@@ -1,2 +1,574 @@
-<html>
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Générateur de devis</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.4/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont,
+          'Segoe UI', sans-serif;
+        background-color: #f3f4f6;
+      }
+      .fixed-nav-space {
+        padding-top: 5.5rem;
+      }
+      .quote-scroll {
+        max-height: 28rem;
+        overflow-y: auto;
+      }
+    </style>
+  </head>
+  <body class="text-slate-800">
+    <nav class="fixed top-0 inset-x-0 z-20 bg-slate-900/95 backdrop-blur text-white shadow">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-400 text-slate-900 font-semibold">DV</span>
+            <div>
+              <p class="text-lg font-semibold">Deviseur Express</p>
+              <p class="text-xs text-amber-200">Générez vos devis en quelques clics</p>
+            </div>
+          </div>
+          <button
+            id="generate-pdf"
+            class="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-md bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 transition"
+          >
+            <span>🧾</span> Générer le devis PDF
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="fixed-nav-space max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+      <section class="grid lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-2 space-y-6">
+          <div class="bg-white shadow rounded-xl p-6 border border-slate-100">
+            <h1 class="text-2xl font-semibold text-slate-900">Catalogue produits</h1>
+            <p class="text-sm text-slate-500 mt-1">
+              Recherchez un article par désignation ou référence pour l'ajouter directement à votre devis.
+            </p>
+            <div class="mt-4">
+              <label for="search" class="block text-sm font-medium text-slate-600 mb-2">Rechercher</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                  🔍
+                </span>
+                <input
+                  id="search"
+                  type="search"
+                  placeholder="Ex : tapis, référence..."
+                  class="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div id="products" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+
+          <div id="empty-state" class="hidden bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">
+            <p class="text-lg font-medium">Aucun article ne correspond à votre recherche.</p>
+            <p class="text-sm">Essayez un autre mot-clé ou vérifiez l'orthographe.</p>
+          </div>
+        </div>
+
+        <aside class="lg:col-span-1 space-y-4">
+          <div class="bg-white shadow rounded-xl border border-slate-100">
+            <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 class="text-xl font-semibold text-slate-900">Devis en cours</h2>
+                <p class="text-sm text-slate-500">Ajoutez des articles pour constituer votre devis.</p>
+              </div>
+              <button
+                id="generate-pdf-mobile"
+                class="sm:hidden inline-flex items-center gap-2 px-3 py-2 rounded-md bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 transition"
+              >
+                🧾 PDF
+              </button>
+            </div>
+
+            <div class="quote-scroll" id="quote-lines"></div>
+
+            <div class="px-6 py-5 border-t border-slate-100 space-y-4 bg-slate-50">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-600">Total HT</span>
+                <span class="font-semibold text-slate-900" id="total-ht">0,00 €</span>
+              </div>
+              <div class="flex items-center justify-between text-sm gap-2">
+                <label for="discount" class="text-slate-600">Remise (%)</label>
+                <input
+                  id="discount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  value="0"
+                  class="w-24 text-right py-1 px-2 border border-slate-200 rounded focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+                />
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-600">Montant remise</span>
+                <span class="font-medium" id="discount-amount">-0,00 €</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-600">TVA (20%)</span>
+                <span class="font-medium" id="vat-amount">0,00 €</span>
+              </div>
+              <div class="flex items-center justify-between text-base font-semibold text-slate-900">
+                <span>Total TTC</span>
+                <span id="total-ttc">0,00 €</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <template id="quote-row-template">
+      <div class="px-6 py-4 border-b border-slate-100 last:border-b-0">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-slate-900 line-clamp-2"></p>
+            <p class="text-xs text-slate-500"></p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="decrease text-slate-500 hover:text-slate-900 transition" title="Diminuer">
+              ➖
+            </button>
+            <span class="quantity text-sm font-semibold w-6 text-center"></span>
+            <button class="increase text-slate-500 hover:text-slate-900 transition" title="Augmenter">
+              ➕
+            </button>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
+          <span class="unit-price"></span>
+          <div class="flex items-center gap-4">
+            <span class="font-semibold text-slate-900 total-price"></span>
+            <button class="remove text-red-500 hover:text-red-600 transition text-sm font-medium" title="Retirer la ligne">
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-/4A1NVuMcZV8K4D4ew3Efr2E1VlzDq+W8sELpAo0P5NdVs4KJIp4jOSAmhpN6wX+ZspGDZsBoBPXaG9q4CP7mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js" integrity="sha512-fJzAm8h1Hn0SI7RyhokW2N7DbStO2Qd6hw2yffA9H9n1tFoZT3zh0+BTtPlqvGjufH6G+jD/adJzi10BGi7ypw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+      const productsContainer = document.getElementById('products');
+      const emptyState = document.getElementById('empty-state');
+      const searchInput = document.getElementById('search');
+      const quoteLinesContainer = document.getElementById('quote-lines');
+      const discountInput = document.getElementById('discount');
+      const totalHtEl = document.getElementById('total-ht');
+      const discountAmountEl = document.getElementById('discount-amount');
+      const vatAmountEl = document.getElementById('vat-amount');
+      const totalTtcEl = document.getElementById('total-ttc');
+      const generatePdfButtons = [
+        document.getElementById('generate-pdf'),
+        document.getElementById('generate-pdf-mobile')
+      ];
+
+      const VAT_RATE = 0.2;
+      const quote = new Map();
+      let catalogue = [];
+      let filteredCatalogue = [];
+
+      document.addEventListener('DOMContentLoaded', () => {
+        init();
+      });
+
+      async function init() {
+        const data = await loadCatalogue();
+        catalogue = data;
+        filteredCatalogue = [...catalogue];
+        renderProducts(filteredCatalogue);
+        attachEvents();
+      }
+
+      async function loadCatalogue() {
+        const sources = ['catalogue/import_items.csv', 'catalogue/export_item.csv'];
+        for (const url of sources) {
+          try {
+            const response = await fetch(url);
+            if (!response.ok) {
+              continue;
+            }
+            const text = await response.text();
+            const rows = parseCSV(text, ';');
+            const [header, ...entries] = rows;
+            const normalizedHeader = header.map((label) => cleanValue(label).toLowerCase());
+            const priceIndex = findPriceIndex(normalizedHeader);
+            const referenceIndex = normalizedHeader.findIndex((h) => h.includes('référence'));
+            const nameIndex = normalizedHeader.findIndex((h) => h.includes('nom commercial'));
+            const imageIndex = normalizedHeader.findIndex((h) => h.includes('image'));
+            const idIndex = 0;
+
+            return entries
+              .filter((row) => row.some((cell) => cell && cell.trim() !== ''))
+              .map((row) => {
+                const cells = row.concat(new Array(Math.max(0, normalizedHeader.length - row.length)).fill(''));
+                const rawPrice = priceIndex >= 0 ? cells[priceIndex] : cells[normalizedHeader.findIndex((h) => h.includes('prix référence'))];
+                const price = parseLocaleNumber(rawPrice);
+                return {
+                  id: cleanValue(cells[idIndex] || cleanValue(cells[referenceIndex]) || crypto.randomUUID()),
+                  reference: cleanValue(cells[referenceIndex] || 'Non renseigné'),
+                  name: cleanValue(cells[nameIndex] || 'Produit sans nom'),
+                  price: Number.isFinite(price) ? price : 0,
+                  image: cleanValue(cells[imageIndex] || ''),
+                  unit: cleanValue(cells[normalizedHeader.findIndex((h) => h.includes('unité'))] || '')
+                };
+              })
+              .filter((item) => item.name && item.name !== 'Produit sans nom');
+          } catch (error) {
+            console.error('Erreur de chargement du catalogue', error);
+          }
+        }
+        showCatalogueError();
+        return [];
+      }
+
+      function parseCSV(text, delimiter = ';') {
+        const rows = [];
+        let currentField = '';
+        let currentRow = [];
+        let insideQuotes = false;
+
+        for (let i = 0; i < text.length; i += 1) {
+          const char = text[i];
+          const nextChar = text[i + 1];
+
+          if (char === '"') {
+            if (insideQuotes && nextChar === '"') {
+              currentField += '"';
+              i += 1;
+            } else {
+              insideQuotes = !insideQuotes;
+            }
+          } else if (char === delimiter && !insideQuotes) {
+            currentRow.push(currentField);
+            currentField = '';
+          } else if ((char === '\n' || char === '\r') && !insideQuotes) {
+            if (currentField || currentRow.length) {
+              currentRow.push(currentField);
+              rows.push(currentRow);
+              currentRow = [];
+              currentField = '';
+            }
+          } else {
+            currentField += char;
+          }
+        }
+
+        if (currentField || currentRow.length) {
+          currentRow.push(currentField);
+          rows.push(currentRow);
+        }
+
+        return rows.map((row) =>
+          row.map((cell) => (typeof cell === 'string' ? cell.replace(/\r?\n/g, ' ') : cell))
+        );
+      }
+
+      function cleanValue(value) {
+        if (typeof value !== 'string') return '';
+        return value.replace(/^\s+|\s+$/g, '').replace(/^"|"$/g, '').trim();
+      }
+
+      function parseLocaleNumber(value) {
+        if (!value) return NaN;
+        const sanitized = cleanValue(value).replace(/\s/g, '').replace(',', '.');
+        const parsed = Number.parseFloat(sanitized);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      }
+
+      function findPriceIndex(headers) {
+        const priority = ['tarif plein', 'prix référence ht', 'tarif 10%', 'tarif -20%'];
+        for (const key of priority) {
+          const index = headers.findIndex((header) => header.includes(key));
+          if (index !== -1) {
+            return index;
+          }
+        }
+        return -1;
+      }
+
+      function showCatalogueError() {
+        productsContainer.innerHTML = `
+          <div class="col-span-full bg-red-50 border border-red-100 text-red-700 rounded-xl p-6">
+            <h2 class="text-lg font-semibold mb-2">Catalogue indisponible</h2>
+            <p class="text-sm">Impossible de charger le fichier CSV du catalogue. Vérifiez la présence de <code>catalogue/import_items.csv</code>.</p>
+          </div>
+        `;
+      }
+
+      function attachEvents() {
+        searchInput.addEventListener('input', handleSearch);
+        discountInput.addEventListener('input', () => {
+          if (discountInput.value === '') {
+            discountInput.value = '0';
+          }
+          updateTotals();
+        });
+
+        productsContainer.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-product-id]');
+          if (!button) return;
+          const productId = button.getAttribute('data-product-id');
+          const product = catalogue.find((item) => item.id === productId);
+          if (!product) return;
+          addToQuote(product);
+        });
+
+        quoteLinesContainer.addEventListener('click', (event) => {
+          const row = event.target.closest('[data-product-id]');
+          if (!row) return;
+          const productId = row.getAttribute('data-product-id');
+          const action = event.target.closest('button');
+          if (!action) return;
+
+          if (action.classList.contains('increase')) {
+            updateQuantity(productId, 1);
+          } else if (action.classList.contains('decrease')) {
+            updateQuantity(productId, -1);
+          } else if (action.classList.contains('remove')) {
+            removeFromQuote(productId);
+          }
+        });
+
+        generatePdfButtons.forEach((btn) => {
+          if (!btn) return;
+          btn.addEventListener('click', generatePDF);
+        });
+      }
+
+      function handleSearch(event) {
+        const term = event.target.value.toLowerCase().trim();
+        filteredCatalogue = catalogue.filter((item) => {
+          const haystack = `${item.name} ${item.reference}`.toLowerCase();
+          return haystack.includes(term);
+        });
+        renderProducts(filteredCatalogue);
+      }
+
+      function renderProducts(items) {
+        if (!items.length) {
+          productsContainer.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+        emptyState.classList.add('hidden');
+        const cards = items
+          .map((item) => {
+            const image = item.image || 'https://via.placeholder.com/400x250?text=Aucune+image';
+            return `
+              <article class="bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition flex flex-col">
+                <div class="h-40 bg-slate-100 rounded-t-xl overflow-hidden">
+                  <img src="${image}" alt="${escapeHtml(item.name)}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/400x250?text=Image+indisponible';" />
+                </div>
+                <div class="p-4 flex-1 flex flex-col">
+                  <p class="text-xs uppercase tracking-wide text-amber-500 font-semibold">${escapeHtml(item.reference || 'Réf. inconnue')}</p>
+                  <h3 class="mt-1 text-base font-semibold text-slate-900 line-clamp-2">${escapeHtml(item.name)}</h3>
+                  <p class="mt-2 text-lg font-bold text-slate-900">${formatCurrency(item.price)}</p>
+                  <div class="mt-auto pt-3">
+                    <button
+                      class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white font-semibold hover:bg-slate-800 transition"
+                      data-product-id="${item.id}"
+                    >
+                      ➕ Ajouter au devis
+                    </button>
+                  </div>
+                </div>
+              </article>
+            `;
+          })
+          .join('');
+
+        productsContainer.innerHTML = cards;
+      }
+
+      function escapeHtml(value) {
+        return value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function addToQuote(product) {
+        const existing = quote.get(product.id);
+        if (existing) {
+          existing.quantity += 1;
+        } else {
+          quote.set(product.id, { product, quantity: 1 });
+        }
+        renderQuote();
+      }
+
+      function updateQuantity(productId, delta) {
+        const entry = quote.get(productId);
+        if (!entry) return;
+        entry.quantity = Math.max(1, entry.quantity + delta);
+        renderQuote();
+      }
+
+      function removeFromQuote(productId) {
+        quote.delete(productId);
+        renderQuote();
+      }
+
+      function renderQuote() {
+        if (quote.size === 0) {
+          quoteLinesContainer.innerHTML = `
+            <div class="px-6 py-10 text-center text-slate-400">
+              <p class="text-sm">Aucun article dans votre devis pour le moment.</p>
+              <p class="text-xs mt-1">Ajoutez des produits depuis le catalogue pour construire votre devis.</p>
+            </div>
+          `;
+        } else {
+          const template = document.getElementById('quote-row-template');
+          const fragment = document.createDocumentFragment();
+
+          for (const [productId, { product, quantity }] of quote.entries()) {
+            const clone = template.content.cloneNode(true);
+            const container = clone.querySelector('div');
+            container.setAttribute('data-product-id', productId);
+
+            clone.querySelector('p.text-sm').textContent = product.name;
+            clone.querySelector('p.text-xs').textContent = product.reference || 'Réf. non communiquée';
+            clone.querySelector('.quantity').textContent = quantity;
+            clone.querySelector('.unit-price').textContent = `PU : ${formatCurrency(product.price)}`;
+            clone.querySelector('.total-price').textContent = formatCurrency(product.price * quantity);
+
+            fragment.appendChild(clone);
+          }
+
+          quoteLinesContainer.innerHTML = '';
+          quoteLinesContainer.appendChild(fragment);
+        }
+
+        updateTotals();
+      }
+
+      function updateTotals() {
+        const subtotal = Array.from(quote.values()).reduce((acc, { product, quantity }) => acc + product.price * quantity, 0);
+        const discountRate = Math.min(Math.max(parseFloat(discountInput.value) || 0, 0), 100);
+        if (discountRate !== parseFloat(discountInput.value)) {
+          discountInput.value = discountRate.toString();
+        }
+        const discountAmount = subtotal * (discountRate / 100);
+        const discountedSubtotal = subtotal - discountAmount;
+        const vatAmount = discountedSubtotal * VAT_RATE;
+        const total = discountedSubtotal + vatAmount;
+
+        totalHtEl.textContent = formatCurrency(subtotal);
+        discountAmountEl.textContent = `-${formatCurrency(discountAmount).replace('-', '')}`;
+        vatAmountEl.textContent = formatCurrency(vatAmount);
+        totalTtcEl.textContent = formatCurrency(total);
+      }
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('fr-FR', {
+          style: 'currency',
+          currency: 'EUR'
+        }).format(value || 0);
+      }
+
+      async function generatePDF() {
+        if (quote.size === 0) {
+          alert('Ajoutez au moins un article au devis avant de générer le PDF.');
+          return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const margin = 40;
+        let currentY = margin;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text('DEVIS', margin, currentY);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        currentY += 24;
+        doc.text('Entreprise : _______________________________', margin, currentY);
+        doc.text('Adresse : __________________________________', margin, currentY + 14);
+        doc.text('Téléphone : ________________________________', margin, currentY + 28);
+        doc.text('Email : ____________________________________', margin, currentY + 42);
+
+        doc.text('Client : ____________________________________', margin + 280, currentY);
+        doc.text('Adresse : __________________________________', margin + 280, currentY + 14);
+        doc.text('Téléphone : ________________________________', margin + 280, currentY + 28);
+        doc.text('Email : ____________________________________', margin + 280, currentY + 42);
+
+        currentY += 80;
+
+        const tableColumnStyles = {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 200 },
+          2: { halign: 'center', cellWidth: 60 },
+          3: { halign: 'right', cellWidth: 80 },
+          4: { halign: 'right', cellWidth: 80 }
+        };
+
+        const tableRows = Array.from(quote.values()).map(({ product, quantity }) => [
+          product.reference || '—',
+          product.name,
+          quantity.toString(),
+          formatCurrency(product.price),
+          formatCurrency(product.price * quantity)
+        ]);
+
+        doc.autoTable({
+          head: [['Référence', 'Désignation', 'Qté', 'PU HT', 'Total HT']],
+          body: tableRows,
+          startY: currentY,
+          styles: { fontSize: 10, cellPadding: 6 },
+          headStyles: { fillColor: [15, 23, 42] },
+          columnStyles: tableColumnStyles,
+          theme: 'grid'
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 20;
+        const subtotal = Array.from(quote.values()).reduce((acc, { product, quantity }) => acc + product.price * quantity, 0);
+        const discountRate = parseFloat(discountInput.value) || 0;
+        const discountAmount = subtotal * (discountRate / 100);
+        const discountedSubtotal = subtotal - discountAmount;
+        const vatAmount = discountedSubtotal * VAT_RATE;
+        const total = discountedSubtotal + vatAmount;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Récapitulatif financier', margin, finalY);
+        doc.setFont('helvetica', 'normal');
+        finalY += 18;
+
+        const summaryLines = [
+          [`Total HT`, formatCurrency(subtotal)],
+          [`Remise (${discountRate.toFixed(2)}%)`, `-${formatCurrency(discountAmount).replace('-', '')}`],
+          [`TVA (20%)`, formatCurrency(vatAmount)],
+          ['Total TTC', formatCurrency(total)]
+        ];
+
+        summaryLines.forEach(([label, value]) => {
+          doc.text(label, margin, finalY);
+          doc.text(value, margin + 200, finalY, { align: 'right' });
+          finalY += 16;
+        });
+
+        finalY += 20;
+        doc.setFontSize(9);
+        doc.text('Conditions : ________________________________________________________________', margin, finalY);
+        doc.text('Signature client : ______________________________________', margin, finalY + 20);
+
+        doc.save('devis.pdf');
+      }
+    </script>
+  </body>
 </html>
