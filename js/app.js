@@ -6,13 +6,20 @@ const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 
 const quantityFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const dimensionFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function formatPriceWithUnit(value, unit) {
+  const formatted = currencyFormatter.format(value);
+  return unit ? `${formatted} / ${unit}` : formatted;
+}
+
 const state = {
   catalogue: [],
   filtered: [],
   catalogueById: new Map(),
   quote: new Map(),
   categories: [],
+  units: [],
   selectedCategories: new Set(),
+  selectedUnit: '',
   searchQuery: '',
   discountRate: 0,
   vatRate: 0.2,
@@ -33,6 +40,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  unitFilter: document.getElementById('unit-filter'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
@@ -46,6 +54,7 @@ const elements = {
   summaryNet: document.getElementById('summary-net'),
   summaryVat: document.getElementById('summary-vat'),
   summaryTotal: document.getElementById('summary-total'),
+  summaryDiscountRate: document.getElementById('summary-discount-rate'),
   generatePdf: document.getElementById('generate-pdf'),
   modalBackdrop: document.getElementById('product-modal'),
   modalImage: document.getElementById('product-modal-image'),
@@ -60,6 +69,7 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
+  elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.discount?.addEventListener('input', handleDiscountChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
@@ -111,7 +121,9 @@ async function loadCatalogue() {
       .filter((item) => item && item.name);
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
+    state.units = deriveUnits(state.catalogue);
     populateCategoryFilter();
+    populateUnitFilter();
     applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
@@ -219,13 +231,20 @@ function handleSearch(event) {
   applyFilters();
 }
 
+function handleUnitFilterChange(event) {
+  const value = event.target.value;
+  state.selectedUnit = value;
+  applyFilters();
+}
+
 function applyFilters() {
   const selectedCategories = state.selectedCategories;
   const query = state.searchQuery;
   state.filtered = state.catalogue.filter((product) => {
     const matchesSearch = !query || `${product.name} ${product.reference}`.toLowerCase().includes(query);
     const matchesCategory = !selectedCategories.size || (product.category && selectedCategories.has(product.category));
-    return matchesSearch && matchesCategory;
+    const matchesUnit = !state.selectedUnit || product.unit === state.selectedUnit;
+    return matchesSearch && matchesCategory && matchesUnit;
   });
   renderProducts();
 }
@@ -242,6 +261,7 @@ function renderProducts() {
   }
 
   const fragment = document.createDocumentFragment();
+  const hasDiscount = state.discountRate > 0;
   for (const product of state.filtered) {
     const card = elements.productTemplate.content.firstElementChild.cloneNode(true);
     const image = card.querySelector('.product-image');
@@ -249,13 +269,6 @@ function renderProducts() {
     image.alt = product.name;
     image.addEventListener('error', () => {
       image.src = defaultImage;
-    });
-
-    const thumbnail = card.querySelector('.product-thumbnail-image');
-    thumbnail.src = product.image || defaultImage;
-    thumbnail.alt = product.name;
-    thumbnail.addEventListener('error', () => {
-      thumbnail.src = defaultImage;
     });
 
     card.querySelector('.product-reference').textContent = product.reference;
@@ -271,8 +284,20 @@ function renderProducts() {
       categoryBadge.classList.add('is-muted');
     }
 
-    const priceLabel = product.unit ? `${product.priceLabel} / ${product.unit}` : product.priceLabel;
-    card.querySelector('.product-price').textContent = priceLabel;
+    const basePriceLabel = formatPriceWithUnit(product.price, product.unit);
+    const discountFactor = Math.max(0, 1 - state.discountRate / 100);
+    const discountedPriceLabel = formatPriceWithUnit(product.price * discountFactor, product.unit);
+    const priceOriginal = card.querySelector('.product-price-original');
+    const priceCurrent = card.querySelector('.product-price-current');
+    if (hasDiscount && discountFactor < 1) {
+      priceOriginal.textContent = basePriceLabel;
+      priceOriginal.classList.remove('hidden');
+      priceCurrent.textContent = discountedPriceLabel;
+    } else {
+      priceOriginal.textContent = '';
+      priceOriginal.classList.add('hidden');
+      priceCurrent.textContent = basePriceLabel;
+    }
 
     const unit = card.querySelector('.product-unit');
     unit.textContent = product.unit ? `Unité de vente : ${product.unit}` : "Unité de vente : à l'article";
@@ -327,15 +352,19 @@ function renderQuote() {
       const referenceElement = node.querySelector('.quote-reference');
       nameElement.textContent = item.name;
       referenceElement.textContent = item.reference;
-      node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
+      const unitPriceOriginal = node.querySelector('.unit-price-original');
+      const unitPriceCurrent = node.querySelector('.unit-price');
 
       const toggleButton = node.querySelector('.toggle-details');
       toggleButton.setAttribute('aria-expanded', String(Boolean(item.expanded)));
       toggleButton.addEventListener('click', () => toggleQuoteItem(item.id));
 
       const summaryQuantity = node.querySelector('[data-role="summary-quantity"]');
-      const summaryTotal = node.querySelector('[data-role="summary-total"]');
+      const summaryTotalContainer = node.querySelector('[data-role="summary-total"]');
+      const summaryTotalOriginal = summaryTotalContainer?.querySelector('.summary-total-original') ?? null;
+      const summaryTotalCurrent = summaryTotalContainer?.querySelector('.summary-total-current') ?? null;
       const lineTotal = node.querySelector('.line-total');
+      const lineTotalOriginal = node.querySelector('.line-total-original');
       const quantityValueElements = node.querySelectorAll('[data-role="quantity-value"]');
       const quantityUnitElements = node.querySelectorAll('[data-role="quantity-unit"]');
       const unitLabel =
@@ -349,10 +378,42 @@ function renderQuote() {
       const dimensions = node.querySelector('.quote-dimensions');
 
       const updateSummaryDisplays = () => {
+        if (!unitPriceCurrent || !lineTotal || !summaryTotalCurrent) {
+          return;
+        }
         summaryQuantity.textContent = formatQuantityLabel(item);
-        const totalLabel = currencyFormatter.format(item.price * (item.quantity || 0));
-        summaryTotal.textContent = totalLabel;
-        lineTotal.textContent = totalLabel;
+        const discountFactor = Math.max(0, 1 - state.discountRate / 100);
+        const baseUnitPriceValue = item.price;
+        const baseLineValue = item.price * (item.quantity || 0);
+        const discountedUnitValue = baseUnitPriceValue * discountFactor;
+        const discountedLineValue = baseLineValue * discountFactor;
+        const baseUnitPrice = currencyFormatter.format(baseUnitPriceValue);
+        const discountedUnitPrice = currencyFormatter.format(discountedUnitValue);
+        const baseLineTotal = currencyFormatter.format(baseLineValue);
+        const discountedLineTotal = currencyFormatter.format(discountedLineValue);
+        const hasDiscount = state.discountRate > 0 && discountFactor < 1;
+
+        unitPriceCurrent.textContent = hasDiscount ? discountedUnitPrice : baseUnitPrice;
+        lineTotal.textContent = hasDiscount ? discountedLineTotal : baseLineTotal;
+        summaryTotalCurrent.textContent = hasDiscount ? discountedLineTotal : baseLineTotal;
+
+        if (unitPriceOriginal && lineTotalOriginal && summaryTotalOriginal) {
+          if (hasDiscount) {
+            unitPriceOriginal.textContent = baseUnitPrice;
+            unitPriceOriginal.classList.remove('hidden');
+            lineTotalOriginal.textContent = baseLineTotal;
+            lineTotalOriginal.classList.remove('hidden');
+            summaryTotalOriginal.textContent = baseLineTotal;
+            summaryTotalOriginal.classList.remove('hidden');
+          } else {
+            unitPriceOriginal.textContent = '';
+            unitPriceOriginal.classList.add('hidden');
+            lineTotalOriginal.textContent = '';
+            lineTotalOriginal.classList.add('hidden');
+            summaryTotalOriginal.textContent = '';
+            summaryTotalOriginal.classList.add('hidden');
+          }
+        }
       };
 
       if (item.quantityMode === 'area') {
@@ -441,7 +502,8 @@ function handleDiscountChange(event) {
     state.discountRate = Math.min(value, 100);
   }
   event.target.value = String(state.discountRate).replace('.', ',');
-  updateSummary();
+  renderProducts();
+  renderQuote();
 }
 
 function handleGeneralCommentChange(event) {
@@ -460,6 +522,9 @@ function updateSummary() {
   elements.summaryNet.textContent = currencyFormatter.format(net);
   elements.summaryVat.textContent = currencyFormatter.format(vat);
   elements.summaryTotal.textContent = currencyFormatter.format(total);
+  if (elements.summaryDiscountRate) {
+    elements.summaryDiscountRate.textContent = `${numberFormatter.format(state.discountRate)} %`;
+  }
 }
 
 function generatePdf() {
@@ -719,6 +784,16 @@ function closeProductModal() {
   }
 }
 
+function deriveUnits(items) {
+  const set = new Set();
+  items.forEach((item) => {
+    if (item.unit) {
+      set.add(item.unit);
+    }
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+}
+
 function deriveCategories(items) {
   const set = new Set();
   items.forEach((item) => {
@@ -727,6 +802,26 @@ function deriveCategories(items) {
     }
   });
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+}
+
+function populateUnitFilter() {
+  if (!elements.unitFilter) return;
+  const select = elements.unitFilter;
+  const currentValue = state.selectedUnit;
+  select.innerHTML = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Toutes les unités';
+  select.appendChild(defaultOption);
+  state.units.forEach((unit) => {
+    const option = document.createElement('option');
+    option.value = unit;
+    option.textContent = unit;
+    if (unit === currentValue) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
 }
 
 function setupCategoryFilter() {
