@@ -13,7 +13,7 @@
   </head>
   <body class="bg-slate-100 text-slate-800 min-h-screen">
     <nav class="fixed inset-x-0 top-0 z-40 bg-white shadow-sm">
-      <div class="mx-auto flex w-full max-w-[120rem] items-center justify-between px-4 py-4">
+      <div class="mx-auto flex w-full max-w-[120rem] flex-wrap items-center gap-4 px-4 py-4">
         <div class="flex items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-semibold">DV</div>
           <div>
@@ -21,9 +21,26 @@
             <p class="text-sm text-slate-500">Créez vos devis en quelques clics</p>
           </div>
         </div>
-        <button id="generate-pdf" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
-          Générer le devis PDF
-        </button>
+        <div class="nav-controls flex flex-1 flex-wrap items-center justify-end gap-3">
+          <div class="nav-discount-field flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 shadow-inner sm:w-auto sm:justify-start">
+            <label for="discount" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Remise (%)</label>
+            <input
+              id="discount"
+              type="number"
+              min="0"
+              max="100"
+              step="0.5"
+              value="0"
+              class="h-9 w-24 rounded-lg border border-transparent bg-white px-2 text-right text-sm text-slate-700 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+          </div>
+          <button
+            id="generate-pdf"
+            class="nav-generate-button w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:w-auto"
+          >
+            Générer le devis PDF
+          </button>
+        </div>
       </div>
     </nav>
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
@@ -49,10 +66,29 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
                 </svg>
               </div>
-              <div class="relative lg:w-64">
-                <button
-                  id="category-filter-button"
-                  type="button"
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+                <div class="relative sm:w-48 lg:w-56">
+                  <label for="unit-filter" class="sr-only">Filtrer par unité</label>
+                  <select
+                    id="unit-filter"
+                    class="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 py-3 pl-3 pr-10 text-sm text-slate-700 shadow-inner transition hover:border-blue-300 hover:bg-white focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">Toutes les unités</option>
+                  </select>
+                  <svg
+                    class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 8.25 12 15.75 4.5 8.25" />
+                  </svg>
+                </div>
+                <div class="relative sm:w-48 lg:w-64">
+                  <button
+                    id="category-filter-button"
+                    type="button"
                   class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                   aria-haspopup="true"
                   aria-expanded="false"
@@ -78,6 +114,7 @@
                     <button id="category-filter-close" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
                   </div>
                 </div>
+                </div>
               </div>
             </div>
           </header>
@@ -91,20 +128,8 @@
               <p class="text-sm text-slate-500">Ajustez les quantités et vérifiez les totaux en temps réel.</p>
             </div>
           </header>
-          <div id="quote-empty" class="mt-4 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-10 w-10 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5h15a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 19.5 4.5h-15A1.5 1.5 0 0 0 3 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
-            </svg>
-            <p>Aucun article n'a encore été ajouté. Utilisez le bouton « Ajouter au devis » sur un produit.</p>
-          </div>
-          <div id="quote-list" class="mt-4 hidden flex-1 space-y-4 overflow-y-auto pr-1"></div>
-          <div class="mt-6 space-y-4">
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <label for="general-comment" class="text-sm font-medium text-slate-700">Commentaire général</label>
-              <textarea id="general-comment" class="general-comment mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
-            </div>
-            <footer class="border-t border-slate-200 pt-4">
+          <section class="mt-4 space-y-4">
+            <footer class="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <dl class="space-y-2 text-sm text-slate-600">
                 <div class="flex items-center justify-between">
                   <dt>Total HT</dt>
@@ -113,7 +138,16 @@
                 <div class="flex items-center justify-between gap-3">
                   <dt class="flex-1">Remise (%)</dt>
                   <dd class="flex items-center gap-2">
-                    <input id="discount" type="number" min="0" max="100" step="0.5" value="0" class="h-9 w-20 rounded-lg border border-slate-200 bg-white px-2 text-right text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    <div class="relative">
+                      <input
+                        id="discount-display"
+                        type="text"
+                        value="0"
+                        disabled
+                        class="h-9 w-24 rounded-lg border border-slate-200 bg-white px-2 text-right text-sm text-slate-500"
+                      />
+                      <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-400">%</span>
+                    </div>
                   </dd>
                 </div>
                 <div class="flex items-center justify-between">
@@ -134,6 +168,18 @@
                 </div>
               </dl>
             </footer>
+          </section>
+          <div id="quote-empty" class="mt-4 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-10 w-10 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5h15a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 19.5 4.5h-15A1.5 1.5 0 0 0 3 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
+            </svg>
+            <p>Aucun article n'a encore été ajouté. Utilisez le bouton « Ajouter au devis » sur un produit.</p>
+          </div>
+          <div id="quote-list" class="mt-4 hidden flex-1 space-y-4 overflow-y-auto pr-1"></div>
+          <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label for="general-comment" class="text-sm font-medium text-slate-700">Commentaire général</label>
+            <textarea id="general-comment" class="general-comment mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
           </div>
         </aside>
       </div>
@@ -148,21 +194,17 @@
           </div>
         </div>
         <div class="mt-4 flex flex-1 flex-col gap-4">
-          <div class="flex flex-1 gap-4">
-            <div class="product-thumbnail">
-              <img class="product-thumbnail-image" alt="" />
+          <div class="flex flex-1 flex-col gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="product-category-badge"></span>
             </div>
-            <div class="flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="product-category-badge"></span>
-              </div>
-              <h3 class="product-name mt-2 text-base font-semibold text-slate-900"></h3>
-              <p class="product-description mt-2 line-clamp-3 text-sm text-slate-500"></p>
-            </div>
+            <h3 class="product-name text-base font-semibold text-slate-900"></h3>
+            <p class="product-description line-clamp-3 text-sm text-slate-500"></p>
           </div>
           <div class="product-actions">
-            <div>
-              <p class="product-price text-lg font-semibold text-blue-600"></p>
+            <div class="product-pricing">
+              <p class="product-price-original text-sm font-medium text-slate-400 line-through"></p>
+              <p class="product-price-discount text-lg font-semibold text-blue-600"></p>
               <p class="product-unit text-xs text-slate-400"></p>
             </div>
             <div class="flex flex-col items-end gap-2">
@@ -188,7 +230,10 @@
               <span class="quote-reference"></span>
             </span>
             <span class="summary-quantity" data-role="summary-quantity"></span>
-            <span class="summary-total" data-role="summary-total"></span>
+            <span class="summary-total" data-role="summary-total">
+              <span class="summary-total-original"></span>
+              <span class="summary-total-discount"></span>
+            </span>
           </button>
           <button class="remove-item" type="button">Retirer</button>
         </div>
@@ -227,11 +272,17 @@
             <div class="price-column">
               <div>
                 <span class="price-label">PU HT</span>
-                <span class="unit-price"></span>
+                <span class="unit-price">
+                  <span class="unit-price-original"></span>
+                  <span class="unit-price-discount"></span>
+                </span>
               </div>
               <div>
                 <span class="price-label">Total ligne</span>
-                <span class="line-total"></span>
+                <span class="line-total">
+                  <span class="line-total-original"></span>
+                  <span class="line-total-discount"></span>
+                </span>
               </div>
             </div>
           </div>
