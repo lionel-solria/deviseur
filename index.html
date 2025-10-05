@@ -146,14 +146,29 @@
           <div>
             <p class="quote-name font-semibold text-slate-900"></p>
             <p class="quote-reference text-xs uppercase tracking-wide text-slate-400"></p>
+            <p class="quote-unit text-xs uppercase tracking-wide text-slate-400"></p>
           </div>
           <button class="remove-item text-xs font-semibold text-rose-500 transition hover:text-rose-600">Retirer</button>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center rounded-lg border border-slate-200 bg-white">
+        <div class="flex flex-wrap items-center gap-3" data-role="quantity-container">
+          <div class="flex items-center rounded-lg border border-slate-200 bg-white" data-role="unit-controls">
             <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
             <span class="quantity min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
             <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
+          </div>
+          <div class="hidden flex flex-wrap items-end gap-3" data-role="area-controls">
+            <label class="flex flex-col text-xs font-medium text-slate-500">
+              Longueur (m)
+              <input type="number" min="0" step="0.01" class="length-input mt-1 h-9 w-24 rounded-lg border border-slate-200 bg-white px-2 text-right text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </label>
+            <label class="flex flex-col text-xs font-medium text-slate-500">
+              Largeur (m)
+              <input type="number" min="0" step="0.01" class="width-input mt-1 h-9 w-24 rounded-lg border border-slate-200 bg-white px-2 text-right text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </label>
+            <div class="flex flex-col">
+              <span class="text-xs uppercase tracking-wide text-slate-400">Surface</span>
+              <span class="area-value font-semibold text-blue-600"></span>
+            </div>
           </div>
           <div class="flex flex-col">
             <span class="text-xs uppercase tracking-wide text-slate-400">PU HT</span>
@@ -171,6 +186,28 @@
       const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
       const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
       const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const unitFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const areaUnits = new Set(['m2', 'm²', 'metre carre', 'metres carres', 'mètre carré', 'mètres carrés']);
+      const companyProfile = {
+        name: 'Deviseur Express',
+        legalName: 'Deviseur Express SAS',
+        address: ['123 Rue Exemple', '75000 Paris', 'France'],
+        email: 'contact@deviseur-express.fr',
+        phone: '+33 1 23 45 67 89',
+        website: 'www.deviseur-express.fr',
+        registration: 'SIRET 123 456 789 00010',
+        vatNumber: 'TVA FR12 345678900',
+        bankDetails: 'IBAN FR76 3000 4000 5000 6000 7000 890 • BIC PSSTFRPPXXX',
+        validity: '30 jours à compter de la date du devis',
+        paymentTerms: 'Paiement à 30 jours fin de mois par virement bancaire.',
+      };
+      const clientProfile = {
+        company: 'Client',
+        contact: 'Nom du client',
+        address: 'Adresse du client',
+        city: 'Code postal - Ville',
+        email: 'client@email.com',
+      };
 
       const state = {
         catalogue: [],
@@ -291,7 +328,7 @@
           description,
           price,
           priceLabel: currencyFormatter.format(price),
-          unit: entry.unite || '',
+          unit: (entry.unite || '').trim(),
           image,
           link,
         };
@@ -334,7 +371,8 @@
           card.querySelector('.product-description').textContent = product.description || 'Pas de description fournie.';
           card.querySelector('.product-price').textContent = product.priceLabel;
           const unit = card.querySelector('.product-unit');
-          unit.textContent = product.unit ? `Unité : ${product.unit}` : '';
+          const unitLabel = getDisplayUnit(product.unit);
+          unit.textContent = unitLabel ? `Unité : ${unitLabel}` : '';
           const link = card.querySelector('.product-link');
           if (product.link) {
             link.href = product.link;
@@ -356,12 +394,21 @@
         if (!product) return;
         const existing = state.quote.get(productId);
         if (existing) {
-          existing.quantity += 1;
+          if (!isAreaUnit(existing.unit)) {
+            existing.quantity += 1;
+          }
         } else {
-          state.quote.set(productId, {
+          const isArea = isAreaUnit(product.unit);
+          const newItem = {
             ...product,
             quantity: 1,
-          });
+          };
+          if (isArea) {
+            newItem.length = 1;
+            newItem.width = 1;
+            updateAreaItemQuantity(newItem);
+          }
+          state.quote.set(productId, newItem);
         }
         renderQuote();
       }
@@ -379,11 +426,31 @@
             const node = elements.quoteTemplate.content.firstElementChild.cloneNode(true);
             node.querySelector('.quote-name').textContent = item.name;
             node.querySelector('.quote-reference').textContent = item.reference;
-            node.querySelector('.quantity').textContent = item.quantity;
+            const unitLabel = getDisplayUnit(item.unit);
+            node.querySelector('.quote-unit').textContent = unitLabel ? `Unité : ${unitLabel}` : 'Unité : -';
+            const unitControls = node.querySelector('[data-role="unit-controls"]');
+            const areaControls = node.querySelector('[data-role="area-controls"]');
+            const quantityDisplay = node.querySelector('.quantity');
+            if (isAreaUnit(item.unit)) {
+              unitControls.classList.add('hidden');
+              areaControls.classList.remove('hidden');
+              const lengthInput = areaControls.querySelector('.length-input');
+              const widthInput = areaControls.querySelector('.width-input');
+              const areaValue = areaControls.querySelector('.area-value');
+              lengthInput.value = formatNumberForInput(item.length ?? 0);
+              widthInput.value = formatNumberForInput(item.width ?? 0);
+              areaValue.textContent = `${numberFormatter.format(item.quantity)} ${unitLabel || ''}`.trim();
+              lengthInput.addEventListener('input', (event) => handleDimensionChange(item.id, 'length', event.target.value));
+              widthInput.addEventListener('input', (event) => handleDimensionChange(item.id, 'width', event.target.value));
+            } else {
+              unitControls.classList.remove('hidden');
+              areaControls.classList.add('hidden');
+              quantityDisplay.textContent = unitLabel ? `${item.quantity} ${unitLabel}` : item.quantity;
+              node.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
+              node.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
+            }
             node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
             node.querySelector('.line-total').textContent = currencyFormatter.format(item.price * item.quantity);
-            node.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
-            node.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
             node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
             fragment.appendChild(node);
           }
@@ -395,7 +462,7 @@
 
       function changeQuantity(productId, delta) {
         const item = state.quote.get(productId);
-        if (!item) return;
+        if (!item || isAreaUnit(item.unit)) return;
         item.quantity = Math.max(1, item.quantity + delta);
         renderQuote();
       }
@@ -442,64 +509,213 @@
         const net = subtotal - discountAmount;
         const vat = net * state.vatRate;
         const total = net + vat;
-
+        const today = new Date();
+        const quoteNumber = `DEV-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${String(today.getHours()).padStart(2, '0')}${String(today.getMinutes()).padStart(2, '0')}`;
+        const creationDate = today.toLocaleDateString('fr-FR');
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'pt', format: 'a4' });
         const margin = 48;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const headerHeight = 220;
 
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(22);
-        doc.text('DEMANDE DE DEVIS', margin, 60);
+        const drawHeader = () => {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(20);
+          doc.setTextColor(37, 99, 235);
+          doc.text(companyProfile.name, margin, 60);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          doc.setTextColor(71, 85, 105);
+          doc.text(companyProfile.address.join('\n'), margin, 80);
+          const companyContacts = [`Email : ${companyProfile.email}`, `Téléphone : ${companyProfile.phone}`, `Site : ${companyProfile.website}`];
+          doc.text(companyContacts.join('\n'), margin, 130);
 
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Votre entreprise\nAdresse\nCode postal - Ville\ncontact@entreprise.fr\n+33 1 23 45 67 89', margin, 90, { align: 'left' });
-        doc.text('Client\nNom du client\nAdresse\nCode postal - Ville\nclient@email.com', 320, 90, { align: 'left' });
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(16);
+          doc.setTextColor(37, 99, 235);
+          doc.text('DEMANDE DE DEVIS', pageWidth - margin, 60, { align: 'right' });
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(11);
+          doc.setTextColor(71, 85, 105);
+          doc.text(`Devis n° ${quoteNumber}`, pageWidth - margin, 84, { align: 'right' });
+          doc.text(`Date : ${creationDate}`, pageWidth - margin, 100, { align: 'right' });
+          doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, pageWidth - margin, 116, { align: 'right' });
 
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, margin, 180);
-        doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, margin, 200);
+          doc.setDrawColor(203, 213, 225);
+          doc.line(margin, 128, pageWidth - margin, 128);
 
-        const body = items.map((item) => [
-          item.reference,
-          item.name,
-          item.quantity,
-          numberFormatter.format(item.price),
-          numberFormatter.format(item.price * item.quantity),
-        ]);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(12);
+          doc.setTextColor(37, 99, 235);
+          doc.text('Destinataire', margin, 150);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          doc.setTextColor(71, 85, 105);
+          const clientLines = [clientProfile.company, clientProfile.contact, clientProfile.address, clientProfile.city, clientProfile.email].filter(Boolean);
+          doc.text(clientLines.join('\n'), margin, 168);
+
+          doc.setDrawColor(226, 232, 240);
+          doc.line(margin, headerHeight - 40, pageWidth - margin, headerHeight - 40);
+        };
+
+        const drawFooter = () => {
+          const footerY = pageHeight - 60;
+          doc.setDrawColor(226, 232, 240);
+          doc.line(margin, footerY, pageWidth - margin, footerY);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(100, 116, 139);
+          const legalLine = [companyProfile.legalName, companyProfile.registration, companyProfile.vatNumber].filter(Boolean).join(' • ');
+          if (legalLine) {
+            doc.text(legalLine, margin, footerY + 16);
+          }
+          if (companyProfile.bankDetails) {
+            doc.text(`Coordonnées bancaires : ${companyProfile.bankDetails}`, margin, footerY + 32);
+          }
+          doc.text(`Page ${doc.internal.getNumberOfPages()}`, pageWidth - margin, footerY + 32, { align: 'right' });
+        };
+
+        const body = items.map((item) => {
+          const unitLabel = getDisplayUnit(item.unit) || '—';
+          const lines = [item.name];
+          if (item.description) {
+            lines.push(item.description);
+          }
+          if (isAreaUnit(item.unit)) {
+            const lengthLabel = unitFormatter.format(item.length ?? 0);
+            const widthLabel = unitFormatter.format(item.width ?? 0);
+            lines.push(`Dimensions retenues : ${lengthLabel} m x ${widthLabel} m`);
+            lines.push(`Surface retenue : ${numberFormatter.format(item.quantity)} ${unitLabel}`);
+          }
+          return [
+            item.reference,
+            lines.join('\n'),
+            numberFormatter.format(item.quantity),
+            unitLabel,
+            numberFormatter.format(item.price),
+            numberFormatter.format(item.price * item.quantity),
+          ];
+        });
 
         doc.autoTable({
-          startY: 230,
-          head: [['Référence', 'Désignation', 'Quantité', 'PU HT (€)', 'Total HT (€)']],
+          startY: headerHeight,
+          head: [['Référence', 'Désignation', 'Quantité', 'Unité', 'PU HT (€)', 'Total HT (€)']],
           body,
-          styles: { font: 'helvetica', fontSize: 10, cellPadding: 6 },
+          styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [71, 85, 105] },
           headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
           columnStyles: {
-            2: { halign: 'center' },
-            3: { halign: 'right' },
-            4: { halign: 'right' },
+            0: { cellWidth: 80 },
+            1: { cellWidth: 200 },
+            2: { halign: 'center', cellWidth: 70 },
+            3: { halign: 'center', cellWidth: 70 },
+            4: { halign: 'right', cellWidth: 90 },
+            5: { halign: 'right', cellWidth: 90 },
           },
-          alternateRowStyles: { fillColor: [250, 250, 250] },
-          margin: { left: margin, right: margin },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          margin: { left: margin, right: margin, top: headerHeight },
+          didDrawPage: () => {
+            drawHeader();
+            drawFooter();
+          },
         });
 
         let y = doc.lastAutoTable.finalY + 24;
-        doc.setFont('helvetica', 'normal');
-        doc.text('Récapitulatif financier', margin, y);
-        y += 16;
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Total HT : ${currencyFormatter.format(subtotal)}`, margin, y);
-        y += 16;
-        doc.text(`Remise (${numberFormatter.format(state.discountRate)} %) : -${currencyFormatter.format(discountAmount)}`, margin, y);
-        y += 16;
-        doc.text(`Base HT après remise : ${currencyFormatter.format(net)}`, margin, y);
-        y += 16;
-        doc.text(`TVA (${numberFormatter.format(state.vatRate * 100)} %) : ${currencyFormatter.format(vat)}`, margin, y);
-        y += 20;
         doc.setFont('helvetica', 'bold');
-        doc.text(`Total TTC : ${currencyFormatter.format(total)}`, margin, y);
+        doc.setFontSize(12);
+        doc.setTextColor(37, 99, 235);
+        doc.text('Récapitulatif financier', margin, y);
+        y += 18;
+        doc.setTextColor(71, 85, 105);
+        const summaryRows = [
+          ['Total HT', currencyFormatter.format(subtotal)],
+          [`Remise (${numberFormatter.format(state.discountRate)} %)` , `-${currencyFormatter.format(discountAmount)}`],
+          ['Base HT après remise', currencyFormatter.format(net)],
+          [`TVA (${numberFormatter.format(state.vatRate * 100)} %)` , currencyFormatter.format(vat)],
+          ['Total TTC', currencyFormatter.format(total)],
+        ];
+        summaryRows.forEach((row, index) => {
+          const isLast = index === summaryRows.length - 1;
+          doc.setFont('helvetica', isLast ? 'bold' : 'normal');
+          doc.setFontSize(isLast ? 12 : 10);
+          doc.text(row[0], margin, y);
+          doc.text(row[1], pageWidth - margin, y, { align: 'right' });
+          y += isLast ? 22 : 16;
+        });
 
-        doc.save('devis.pdf');
+        y += 8;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(37, 99, 235);
+        doc.text('Informations complémentaires', margin, y);
+        y += 16;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(71, 85, 105);
+        doc.text(`Validité du devis : ${companyProfile.validity}`, margin, y);
+        y += 14;
+        doc.text(`Conditions de paiement : ${companyProfile.paymentTerms}`, margin, y);
+        y += 14;
+        if (companyProfile.bankDetails) {
+          doc.text(`Coordonnées bancaires : ${companyProfile.bankDetails}`, margin, y);
+          y += 14;
+        }
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(10);
+        doc.text('Merci pour votre confiance.', margin, y + 10);
+
+        doc.save(`devis-${quoteNumber}.pdf`);
+      }
+
+      function normaliseUnit(unit) {
+        return (unit || '').toString().trim().toLowerCase();
+      }
+
+      function isAreaUnit(unit) {
+        const normalised = normaliseUnit(unit);
+        if (!normalised) return false;
+        if (areaUnits.has(normalised)) return true;
+        return normalised.replace(/\s+/g, '') === 'm2';
+      }
+
+      function getDisplayUnit(unit) {
+        const normalised = normaliseUnit(unit);
+        if (!normalised) return '';
+        if (isAreaUnit(unit)) {
+          return 'm²';
+        }
+        const catalogue = new Map([
+          ['ml', 'ML'],
+          ['piece', 'PIÈCE'],
+          ['pièce', 'PIÈCE'],
+        ]);
+        if (catalogue.has(normalised)) {
+          return catalogue.get(normalised);
+        }
+        return unit.toUpperCase();
+      }
+
+      function formatNumberForInput(value) {
+        if (!Number.isFinite(value)) return '';
+        const rounded = Math.max(0, Number(value));
+        return String(Number(rounded.toFixed(2)));
+      }
+
+      function handleDimensionChange(productId, dimension, rawValue) {
+        const item = state.quote.get(productId);
+        if (!item || !isAreaUnit(item.unit)) return;
+        const parsed = Math.max(0, parseFrenchNumber(String(rawValue)));
+        item[dimension] = parsed;
+        updateAreaItemQuantity(item);
+        renderQuote();
+      }
+
+      function updateAreaItemQuantity(item) {
+        const length = Number.isFinite(item.length) ? item.length : 0;
+        const width = Number.isFinite(item.width) ? item.width : 0;
+        const area = Math.max(0, length * width);
+        item.quantity = parseFloat(area.toFixed(2));
       }
 
       function toggleFeedback(message, type = 'info') {
