@@ -150,7 +150,7 @@
           <button class="remove-item text-xs font-semibold text-rose-500 transition hover:text-rose-600">Retirer</button>
         </div>
         <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center rounded-lg border border-slate-200 bg-white">
+          <div class="quantity-controls flex items-center rounded-lg border border-slate-200 bg-white">
             <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
             <span class="quantity min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
             <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
@@ -164,6 +164,25 @@
             <span class="line-total font-semibold text-blue-600"></span>
           </div>
         </div>
+        <div class="dimension-controls hidden w-full rounded-lg border border-slate-200 bg-white p-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Longueur (m)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              class="length-input h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+            <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Largeur (m)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              class="width-input h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+            <p class="dimension-summary text-xs text-slate-500"></p>
+          </div>
+        </div>
       </div>
     </template>
     <script>
@@ -171,6 +190,7 @@
       const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
       const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
       const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const quantityFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
       const state = {
         catalogue: [],
@@ -334,7 +354,7 @@
           card.querySelector('.product-description').textContent = product.description || 'Pas de description fournie.';
           card.querySelector('.product-price').textContent = product.priceLabel;
           const unit = card.querySelector('.product-unit');
-          unit.textContent = product.unit ? `Unité : ${product.unit}` : '';
+          unit.textContent = product.unit ? `Unité : ${formatUnitLabel(product.unit)}` : '';
           const link = card.querySelector('.product-link');
           if (product.link) {
             link.href = product.link;
@@ -356,13 +376,26 @@
         if (!product) return;
         const existing = state.quote.get(productId);
         if (existing) {
+          if (requiresDimensions(existing.unit)) {
+            toggleFeedback('Cet article est déjà présent dans le devis. Ajustez ses dimensions directement dans le récapitulatif.', 'info');
+            return;
+          }
           existing.quantity += 1;
-        } else {
-          state.quote.set(productId, {
-            ...product,
-            quantity: 1,
-          });
+          renderQuote();
+          return;
         }
+        const requiresDims = requiresDimensions(product.unit);
+        const newItem = {
+          ...product,
+          quantity: 1,
+        };
+        if (requiresDims) {
+          newItem.length = 1;
+          newItem.width = 1;
+          newItem.quantity = Number((newItem.length * newItem.width).toFixed(2));
+        }
+        state.quote.set(productId, newItem);
+        toggleFeedback('', 'hide');
         renderQuote();
       }
 
@@ -379,11 +412,32 @@
             const node = elements.quoteTemplate.content.firstElementChild.cloneNode(true);
             node.querySelector('.quote-name').textContent = item.name;
             node.querySelector('.quote-reference').textContent = item.reference;
-            node.querySelector('.quantity').textContent = item.quantity;
+            node.querySelector('.quantity').textContent = formatQuantityLabel(item);
             node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
             node.querySelector('.line-total').textContent = currencyFormatter.format(item.price * item.quantity);
-            node.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
-            node.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
+            const quantityControls = node.querySelector('.quantity-controls');
+            const dimensionControls = node.querySelector('.dimension-controls');
+            const dimensionSummary = node.querySelector('.dimension-summary');
+            if (requiresDimensions(item.unit)) {
+              quantityControls.classList.add('hidden');
+              dimensionControls.classList.remove('hidden');
+              const lengthInput = dimensionControls.querySelector('.length-input');
+              const widthInput = dimensionControls.querySelector('.width-input');
+              lengthInput.value = toDimensionInputValue(item.length ?? 0);
+              widthInput.value = toDimensionInputValue(item.width ?? 0);
+              dimensionSummary.textContent = formatDimensionSummary(item);
+              lengthInput.addEventListener('input', (event) => {
+                handleDimensionChange(item.id, { length: event.target.value, width: widthInput.value });
+              });
+              widthInput.addEventListener('input', (event) => {
+                handleDimensionChange(item.id, { length: lengthInput.value, width: event.target.value });
+              });
+            } else {
+              quantityControls.classList.remove('hidden');
+              dimensionControls.classList.add('hidden');
+              node.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
+              node.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
+            }
             node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
             fragment.appendChild(node);
           }
@@ -396,6 +450,9 @@
       function changeQuantity(productId, delta) {
         const item = state.quote.get(productId);
         if (!item) return;
+        if (requiresDimensions(item.unit)) {
+          return;
+        }
         item.quantity = Math.max(1, item.quantity + delta);
         renderQuote();
       }
@@ -447,59 +504,139 @@
         const doc = new jsPDF({ unit: 'pt', format: 'a4' });
         const margin = 48;
 
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(22);
-        doc.text('DEMANDE DE DEVIS', margin, 60);
+        const quoteNumber = `DV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+        const validityDays = 30;
+        const companyInfo = [
+          'Deviseur Express',
+          '123 avenue de la République',
+          '75000 Paris',
+          'contact@deviseur-express.fr',
+          '+33 1 23 45 67 89',
+        ];
+        const clientInfo = [
+          'Client',
+          'Nom du client',
+          'Adresse',
+          'Code postal - Ville',
+          'client@email.com',
+        ];
 
-        doc.setFontSize(11);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let pageHeight = doc.internal.pageSize.getHeight();
+        const headerHeight = 110;
+        const accentColor = [37, 99, 235];
+
+        doc.setFillColor(...accentColor);
+        doc.rect(0, 0, pageWidth, headerHeight, 'F');
+        doc.setTextColor(255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(26);
+        doc.text('DEVIS', margin, 55);
+        doc.setFontSize(12);
+        doc.text(`N° ${quoteNumber}`, margin, 78);
         doc.setFont('helvetica', 'normal');
-        doc.text('Votre entreprise\nAdresse\nCode postal - Ville\ncontact@entreprise.fr\n+33 1 23 45 67 89', margin, 90, { align: 'left' });
-        doc.text('Client\nNom du client\nAdresse\nCode postal - Ville\nclient@email.com', 320, 90, { align: 'left' });
+        doc.setFontSize(11);
+        doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - margin, 50, { align: 'right' });
+        doc.text(`Validité de l'offre : ${validityDays} jours`, pageWidth - margin, 68, { align: 'right' });
+        doc.setTextColor(33);
+
+        let y = headerHeight + 30;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Émetteur', margin, y);
+        doc.text('Destinataire', pageWidth / 2, y);
+        y += 16;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(companyInfo, margin, y);
+        doc.text(clientInfo, pageWidth / 2, y);
+        y += 70;
+
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 24;
 
         doc.setFont('helvetica', 'bold');
-        doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, margin, 180);
-        doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, margin, 200);
+        doc.setFontSize(14);
+        doc.text('Détail du devis', margin, y);
+        y += 12;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, margin, y);
+        y += 14;
 
-        const body = items.map((item) => [
+        const body = items.map((item, index) => [
+          String(index + 1).padStart(2, '0'),
           item.reference,
           item.name,
-          item.quantity,
+          formatPdfQuantity(item),
           numberFormatter.format(item.price),
           numberFormatter.format(item.price * item.quantity),
         ]);
 
         doc.autoTable({
-          startY: 230,
-          head: [['Référence', 'Désignation', 'Quantité', 'PU HT (€)', 'Total HT (€)']],
+          startY: y,
+          head: [['#', 'Référence', 'Désignation', 'Quantité / Détails', 'PU HT (€)', 'Total HT (€)']],
           body,
           styles: { font: 'helvetica', fontSize: 10, cellPadding: 6 },
-          headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+          headStyles: { fillColor: accentColor, textColor: 255, fontStyle: 'bold' },
           columnStyles: {
-            2: { halign: 'center' },
-            3: { halign: 'right' },
+            0: { halign: 'center', cellWidth: 30 },
+            3: { cellWidth: 140 },
             4: { halign: 'right' },
+            5: { halign: 'right' },
           },
           alternateRowStyles: { fillColor: [250, 250, 250] },
           margin: { left: margin, right: margin },
         });
 
-        let y = doc.lastAutoTable.finalY + 24;
-        doc.setFont('helvetica', 'normal');
+        y = doc.lastAutoTable.finalY + 30;
+        if (y > pageHeight - 220) {
+          doc.addPage();
+          pageHeight = doc.internal.pageSize.getHeight();
+          y = margin;
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
         doc.text('Récapitulatif financier', margin, y);
-        y += 16;
+        y += 18;
         doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
         doc.text(`Total HT : ${currencyFormatter.format(subtotal)}`, margin, y);
-        y += 16;
+        y += 14;
         doc.text(`Remise (${numberFormatter.format(state.discountRate)} %) : -${currencyFormatter.format(discountAmount)}`, margin, y);
-        y += 16;
+        y += 14;
         doc.text(`Base HT après remise : ${currencyFormatter.format(net)}`, margin, y);
-        y += 16;
+        y += 14;
         doc.text(`TVA (${numberFormatter.format(state.vatRate * 100)} %) : ${currencyFormatter.format(vat)}`, margin, y);
         y += 20;
         doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
         doc.text(`Total TTC : ${currencyFormatter.format(total)}`, margin, y);
+        y += 30;
 
-        doc.save('devis.pdf');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Conditions de règlement : paiement à 30 jours fin de mois.', margin, y);
+        y += 14;
+        doc.text('Merci de nous retourner le devis signé avec la mention « Bon pour accord ».', margin, y);
+
+        let footerY = pageHeight - 60;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(margin, footerY - 16, pageWidth - margin, footerY - 16);
+        doc.setFontSize(9);
+        doc.setTextColor(120);
+        const footerLines = [
+          'Deviseur Express • SAS au capital de 30 000 € • RCS Paris 123 456 789 • www.deviseur-express.fr',
+          'Siège social : 123 avenue de la République, 75000 Paris • TVA FR 12 345 678 900',
+          'contact@deviseur-express.fr • +33 1 23 45 67 89',
+        ];
+        footerLines.forEach((line, index) => {
+          doc.text(line, margin, footerY + index * 12);
+        });
+
+        doc.save(`devis-${quoteNumber}.pdf`);
       }
 
       function toggleFeedback(message, type = 'info') {
@@ -524,6 +661,92 @@
         const normalised = value.replace(/\s/g, '').replace(',', '.');
         const parsed = parseFloat(normalised);
         return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      function requiresDimensions(unit = '') {
+        const normalised = unit.toString().toLowerCase().replace(/\s/g, '');
+        return normalised === 'm2' || normalised === 'm²';
+      }
+
+      function formatUnitLabel(unit = '') {
+        if (!unit) return '';
+        const trimmed = unit.trim();
+        if (!trimmed) return '';
+        if (trimmed.toLowerCase() === 'm2' || trimmed === 'm²') {
+          return 'm²';
+        }
+        return trimmed;
+      }
+
+      function formatQuantityLabel(item) {
+        if (!item) return '';
+        const unitLabel = formatUnitLabel(item.unit);
+        if (requiresDimensions(item.unit)) {
+          const area = Number.isFinite(item.quantity) ? item.quantity : 0;
+          return `${numberFormatter.format(area)}${unitLabel ? ` ${unitLabel}` : ''}`;
+        }
+        const value = Number.isFinite(item.quantity) ? item.quantity : 0;
+        return `${quantityFormatter.format(value)}${unitLabel ? ` ${unitLabel}` : ''}`.trim();
+      }
+
+      function toDimensionInputValue(value) {
+        if (!Number.isFinite(value) || value <= 0) {
+          return '';
+        }
+        return Number(value).toFixed(2);
+      }
+
+      function parseDimensionValue(raw) {
+        if (raw === '' || raw === null || raw === undefined) return 0;
+        const numeric = parseFloat(String(raw).replace(',', '.'));
+        if (!Number.isFinite(numeric) || numeric < 0) {
+          return 0;
+        }
+        return numeric;
+      }
+
+      function handleDimensionChange(productId, { length, width }) {
+        const item = state.quote.get(productId);
+        if (!item || !requiresDimensions(item.unit)) return;
+        const nextLength = parseDimensionValue(length);
+        const nextWidth = parseDimensionValue(width);
+        item.length = nextLength;
+        item.width = nextWidth;
+        const surface = nextLength > 0 && nextWidth > 0 ? nextLength * nextWidth : 0;
+        item.quantity = Number(surface.toFixed(2));
+        renderQuote();
+      }
+
+      function formatDimensionSummary(item) {
+        if (!requiresDimensions(item.unit)) {
+          return '';
+        }
+        const length = Number.isFinite(item.length) && item.length > 0 ? numberFormatter.format(item.length) : null;
+        const width = Number.isFinite(item.width) && item.width > 0 ? numberFormatter.format(item.width) : null;
+        const surface = Number.isFinite(item.quantity) && item.quantity > 0 ? numberFormatter.format(item.quantity) : null;
+        if (length && width && surface) {
+          return `${length} m × ${width} m = ${surface} ${formatUnitLabel(item.unit)}`;
+        }
+        return 'Indiquez une longueur et une largeur pour calculer la surface.';
+      }
+
+      function formatPdfQuantity(item) {
+        if (!item) return '';
+        const unitLabel = formatUnitLabel(item.unit);
+        if (requiresDimensions(item.unit)) {
+          const length = Number.isFinite(item.length) && item.length > 0 ? numberFormatter.format(item.length) : null;
+          const width = Number.isFinite(item.width) && item.width > 0 ? numberFormatter.format(item.width) : null;
+          const surface = Number.isFinite(item.quantity) ? numberFormatter.format(item.quantity) : numberFormatter.format(0);
+          if (length && width) {
+            return `${length} m × ${width} m = ${surface} ${unitLabel || 'm²'}`;
+          }
+          return `${surface} ${unitLabel || 'm²'}`;
+        }
+        const value = Number.isFinite(item.quantity) ? item.quantity : 0;
+        if (unitLabel) {
+          return `${quantityFormatter.format(value)} ${unitLabel}`;
+        }
+        return quantityFormatter.format(value);
       }
     </script>
   </body>
