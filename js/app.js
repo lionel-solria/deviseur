@@ -16,6 +16,9 @@ const state = {
   generalComment: '',
   splitInstance: null,
   lastFocusElement: null,
+  searchQuery: '',
+  selectedCategories: new Set(),
+  categories: [],
 };
 
 const elements = {
@@ -23,6 +26,12 @@ const elements = {
   cataloguePanel: document.getElementById('catalogue-panel'),
   quotePanel: document.getElementById('quote-panel'),
   search: document.getElementById('search'),
+  categoryFilterToggle: document.getElementById('category-filter-toggle'),
+  categoryFilterMenu: document.getElementById('category-filter-menu'),
+  categoryFilterLabel: document.getElementById('category-filter-label'),
+  categoryFilterOptions: document.getElementById('category-filter-options'),
+  categoryFilterClear: document.getElementById('category-filter-clear'),
+  categoryFilterClose: document.getElementById('category-filter-close'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
@@ -49,6 +58,7 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
+  setupCategoryFilter();
   elements.discount?.addEventListener('input', handleDiscountChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
@@ -95,8 +105,8 @@ async function loadCatalogue() {
       .map(toProduct)
       .filter((item) => item && item.name);
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
-    state.filtered = [...state.catalogue];
-    renderProducts();
+    populateCategoryFilter();
+    applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
     console.error(error);
@@ -181,6 +191,8 @@ function toProduct(entry) {
   const rawUnit = entry.unite || '';
   const unit = normaliseUnitLabel(rawUnit);
   const quantityMode = getQuantityMode(rawUnit);
+  const rawCategory = entry.categorie || '';
+  const category = rawCategory.trim() || 'Non classé';
   return {
     id: entry.id_produit_sellsy,
     reference,
@@ -192,20 +204,13 @@ function toProduct(entry) {
     quantityMode,
     image,
     link,
+    category,
   };
 }
 
 function handleSearch(event) {
-  const query = event.target.value.trim().toLowerCase();
-  if (!query) {
-    state.filtered = [...state.catalogue];
-  } else {
-    state.filtered = state.catalogue.filter((product) => {
-      const haystack = `${product.name} ${product.reference}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }
-  renderProducts();
+  state.searchQuery = event.target.value.trim();
+  applyFilters();
 }
 
 function renderProducts() {
@@ -229,6 +234,11 @@ function renderProducts() {
       image.src = defaultImage;
     });
 
+    const categoryBadge = card.querySelector('.product-category-badge');
+    if (categoryBadge) {
+      categoryBadge.textContent = product.category;
+    }
+
     card.querySelector('.product-reference').textContent = product.reference;
     card.querySelector('.product-name').textContent = product.name;
     card.querySelector('.product-description').textContent = product.description || 'Pas de description fournie.';
@@ -250,6 +260,160 @@ function renderProducts() {
     fragment.appendChild(card);
   }
   productGrid.appendChild(fragment);
+}
+
+function populateCategoryFilter() {
+  const { categoryFilterOptions } = elements;
+  if (!categoryFilterOptions) return;
+
+  const categories = Array.from(
+    new Set(
+      state.catalogue
+        .map((product) => product.category || 'Non classé')
+        .filter((category) => category && category.trim().length > 0),
+    ),
+  ).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+  state.categories = categories;
+  categoryFilterOptions.innerHTML = '';
+
+  if (!categories.length) {
+    const empty = document.createElement('p');
+    empty.className = 'px-4 py-2 text-xs text-slate-500';
+    empty.textContent = 'Aucune catégorie disponible.';
+    categoryFilterOptions.appendChild(empty);
+    updateCategoryFilterLabel();
+    return;
+  }
+
+  categories.forEach((category, index) => {
+    const option = document.createElement('label');
+    option.className = 'category-filter-option';
+    option.dataset.category = category;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = category;
+    checkbox.id = `category-filter-${index}`;
+    checkbox.checked = state.selectedCategories.has(category);
+    checkbox.addEventListener('change', handleCategoryFilterChange);
+
+    const text = document.createElement('span');
+    text.textContent = category;
+
+    option.appendChild(checkbox);
+    option.appendChild(text);
+    categoryFilterOptions.appendChild(option);
+  });
+
+  updateCategoryFilterLabel();
+}
+
+function setupCategoryFilter() {
+  const { categoryFilterToggle, categoryFilterMenu, categoryFilterClose, categoryFilterClear } = elements;
+  if (!categoryFilterToggle || !categoryFilterMenu) return;
+
+  categoryFilterToggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const isOpen = categoryFilterMenu.dataset.open === 'true';
+    if (isOpen) {
+      closeCategoryDropdown();
+    } else {
+      openCategoryDropdown();
+    }
+  });
+
+  categoryFilterMenu.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+
+  if (categoryFilterClose) {
+    categoryFilterClose.addEventListener('click', () => {
+      closeCategoryDropdown();
+    });
+  }
+
+  if (categoryFilterClear) {
+    categoryFilterClear.addEventListener('click', () => {
+      clearCategoryFilter();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!categoryFilterMenu.contains(event.target) && event.target !== categoryFilterToggle) {
+      closeCategoryDropdown();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeCategoryDropdown();
+    }
+  });
+}
+
+function openCategoryDropdown() {
+  const { categoryFilterMenu, categoryFilterToggle } = elements;
+  if (!categoryFilterMenu || !categoryFilterToggle) return;
+  categoryFilterMenu.dataset.open = 'true';
+  categoryFilterToggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeCategoryDropdown() {
+  const { categoryFilterMenu, categoryFilterToggle } = elements;
+  if (!categoryFilterMenu || !categoryFilterToggle) return;
+  categoryFilterMenu.dataset.open = 'false';
+  categoryFilterToggle.setAttribute('aria-expanded', 'false');
+}
+
+function handleCategoryFilterChange(event) {
+  const { value, checked } = event.target;
+  if (!value) return;
+  if (checked) {
+    state.selectedCategories.add(value);
+  } else {
+    state.selectedCategories.delete(value);
+  }
+  updateCategoryFilterLabel();
+  applyFilters();
+}
+
+function clearCategoryFilter() {
+  state.selectedCategories.clear();
+  const optionsContainer = elements.categoryFilterOptions;
+  if (optionsContainer) {
+    const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach((checkbox) => {
+      checkbox.checked = false;
+    });
+  }
+  updateCategoryFilterLabel();
+  applyFilters();
+}
+
+function updateCategoryFilterLabel() {
+  const { categoryFilterLabel } = elements;
+  if (!categoryFilterLabel) return;
+  const selections = Array.from(state.selectedCategories);
+  if (!selections.length) {
+    categoryFilterLabel.textContent = 'Toutes les catégories';
+  } else if (selections.length === 1) {
+    categoryFilterLabel.textContent = selections[0];
+  } else {
+    categoryFilterLabel.textContent = `${selections.length} catégories sélectionnées`;
+  }
+}
+
+function applyFilters() {
+  const query = state.searchQuery.trim().toLowerCase();
+  state.filtered = state.catalogue.filter((product) => {
+    const haystack = `${product.name} ${product.reference}`.toLowerCase();
+    const matchesQuery = !query || haystack.includes(query);
+    const matchesCategory = !state.selectedCategories.size || state.selectedCategories.has(product.category);
+    return matchesQuery && matchesCategory;
+  });
+  renderProducts();
 }
 
 function addToQuote(productId) {
@@ -283,15 +447,50 @@ function renderQuote() {
     const fragment = document.createDocumentFragment();
     for (const item of state.quote.values()) {
       const node = elements.quoteTemplate.content.firstElementChild.cloneNode(true);
-      node.querySelector('.quote-name').textContent = item.name;
-      node.querySelector('.quote-reference').textContent = item.reference;
-      node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
+      node.dataset.expanded = 'false';
 
-      const lineTotal = node.querySelector('.line-total');
+      const summaryName = node.querySelector('.quote-summary-name');
+      const summaryReference = node.querySelector('.quote-summary-reference');
+      const summaryTotal = node.querySelector('.quote-summary-total');
+      const toggleButton = node.querySelector('.quote-toggle');
+      const details = node.querySelector('.quote-details');
+      const removeButton = node.querySelector('.remove-item');
+
+      if (details) {
+        details.classList.remove('hidden');
+      }
+
+      if (toggleButton) {
+        toggleButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const expanded = node.dataset.expanded === 'true';
+          node.dataset.expanded = expanded ? 'false' : 'true';
+          toggleButton.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        });
+      }
+
+      if (removeButton) {
+        removeButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          removeItem(item.id);
+        });
+      }
+
+      if (summaryName) summaryName.textContent = item.name;
+      if (summaryReference) summaryReference.textContent = item.reference;
+
+      const detailName = node.querySelector('.quote-name');
+      const detailReference = node.querySelector('.quote-reference');
+      const unitPrice = node.querySelector('.unit-price');
+
+      if (detailName) detailName.textContent = item.name;
+      if (detailReference) detailReference.textContent = item.reference;
+      if (unitPrice) unitPrice.textContent = currencyFormatter.format(item.price);
+
+      const lineTotalElements = node.querySelectorAll('.line-total');
       const quantityValueElements = node.querySelectorAll('[data-role="quantity-value"]');
       const quantityUnitElements = node.querySelectorAll('[data-role="quantity-unit"]');
-      const unitLabel =
-        item.quantityMode === 'area' ? item.unit || 'm²' : item.unit || "à l'unité";
+      const unitLabel = item.quantityMode === 'area' ? item.unit || 'm²' : item.unit || "à l'unité";
       quantityUnitElements.forEach((element) => {
         element.textContent = unitLabel;
       });
@@ -300,17 +499,36 @@ function renderQuote() {
       const areaControls = node.querySelector('[data-mode="area"]');
       const dimensions = node.querySelector('.quote-dimensions');
 
+      const updateLineTotals = () => {
+        const total = item.price * (item.quantity || 0);
+        const formatted = currencyFormatter.format(total);
+        if (summaryTotal) {
+          summaryTotal.textContent = formatted;
+        }
+        lineTotalElements.forEach((element) => {
+          element.textContent = formatted;
+        });
+      };
+
       if (item.quantityMode === 'area') {
-        unitControls.classList.add('hidden');
-        areaControls.classList.remove('hidden');
-        const lengthInput = areaControls.querySelector('.length-input');
-        const widthInput = areaControls.querySelector('.width-input');
-        lengthInput.value = item.length ?? 1;
-        widthInput.value = item.width ?? 1;
+        if (unitControls) {
+          unitControls.classList.add('hidden');
+        }
+        if (areaControls) {
+          areaControls.classList.remove('hidden');
+        }
+        const lengthInput = areaControls ? areaControls.querySelector('.length-input') : null;
+        const widthInput = areaControls ? areaControls.querySelector('.width-input') : null;
+        if (lengthInput) {
+          lengthInput.value = item.length ?? 1;
+        }
+        if (widthInput) {
+          widthInput.value = item.width ?? 1;
+        }
 
         const refreshArea = (shouldUpdateSummary = true) => {
-          const length = Math.max(0, parseFrenchNumber(lengthInput.value));
-          const width = Math.max(0, parseFrenchNumber(widthInput.value));
+          const length = Math.max(0, parseFrenchNumber(lengthInput ? lengthInput.value : 0));
+          const width = Math.max(0, parseFrenchNumber(widthInput ? widthInput.value : 0));
           item.length = length;
           item.width = width;
           const area = Number.isFinite(length * width) ? length * width : 0;
@@ -318,39 +536,58 @@ function renderQuote() {
           quantityValueElements.forEach((element) => {
             element.textContent = quantityFormatter.format(area);
           });
-          if (length > 0 && width > 0) {
-            dimensions.textContent = `Dimensions : ${dimensionFormatter.format(length)} m x ${dimensionFormatter.format(width)} m`;
-          } else {
-            dimensions.textContent = 'Dimensions : à préciser';
+          if (dimensions) {
+            if (length > 0 && width > 0) {
+              dimensions.textContent = `Dimensions : ${dimensionFormatter.format(length)} m x ${dimensionFormatter.format(width)} m`;
+            } else {
+              dimensions.textContent = 'Dimensions : à préciser';
+            }
           }
-          lineTotal.textContent = currencyFormatter.format(item.price * item.quantity);
+          updateLineTotals();
           if (shouldUpdateSummary) {
             updateSummary();
           }
         };
 
-        lengthInput.addEventListener('input', () => refreshArea(true));
-        widthInput.addEventListener('input', () => refreshArea(true));
+        if (lengthInput) {
+          lengthInput.addEventListener('input', () => refreshArea(true));
+        }
+        if (widthInput) {
+          widthInput.addEventListener('input', () => refreshArea(true));
+        }
         refreshArea(false);
       } else {
-        areaControls.classList.add('hidden');
-        unitControls.classList.remove('hidden');
-        dimensions.textContent = '';
+        if (areaControls) {
+          areaControls.classList.add('hidden');
+        }
+        if (unitControls) {
+          unitControls.classList.remove('hidden');
+        }
+        if (dimensions) {
+          dimensions.textContent = '';
+        }
         quantityValueElements.forEach((element) => {
           element.textContent = quantityFormatter.format(item.quantity);
         });
-        unitControls.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
-        unitControls.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
-        lineTotal.textContent = currencyFormatter.format(item.price * item.quantity);
+        const decreaseButton = unitControls ? unitControls.querySelector('.decrease') : null;
+        const increaseButton = unitControls ? unitControls.querySelector('.increase') : null;
+        if (decreaseButton) {
+          decreaseButton.addEventListener('click', () => changeQuantity(item.id, -1));
+        }
+        if (increaseButton) {
+          increaseButton.addEventListener('click', () => changeQuantity(item.id, 1));
+        }
+        updateLineTotals();
       }
 
       const commentField = node.querySelector('.quote-comment');
-      commentField.value = item.comment || '';
-      commentField.addEventListener('input', (event) => {
-        item.comment = event.target.value;
-      });
+      if (commentField) {
+        commentField.value = item.comment || '';
+        commentField.addEventListener('input', (event) => {
+          item.comment = event.target.value;
+        });
+      }
 
-      node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
       fragment.appendChild(node);
     }
     elements.quoteList.innerHTML = '';
