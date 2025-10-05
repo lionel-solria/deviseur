@@ -146,14 +146,29 @@
           <div>
             <p class="quote-name font-semibold text-slate-900"></p>
             <p class="quote-reference text-xs uppercase tracking-wide text-slate-400"></p>
+            <p class="quote-unit text-xs text-slate-500"></p>
           </div>
           <button class="remove-item text-xs font-semibold text-rose-500 transition hover:text-rose-600">Retirer</button>
         </div>
         <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center rounded-lg border border-slate-200 bg-white">
+          <div class="quantity-standard flex items-center rounded-lg border border-slate-200 bg-white">
             <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
             <span class="quantity min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
             <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
+          </div>
+          <div class="quantity-area hidden w-full flex flex-wrap items-end gap-3">
+            <label class="flex flex-col text-xs font-medium text-slate-500">
+              Longueur (m)
+              <input type="number" min="0" step="0.01" class="length-input mt-1 w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </label>
+            <label class="flex flex-col text-xs font-medium text-slate-500">
+              Largeur (m)
+              <input type="number" min="0" step="0.01" class="width-input mt-1 w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </label>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-xs uppercase tracking-wide text-slate-400">Quantité</span>
+            <span class="quantity-display font-medium text-slate-900"></span>
           </div>
           <div class="flex flex-col">
             <span class="text-xs uppercase tracking-wide text-slate-400">PU HT</span>
@@ -171,6 +186,7 @@
       const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
       const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
       const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const areaUnits = ['m²', 'm2', 'metre carre', 'metres carres', 'mètre carré', 'mètres carrés', 'square meter', 'square metre', 'sqm'];
 
       const state = {
         catalogue: [],
@@ -282,7 +298,7 @@
         const description = entry.description || '';
         const rawPrice = entry.tarif_plein || entry.prix_reference_ht || '0';
         const price = parseFrenchNumber(rawPrice);
-        const image = entry.image || '';
+        const image = normalizeImage(entry.image);
         const link = entry.lien || '';
         return {
           id: entry.id_produit_sellsy,
@@ -293,6 +309,7 @@
           priceLabel: currencyFormatter.format(price),
           unit: entry.unite || '',
           image,
+          hasImage: Boolean(image),
           link,
         };
       }
@@ -324,7 +341,7 @@
         for (const product of state.filtered) {
           const card = elements.productTemplate.content.firstElementChild.cloneNode(true);
           const image = card.querySelector('.product-image');
-          image.src = product.image || defaultImage;
+          image.src = product.hasImage ? product.image : defaultImage;
           image.alt = product.name;
           image.addEventListener('error', () => {
             image.src = defaultImage;
@@ -356,11 +373,18 @@
         if (!product) return;
         const existing = state.quote.get(productId);
         if (existing) {
-          existing.quantity += 1;
+          if (isAreaUnit(existing.unit)) {
+            existing.quantity = roundToTwo(existing.quantity + 1);
+          } else {
+            existing.quantity += 1;
+          }
         } else {
+          const isArea = isAreaUnit(product.unit);
           state.quote.set(productId, {
             ...product,
-            quantity: 1,
+            quantity: isArea ? roundToTwo(1) : 1,
+            length: isArea ? 1 : undefined,
+            width: isArea ? 1 : undefined,
           });
         }
         renderQuote();
@@ -379,11 +403,36 @@
             const node = elements.quoteTemplate.content.firstElementChild.cloneNode(true);
             node.querySelector('.quote-name').textContent = item.name;
             node.querySelector('.quote-reference').textContent = item.reference;
-            node.querySelector('.quantity').textContent = item.quantity;
+            node.querySelector('.quote-unit').textContent = formatUnitLabel(item.unit);
+            const quantityStandard = node.querySelector('.quantity-standard');
+            const quantityArea = node.querySelector('.quantity-area');
+            const quantitySpan = node.querySelector('.quantity');
+            const quantityDisplay = node.querySelector('.quantity-display');
+            const decrease = node.querySelector('.decrease');
+            const increase = node.querySelector('.increase');
+            const isArea = isAreaUnit(item.unit);
+            if (isArea) {
+              quantityStandard.classList.add('hidden');
+              quantityArea.classList.remove('hidden');
+              const lengthInput = quantityArea.querySelector('.length-input');
+              const widthInput = quantityArea.querySelector('.width-input');
+              if (!Number.isFinite(item.length) || item.length <= 0) item.length = 1;
+              if (!Number.isFinite(item.width) || item.width <= 0) item.width = 1;
+              lengthInput.value = formatNumberForInput(item.length);
+              widthInput.value = formatNumberForInput(item.width);
+              lengthInput.addEventListener('change', (event) => updateAreaDimension(item.id, 'length', event.target.value));
+              widthInput.addEventListener('change', (event) => updateAreaDimension(item.id, 'width', event.target.value));
+              quantitySpan.textContent = numberFormatter.format(item.quantity);
+            } else {
+              quantityStandard.classList.remove('hidden');
+              quantityArea.classList.add('hidden');
+              quantitySpan.textContent = item.quantity;
+              decrease.addEventListener('click', () => changeQuantity(item.id, -1));
+              increase.addEventListener('click', () => changeQuantity(item.id, 1));
+            }
+            quantityDisplay.textContent = formatQuantity(item);
             node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
             node.querySelector('.line-total').textContent = currencyFormatter.format(item.price * item.quantity);
-            node.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
-            node.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
             node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
             fragment.appendChild(node);
           }
@@ -395,8 +444,19 @@
 
       function changeQuantity(productId, delta) {
         const item = state.quote.get(productId);
-        if (!item) return;
+        if (!item || isAreaUnit(item.unit)) return;
         item.quantity = Math.max(1, item.quantity + delta);
+        renderQuote();
+      }
+
+      function updateAreaDimension(productId, dimension, rawValue) {
+        const item = state.quote.get(productId);
+        if (!item) return;
+        const parsed = Math.max(0, parseFrenchNumber(String(rawValue)));
+        item[dimension] = parsed;
+        const length = Number.isFinite(item.length) ? item.length : 0;
+        const width = Number.isFinite(item.width) ? item.width : 0;
+        item.quantity = roundToTwo(length * width);
         renderQuote();
       }
 
@@ -446,6 +506,8 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'pt', format: 'a4' });
         const margin = 48;
+        const quoteDate = new Date();
+        doc.setProperties({ title: `Devis ${quoteDate.toLocaleDateString('fr-FR')}` });
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
@@ -457,37 +519,42 @@
         doc.text('Client\nNom du client\nAdresse\nCode postal - Ville\nclient@email.com', 320, 90, { align: 'left' });
 
         doc.setFont('helvetica', 'bold');
-        doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, margin, 180);
+        doc.text(`Date : ${quoteDate.toLocaleDateString('fr-FR')}`, margin, 180);
         doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, margin, 200);
 
         const body = items.map((item) => [
           item.reference,
           item.name,
-          item.quantity,
+          getItemDetails(item),
+          formatQuantity(item),
           numberFormatter.format(item.price),
           numberFormatter.format(item.price * item.quantity),
         ]);
 
         doc.autoTable({
           startY: 230,
-          head: [['Référence', 'Désignation', 'Quantité', 'PU HT (€)', 'Total HT (€)']],
+          head: [['Référence', 'Désignation', 'Détails', 'Quantité', 'PU HT (€)', 'Total HT (€)']],
           body,
           styles: { font: 'helvetica', fontSize: 10, cellPadding: 6 },
           headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
           columnStyles: {
-            2: { halign: 'center' },
-            3: { halign: 'right' },
+            3: { halign: 'center' },
             4: { halign: 'right' },
+            5: { halign: 'right' },
           },
           alternateRowStyles: { fillColor: [250, 250, 250] },
           margin: { left: margin, right: margin },
         });
 
         let y = doc.lastAutoTable.finalY + 24;
+        const pageHeight = doc.internal.pageSize.getHeight();
+        if (y > pageHeight - 200) {
+          doc.addPage();
+          y = margin;
+        }
         doc.setFont('helvetica', 'normal');
         doc.text('Récapitulatif financier', margin, y);
         y += 16;
-        doc.setFont('helvetica', 'normal');
         doc.text(`Total HT : ${currencyFormatter.format(subtotal)}`, margin, y);
         y += 16;
         doc.text(`Remise (${numberFormatter.format(state.discountRate)} %) : -${currencyFormatter.format(discountAmount)}`, margin, y);
@@ -498,6 +565,36 @@
         y += 20;
         doc.setFont('helvetica', 'bold');
         doc.text(`Total TTC : ${currencyFormatter.format(total)}`, margin, y);
+
+        y += 32;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Informations complémentaires', margin, y);
+        y += 16;
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+          "Devis valable 30 jours à compter de la date d'émission. Règlement par virement bancaire sous 30 jours fin de mois. En cas de question, contactez notre service commercial.",
+          margin,
+          y,
+          { maxWidth: doc.internal.pageSize.getWidth() - margin * 2, lineHeightFactor: 1.4 }
+        );
+
+        const pageCount = doc.getNumberOfPages();
+        for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+          doc.setPage(pageNumber);
+          const height = doc.internal.pageSize.getHeight();
+          doc.setDrawColor(226, 232, 240);
+          doc.setLineWidth(0.5);
+          doc.line(margin, height - 60, doc.internal.pageSize.getWidth() - margin, height - 60);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(100);
+          doc.text('Deviseur Express • www.votre-entreprise.fr • SIRET 123 456 789 00010 • TVA FR1234567890', margin, height - 44);
+          doc.text(`Page ${pageNumber}/${pageCount}`, doc.internal.pageSize.getWidth() - margin, height - 44, { align: 'right' });
+          doc.text('Merci pour votre confiance. Document généré automatiquement par Deviseur Express.', margin, height - 28);
+        }
+        doc.setTextColor(0);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
 
         doc.save('devis.pdf');
       }
@@ -524,6 +621,57 @@
         const normalised = value.replace(/\s/g, '').replace(',', '.');
         const parsed = parseFloat(normalised);
         return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      function isAreaUnit(unit) {
+        if (!unit) return false;
+        const value = unit.toString().toLowerCase();
+        return areaUnits.some((keyword) => value.includes(keyword));
+      }
+
+      function formatQuantity(item) {
+        if (!item) return '0';
+        if (isAreaUnit(item.unit)) {
+          const quantity = Number.isFinite(item.quantity) ? item.quantity : 0;
+          const unitLabel = item.unit || 'm²';
+          const length = Number.isFinite(item.length) ? numberFormatter.format(item.length) : numberFormatter.format(0);
+          const width = Number.isFinite(item.width) ? numberFormatter.format(item.width) : numberFormatter.format(0);
+          return `${length} m × ${width} m = ${numberFormatter.format(quantity)} ${unitLabel}`.trim();
+        }
+        if (item.unit) {
+          return `${item.quantity} ${item.unit}`.trim();
+        }
+        return String(item.quantity);
+      }
+
+      function formatUnitLabel(unit) {
+        return unit ? `Unité : ${unit}` : 'Unité : non précisée';
+      }
+
+      function getItemDetails(item) {
+        if (isAreaUnit(item.unit)) {
+          const length = Number.isFinite(item.length) ? item.length : 0;
+          const width = Number.isFinite(item.width) ? item.width : 0;
+          return `Longueur : ${numberFormatter.format(length)} m\nLargeur : ${numberFormatter.format(width)} m`;
+        }
+        return item.unit ? `Unité : ${item.unit}` : 'Unité : -';
+      }
+
+      function normalizeImage(value) {
+        const raw = (value || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower === 'null' || lower === 'n/a' || lower === '#n/a') return '';
+        return raw;
+      }
+
+      function roundToTwo(value) {
+        return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+      }
+
+      function formatNumberForInput(value) {
+        if (!Number.isFinite(value)) return '0.00';
+        return roundToTwo(value).toFixed(2);
       }
     </script>
   </body>
