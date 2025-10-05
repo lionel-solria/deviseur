@@ -36,17 +36,46 @@
                 Parcourez le catalogue et ajoutez les articles souhaités directement à votre devis.
               </p>
             </div>
-            <div class="relative">
-              <label for="search" class="sr-only">Rechercher un produit</label>
-              <input
-                id="search"
-                type="search"
-                placeholder="Rechercher par nom ou référence..."
-                class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-              <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
-              </svg>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <div class="relative flex-1">
+                <label for="search" class="sr-only">Rechercher un produit</label>
+                <input
+                  id="search"
+                  type="search"
+                  placeholder="Rechercher par nom ou référence..."
+                  class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
+                </svg>
+              </div>
+              <div class="category-filter relative">
+                <button
+                  id="category-filter-toggle"
+                  type="button"
+                  class="category-filter-toggle"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                >
+                  <span class="flex items-center gap-2">
+                    <svg class="h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h18M5.25 12h13.5M9 19.5h6" />
+                    </svg>
+                    <span class="text-sm font-semibold text-slate-700">Catégories</span>
+                  </span>
+                  <span id="category-filter-summary" class="category-filter-summary">Toutes</span>
+                  <svg class="h-4 w-4 text-slate-400 transition-transform" data-role="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                <div id="category-filter-panel" class="category-filter-panel" role="listbox" aria-multiselectable="true">
+                  <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Filtrer par catégorie</p>
+                    <button id="category-filter-clear" type="button" class="text-xs font-semibold text-blue-600 transition hover:text-blue-700">Effacer</button>
+                  </div>
+                  <div id="category-filter-list" class="category-filter-list" role="group"></div>
+                </div>
+              </div>
             </div>
           </header>
           <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
@@ -66,7 +95,7 @@
             </svg>
             <p>Aucun article n'a encore été ajouté. Utilisez le bouton « Ajouter au devis » sur un produit.</p>
           </div>
-          <div id="quote-list" class="mt-4 hidden flex-1 space-y-4 overflow-y-auto pr-1"></div>
+          <div id="quote-list" class="mt-4 hidden flex-1 overflow-y-auto pr-1"></div>
           <div class="mt-6 space-y-4">
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <label for="general-comment" class="text-sm font-medium text-slate-700">Commentaire général</label>
@@ -108,7 +137,7 @@
     </main>
 
     <template id="product-card-template">
-      <article class="product-card group flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md focus-within:-translate-y-1 focus-within:shadow-md">
+      <article class="product-card group flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm transition">
         <div class="product-image-frame">
           <img class="product-image" alt="" />
           <div class="product-reference-badge">
@@ -116,9 +145,12 @@
           </div>
         </div>
         <div class="mt-4 flex flex-1 flex-col gap-4">
-          <div class="flex-1">
-            <h3 class="product-name text-base font-semibold text-slate-900"></h3>
-            <p class="product-description mt-2 line-clamp-3 text-sm text-slate-500"></p>
+          <div class="flex items-start gap-3">
+            <img class="product-thumbnail" alt="" />
+            <div class="flex-1">
+              <h3 class="product-name text-base font-semibold text-slate-900"></h3>
+              <p class="product-description mt-1 line-clamp-3 text-sm text-slate-500"></p>
+            </div>
           </div>
           <div class="product-actions">
             <div>
@@ -139,57 +171,77 @@
     </template>
 
     <template id="quote-item-template">
-      <div class="quote-row flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-        <div class="flex items-start justify-between gap-2">
-          <div class="space-y-1">
-            <p class="quote-name font-semibold text-slate-900"></p>
-            <p class="quote-reference text-xs uppercase tracking-wide text-slate-400"></p>
-            <p class="quote-unit text-xs text-slate-500">
-              Unité de vente : <span data-role="quantity-unit"></span>
-            </p>
-          </div>
-          <button class="remove-item text-xs font-semibold text-rose-500 transition hover:text-rose-600">Retirer</button>
-        </div>
-        <div class="flex flex-wrap items-start gap-4">
-          <div class="flex flex-col gap-3">
-            <div class="quantity-unit-controls hidden flex items-center rounded-lg border border-slate-200 bg-white" data-mode="unit">
-              <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
-              <span data-role="quantity-value" class="min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
-              <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
+      <div class="quote-row rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600" data-expanded="false">
+        <div class="quote-summary flex items-stretch justify-between gap-2">
+          <button type="button" class="quote-toggle flex flex-1 items-center justify-between gap-3 rounded-t-xl px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" aria-expanded="false">
+            <div class="min-w-0 flex-1">
+              <p class="quote-name truncate text-sm font-semibold text-slate-900"></p>
+              <p class="quote-reference truncate text-xs uppercase tracking-wide text-slate-400"></p>
             </div>
-            <div class="quantity-area-controls hidden rounded-xl border border-slate-200 bg-white p-3" data-mode="area">
-              <div class="grid grid-cols-2 gap-3">
-                <label class="flex flex-col text-xs font-medium text-slate-500">
-                  Longueur (m)
-                  <input type="number" min="0" step="0.01" class="length-input mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                </label>
-                <label class="flex flex-col text-xs font-medium text-slate-500">
-                  Largeur (m)
-                  <input type="number" min="0" step="0.01" class="width-input mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                </label>
-              </div>
-              <p class="quote-dimensions mt-2 text-xs text-slate-500"></p>
-              <p class="quote-area mt-1 text-sm font-semibold text-slate-900">
-                Surface calculée :
+            <div class="flex shrink-0 items-center gap-4">
+              <span class="summary-quantity flex items-center gap-1 text-xs font-medium text-slate-500">
                 <span data-role="quantity-value"></span>
-                <span data-role="quantity-unit" class="text-xs uppercase tracking-wide text-blue-600"></span>
-              </p>
+                <span data-role="quantity-unit" class="text-blue-600"></span>
+              </span>
+              <span class="summary-total font-semibold text-blue-600" data-role="line-total"></span>
+              <svg class="quote-toggle-icon h-4 w-4 text-slate-400 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+              </svg>
             </div>
-          </div>
-          <div class="flex flex-1 flex-wrap items-center gap-4">
-            <div class="flex flex-col">
-              <span class="text-xs uppercase tracking-wide text-slate-400">PU HT</span>
-              <span class="unit-price font-medium text-slate-900"></span>
-            </div>
-            <div class="flex flex-col">
-              <span class="text-xs uppercase tracking-wide text-slate-400">Total ligne</span>
-              <span class="line-total font-semibold text-blue-600"></span>
-            </div>
-          </div>
+          </button>
+          <button type="button" class="remove-item px-4 text-xs font-semibold text-rose-500 transition hover:text-rose-600">Retirer</button>
         </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-medium text-slate-500">Commentaire sur l'article</label>
-          <textarea class="quote-comment w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez une précision qui apparaîtra dans le devis..."></textarea>
+        <div class="quote-details hidden border-t border-slate-200 px-4 py-4">
+          <div class="flex flex-col gap-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="space-y-1">
+                <p class="quote-name text-base font-semibold text-slate-900"></p>
+                <p class="quote-reference text-xs uppercase tracking-wide text-slate-400"></p>
+                <p class="quote-unit text-xs text-slate-500">Unité de vente : <span data-role="quantity-unit"></span></p>
+              </div>
+              <div class="flex items-center gap-6">
+                <div class="flex flex-col text-right">
+                  <span class="text-xs uppercase tracking-wide text-slate-400">PU HT</span>
+                  <span class="unit-price font-medium text-slate-900"></span>
+                </div>
+                <div class="flex flex-col text-right">
+                  <span class="text-xs uppercase tracking-wide text-slate-400">Total ligne</span>
+                  <span class="line-total font-semibold text-blue-600" data-role="line-total"></span>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-start gap-4">
+              <div class="flex flex-col gap-3">
+                <div class="quantity-unit-controls hidden flex items-center rounded-lg border border-slate-200 bg-white" data-mode="unit">
+                  <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
+                  <span data-role="quantity-value" class="min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
+                  <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
+                </div>
+                <div class="quantity-area-controls hidden rounded-xl border border-slate-200 bg-white p-3" data-mode="area">
+                  <div class="grid grid-cols-2 gap-3">
+                    <label class="flex flex-col text-xs font-medium text-slate-500">
+                      Longueur (m)
+                      <input type="number" min="0" step="0.01" class="length-input mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </label>
+                    <label class="flex flex-col text-xs font-medium text-slate-500">
+                      Largeur (m)
+                      <input type="number" min="0" step="0.01" class="width-input mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </label>
+                  </div>
+                  <p class="quote-dimensions mt-2 text-xs text-slate-500"></p>
+                  <p class="quote-area mt-1 text-sm font-semibold text-slate-900">
+                    Surface calculée :
+                    <span data-role="quantity-value"></span>
+                    <span data-role="quantity-unit" class="text-xs uppercase tracking-wide text-blue-600"></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-xs font-medium text-slate-500">Commentaire sur l'article</label>
+              <textarea class="quote-comment w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez une précision qui apparaîtra dans le devis..."></textarea>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -210,5 +262,19 @@
         </div>
       </div>
     </div>
+
+    <footer class="site-footer">
+      <div class="mx-auto flex w-full max-w-[120rem] flex-col gap-4 px-4 py-10 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p class="text-lg font-semibold text-white">Deviseur Express</p>
+          <p class="text-sm text-slate-300">Créez, ajustez et partagez vos devis en toute simplicité.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-6">
+          <a href="#catalogue-title" class="text-slate-300 transition hover:text-white">Catalogue</a>
+          <a href="#quote-panel" class="text-slate-300 transition hover:text-white">Devis</a>
+          <p class="text-slate-400">&copy; <span id="footer-year"></span> Deviseur Express</p>
+        </div>
+      </div>
+    </footer>
   </body>
 </html>
