@@ -141,27 +141,52 @@
       </article>
     </template>
     <template id="quote-item-template">
-      <div class="quote-row flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+      <div class="quote-row flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
         <div class="flex items-start justify-between gap-2">
-          <div>
+          <div class="space-y-1">
             <p class="quote-name font-semibold text-slate-900"></p>
             <p class="quote-reference text-xs uppercase tracking-wide text-slate-400"></p>
+            <p class="quote-unit text-xs text-slate-500">
+              Unité de vente : <span data-role="quantity-unit"></span>
+            </p>
           </div>
           <button class="remove-item text-xs font-semibold text-rose-500 transition hover:text-rose-600">Retirer</button>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center rounded-lg border border-slate-200 bg-white">
-            <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
-            <span class="quantity min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
-            <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
+        <div class="flex flex-wrap items-start gap-4">
+          <div class="flex flex-col gap-3">
+            <div class="quantity-unit-controls hidden flex items-center rounded-lg border border-slate-200 bg-white" data-mode="unit">
+              <button class="decrease px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">−</button>
+              <span data-role="quantity-value" class="min-w-[2.5rem] text-center text-sm font-semibold text-slate-900"></span>
+              <button class="increase px-2 py-1 text-base text-slate-500 transition hover:text-slate-700">+</button>
+            </div>
+            <div class="quantity-area-controls hidden rounded-xl border border-slate-200 bg-white p-3" data-mode="area">
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex flex-col text-xs font-medium text-slate-500">
+                  Longueur (m)
+                  <input type="number" min="0" step="0.01" class="length-input mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                </label>
+                <label class="flex flex-col text-xs font-medium text-slate-500">
+                  Largeur (m)
+                  <input type="number" min="0" step="0.01" class="width-input mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                </label>
+              </div>
+              <p class="quote-dimensions mt-2 text-xs text-slate-500"></p>
+              <p class="quote-area mt-1 text-sm font-semibold text-slate-900">
+                Surface calculée :
+                <span data-role="quantity-value"></span>
+                <span data-role="quantity-unit" class="text-xs uppercase tracking-wide text-blue-600"></span>
+              </p>
+            </div>
           </div>
-          <div class="flex flex-col">
-            <span class="text-xs uppercase tracking-wide text-slate-400">PU HT</span>
-            <span class="unit-price font-medium text-slate-900"></span>
-          </div>
-          <div class="flex flex-col">
-            <span class="text-xs uppercase tracking-wide text-slate-400">Total ligne</span>
-            <span class="line-total font-semibold text-blue-600"></span>
+          <div class="flex flex-1 flex-wrap items-center gap-4">
+            <div class="flex flex-col">
+              <span class="text-xs uppercase tracking-wide text-slate-400">PU HT</span>
+              <span class="unit-price font-medium text-slate-900"></span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-xs uppercase tracking-wide text-slate-400">Total ligne</span>
+              <span class="line-total font-semibold text-blue-600"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -171,6 +196,8 @@
       const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
       const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
       const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const quantityFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      const dimensionFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
       const state = {
         catalogue: [],
@@ -275,6 +302,23 @@
           .replace(/^_|_$/g, '');
       }
 
+      function normaliseUnitLabel(unit) {
+        if (!unit) return '';
+        return unit
+          .replace(/m2/gi, 'm²')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      function getQuantityMode(unit) {
+        if (!unit) return 'unit';
+        const normalised = unit.toLowerCase();
+        if (normalised.includes('m2') || normalised.includes('m²')) {
+          return 'area';
+        }
+        return 'unit';
+      }
+
       function toProduct(entry) {
         if (!entry || !entry.id_produit_sellsy) return null;
         const name = entry.nom_commercial || '';
@@ -284,6 +328,9 @@
         const price = parseFrenchNumber(rawPrice);
         const image = entry.image || '';
         const link = entry.lien || '';
+        const rawUnit = entry.unite || '';
+        const unit = normaliseUnitLabel(rawUnit);
+        const quantityMode = getQuantityMode(rawUnit);
         return {
           id: entry.id_produit_sellsy,
           reference,
@@ -291,7 +338,8 @@
           description,
           price,
           priceLabel: currencyFormatter.format(price),
-          unit: entry.unite || '',
+          unit,
+          quantityMode,
           image,
           link,
         };
@@ -332,9 +380,10 @@
           card.querySelector('.product-reference').textContent = product.reference;
           card.querySelector('.product-name').textContent = product.name;
           card.querySelector('.product-description').textContent = product.description || 'Pas de description fournie.';
-          card.querySelector('.product-price').textContent = product.priceLabel;
+          const priceLabel = product.unit ? `${product.priceLabel} / ${product.unit}` : product.priceLabel;
+          card.querySelector('.product-price').textContent = priceLabel;
           const unit = card.querySelector('.product-unit');
-          unit.textContent = product.unit ? `Unité : ${product.unit}` : '';
+          unit.textContent = product.unit ? `Unité de vente : ${product.unit}` : 'Unité de vente : à l\'article';
           const link = card.querySelector('.product-link');
           if (product.link) {
             link.href = product.link;
@@ -356,11 +405,15 @@
         if (!product) return;
         const existing = state.quote.get(productId);
         if (existing) {
-          existing.quantity += 1;
+          if (existing.quantityMode === 'unit') {
+            existing.quantity += 1;
+          }
         } else {
           state.quote.set(productId, {
             ...product,
             quantity: 1,
+            length: product.quantityMode === 'area' ? 1 : undefined,
+            width: product.quantityMode === 'area' ? 1 : undefined,
           });
         }
         renderQuote();
@@ -379,11 +432,63 @@
             const node = elements.quoteTemplate.content.firstElementChild.cloneNode(true);
             node.querySelector('.quote-name').textContent = item.name;
             node.querySelector('.quote-reference').textContent = item.reference;
-            node.querySelector('.quantity').textContent = item.quantity;
             node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
-            node.querySelector('.line-total').textContent = currencyFormatter.format(item.price * item.quantity);
-            node.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
-            node.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
+            const lineTotal = node.querySelector('.line-total');
+            const quantityValueElements = node.querySelectorAll('[data-role="quantity-value"]');
+            const quantityUnitElements = node.querySelectorAll('[data-role="quantity-unit"]');
+            const unitLabel = item.unit || 'à l\'unité';
+            quantityUnitElements.forEach((element) => {
+              element.textContent = unitLabel;
+            });
+
+            const unitControls = node.querySelector('[data-mode="unit"]');
+            const areaControls = node.querySelector('[data-mode="area"]');
+            const dimensions = node.querySelector('.quote-dimensions');
+
+            if (item.quantityMode === 'area') {
+              unitControls.classList.add('hidden');
+              areaControls.classList.remove('hidden');
+              const lengthInput = areaControls.querySelector('.length-input');
+              const widthInput = areaControls.querySelector('.width-input');
+              lengthInput.value = item.length ?? 1;
+              widthInput.value = item.width ?? 1;
+
+              const refreshArea = (shouldUpdateSummary = true) => {
+                const length = Math.max(0, parseFrenchNumber(lengthInput.value));
+                const width = Math.max(0, parseFrenchNumber(widthInput.value));
+                item.length = length;
+                item.width = width;
+                const area = Number.isFinite(length * width) ? length * width : 0;
+                item.quantity = area;
+                quantityValueElements.forEach((element) => {
+                  element.textContent = quantityFormatter.format(area);
+                });
+                if (length > 0 && width > 0) {
+                  dimensions.textContent = `Dimensions : ${dimensionFormatter.format(length)} m x ${dimensionFormatter.format(width)} m`;
+                } else {
+                  dimensions.textContent = 'Dimensions : à préciser';
+                }
+                lineTotal.textContent = currencyFormatter.format(item.price * item.quantity);
+                if (shouldUpdateSummary) {
+                  updateSummary();
+                }
+              };
+
+              lengthInput.addEventListener('input', () => refreshArea(true));
+              widthInput.addEventListener('input', () => refreshArea(true));
+              refreshArea(false);
+            } else {
+              areaControls.classList.add('hidden');
+              unitControls.classList.remove('hidden');
+              dimensions.textContent = '';
+              quantityValueElements.forEach((element) => {
+                element.textContent = quantityFormatter.format(item.quantity);
+              });
+              unitControls.querySelector('.decrease').addEventListener('click', () => changeQuantity(item.id, -1));
+              unitControls.querySelector('.increase').addEventListener('click', () => changeQuantity(item.id, 1));
+              lineTotal.textContent = currencyFormatter.format(item.price * item.quantity);
+            }
+
             node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
             fragment.appendChild(node);
           }
@@ -395,7 +500,7 @@
 
       function changeQuantity(productId, delta) {
         const item = state.quote.get(productId);
-        if (!item) return;
+        if (!item || item.quantityMode !== 'unit') return;
         item.quantity = Math.max(1, item.quantity + delta);
         renderQuote();
       }
@@ -443,63 +548,151 @@
         const vat = net * state.vatRate;
         const total = net + vat;
 
+        const issueDate = new Date();
+        const issueDateLabel = issueDate.toLocaleDateString('fr-FR');
+        const validityDate = new Date(issueDate);
+        validityDate.setDate(validityDate.getDate() + 30);
+        const validityLabel = validityDate.toLocaleDateString('fr-FR');
+        const quoteNumber = `DEV-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'pt', format: 'a4' });
         const margin = 48;
+        const pageWidth = doc.internal.pageSize.getWidth();
 
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, 0, pageWidth, 120, 'F');
+        doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(22);
-        doc.text('DEMANDE DE DEVIS', margin, 60);
-
-        doc.setFontSize(11);
+        doc.setFontSize(24);
+        doc.text('DEVIS PROFESSIONNEL', margin, 60);
         doc.setFont('helvetica', 'normal');
-        doc.text('Votre entreprise\nAdresse\nCode postal - Ville\ncontact@entreprise.fr\n+33 1 23 45 67 89', margin, 90, { align: 'left' });
-        doc.text('Client\nNom du client\nAdresse\nCode postal - Ville\nclient@email.com', 320, 90, { align: 'left' });
+        doc.setFontSize(12);
+        doc.text(`Référence : ${quoteNumber}`, margin, 88);
+        doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
 
         doc.setFont('helvetica', 'bold');
-        doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, margin, 180);
-        doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, margin, 200);
+        doc.setFontSize(12);
+        doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
+          align: 'right',
+        });
 
-        const body = items.map((item) => [
-          item.reference,
-          item.name,
-          item.quantity,
-          numberFormatter.format(item.price),
-          numberFormatter.format(item.price * item.quantity),
-        ]);
+        doc.setTextColor(30, 41, 59);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        let y = 150;
+        doc.text('Informations client', margin, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text('Nom du client\nAdresse\nCode postal - Ville\nclient@email.com', margin, y + 18);
+
+        const infoX = pageWidth / 2 + 10;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Conditions du devis', infoX, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text(`Validité de l'offre : ${validityLabel}`, infoX, y + 18);
+        doc.text('Conditions de paiement : 30% à la commande, solde à la livraison', infoX, y + 36, {
+          maxWidth: pageWidth - infoX - margin,
+        });
+        doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, infoX, y + 54);
+
+        const body = items.map((item) => {
+          const quantityDetails =
+            item.quantityMode === 'area'
+              ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(item.quantity)} ${item.unit || 'm²'}`
+              : `${quantityFormatter.format(item.quantity)} ${item.unit || ''}`.trim();
+          return [
+            item.reference,
+            item.name,
+            quantityDetails,
+            currencyFormatter.format(item.price),
+            currencyFormatter.format(item.price * item.quantity),
+          ];
+        });
 
         doc.autoTable({
-          startY: 230,
-          head: [['Référence', 'Désignation', 'Quantité', 'PU HT (€)', 'Total HT (€)']],
+          startY: y + 90,
+          head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Total HT']],
           body,
-          styles: { font: 'helvetica', fontSize: 10, cellPadding: 6 },
+          styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
           headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
           columnStyles: {
-            2: { halign: 'center' },
-            3: { halign: 'right' },
-            4: { halign: 'right' },
+            0: { cellWidth: 90 },
+            2: { cellWidth: 170 },
+            3: { halign: 'right', cellWidth: 80 },
+            4: { halign: 'right', cellWidth: 80 },
           },
-          alternateRowStyles: { fillColor: [250, 250, 250] },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
           margin: { left: margin, right: margin },
         });
 
-        let y = doc.lastAutoTable.finalY + 24;
-        doc.setFont('helvetica', 'normal');
-        doc.text('Récapitulatif financier', margin, y);
-        y += 16;
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Total HT : ${currencyFormatter.format(subtotal)}`, margin, y);
-        y += 16;
-        doc.text(`Remise (${numberFormatter.format(state.discountRate)} %) : -${currencyFormatter.format(discountAmount)}`, margin, y);
-        y += 16;
-        doc.text(`Base HT après remise : ${currencyFormatter.format(net)}`, margin, y);
-        y += 16;
-        doc.text(`TVA (${numberFormatter.format(state.vatRate * 100)} %) : ${currencyFormatter.format(vat)}`, margin, y);
-        y += 20;
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Total TTC : ${currencyFormatter.format(total)}`, margin, y);
+        const summaryStartY = doc.lastAutoTable.finalY + 24;
+        doc.autoTable({
+          startY: summaryStartY,
+          head: [['Récapitulatif', 'Montant']],
+          body: [
+            ['Total HT', currencyFormatter.format(subtotal)],
+            [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
+            ['Base HT après remise', currencyFormatter.format(net)],
+            [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
+            ['Total TTC', currencyFormatter.format(total)],
+          ],
+          styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
+          headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 200 },
+            1: { halign: 'right', cellWidth: 120 },
+          },
+          margin: { left: margin, right: margin },
+          didParseCell: (data) => {
+            if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fillColor = [226, 232, 240];
+            }
+          },
+        });
 
-        doc.save('devis.pdf');
+        let closingY = doc.lastAutoTable.finalY + 28;
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(11);
+        doc.text(
+          'Merci pour votre confiance. Ce devis reste modifiable jusqu\'à validation écrite.',
+          margin,
+          closingY,
+        );
+        closingY += 18;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(
+          'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
+          margin,
+          closingY,
+          { maxWidth: pageWidth - margin * 2 },
+        );
+
+        const addFooter = () => {
+          const pageCount = doc.getNumberOfPages();
+          for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+            doc.setPage(pageNumber);
+            const pageHeight = doc.internal.pageSize.getHeight();
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(100, 116, 139);
+            doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
+            doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
+            doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
+            doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
+          }
+          doc.setTextColor(30, 41, 59);
+        };
+
+        addFooter();
+        doc.save(`devis-${quoteNumber}.pdf`);
       }
 
       function toggleFeedback(message, type = 'info') {
