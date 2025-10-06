@@ -1,4 +1,4 @@
-const catalogueUrl = './catalogue/import_items.csv';
+const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 
 const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -50,6 +50,8 @@ const elements = {
   generalComment: document.getElementById('general-comment'),
   summarySubtotal: document.getElementById('summary-subtotal'),
   summaryDiscount: document.getElementById('summary-discount'),
+  summaryNetProducts: document.getElementById('summary-net-products'),
+  summaryEcotax: document.getElementById('summary-ecotax'),
   summaryNet: document.getElementById('summary-net'),
   summaryVat: document.getElementById('summary-vat'),
   summaryTotal: document.getElementById('summary-total'),
@@ -59,9 +61,15 @@ const elements = {
   modalTitle: document.getElementById('product-modal-title'),
   modalReference: document.getElementById('product-modal-reference'),
   modalDescription: document.getElementById('product-modal-description'),
+  modalHighlights: document.getElementById('product-modal-highlights'),
+  modalUnit: document.getElementById('product-modal-unit'),
+  modalWeight: document.getElementById('product-modal-weight'),
+  modalEcotax: document.getElementById('product-modal-ecotax'),
+  modalScore: document.getElementById('product-modal-score'),
   modalLink: document.getElementById('product-modal-link'),
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
+  footerEcotax: document.getElementById('footer-ecotax'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -139,7 +147,7 @@ function parseCsv(text, delimiter = ';') {
     const cells = splitCsvLine(line, delimiter);
     const entry = {};
     headers.forEach((header, index) => {
-      entry[header] = (cells[index] ?? '').trim();
+      entry[header] = normaliseCsvValue(cells[index]);
     });
     return entry;
   });
@@ -170,6 +178,16 @@ function splitCsvLine(line, delimiter) {
   return cells;
 }
 
+function normaliseCsvValue(value) {
+  if (value === undefined || value === null) return '';
+  const stringValue = String(value).trim();
+  if (!stringValue) return '';
+  if (/^(null|undefined|nan)$/i.test(stringValue)) {
+    return '';
+  }
+  return stringValue;
+}
+
 function slugifyHeader(header) {
   return header
     .toLowerCase()
@@ -179,16 +197,47 @@ function slugifyHeader(header) {
     .replace(/^_|_$/g, '');
 }
 
+function interpretUnit(rawUnit) {
+  const value = normaliseCsvValue(rawUnit);
+  if (!value) {
+    return { label: '', quantityMode: 'unit' };
+  }
+
+  const normalised = value.toLowerCase();
+  const numericValue = Number.parseFloat(normalised);
+  const isNumeric = Number.isFinite(numericValue) && /^-?\d+(\.\d+)?$/.test(normalised);
+
+  if (normalised === '3' || normalised === '3.0' || normalised.includes('m2') || normalised.includes('m²')) {
+    return { label: 'm²', quantityMode: 'area' };
+  }
+
+  if (isNumeric) {
+    return { label: 'pièce', quantityMode: 'unit' };
+  }
+
+  if (normalised.includes('piece') || normalised.includes('pièce')) {
+    return { label: 'pièce', quantityMode: 'unit' };
+  }
+
+  if (normalised.includes('unite')) {
+    return { label: "à l'unité", quantityMode: 'unit' };
+  }
+
+  if (normalised.includes('m2') || normalised.includes('m²')) {
+    return { label: 'm²', quantityMode: 'area' };
+  }
+
+  return { label: value.replace(/m2/gi, 'm²'), quantityMode: 'unit' };
+}
+
 function normaliseUnitLabel(unit) {
-  if (!unit) return '';
-  return unit
-    .replace(/m2/gi, 'm²')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return interpretUnit(unit).label;
 }
 
 function formatUnitLabel(unit) {
   if (!unit) return "À l'unité";
+  if (unit.toLowerCase() === 'pièce') return 'Pièce';
+  if (unit.toLowerCase() === "à l'unité") return "À l'unité";
   return unit;
 }
 
@@ -197,39 +246,43 @@ function getUnitFilterValue(unit) {
 }
 
 function getQuantityMode(unit) {
-  if (!unit) return 'unit';
-  const normalised = unit.toLowerCase();
-  if (normalised.includes('m2') || normalised.includes('m²')) {
-    return 'area';
-  }
-  return 'unit';
+  return interpretUnit(unit).quantityMode;
+}
+
+function normaliseScore(value) {
+  const score = normaliseCsvValue(value).toUpperCase();
+  return ['A', 'B', 'C', 'D', 'E'].includes(score) ? score : '';
 }
 
 function toProduct(entry) {
-  if (!entry || !entry.id_produit_sellsy) return null;
-  const name = entry.nom_commercial || '';
-  const reference = entry.reference || entry.id_produit_sellsy;
-  const description = entry.description || '';
-  const rawPrice = entry.tarif_plein || entry.prix_reference_ht || '0';
-  const price = parseFrenchNumber(rawPrice);
+  if (!entry) return null;
+  const reference = entry.ref;
+  if (!reference) return null;
+  const name = entry.design || reference;
+  const price = Math.max(0, parseFrenchNumber(entry.prix));
+  const ecotax = Math.max(0, parseFrenchNumber(entry.ecotaxe));
   const image = entry.image || '';
-  const link = entry.lien || '';
-  const rawUnit = entry.unite || '';
-  const unit = normaliseUnitLabel(rawUnit);
-  const quantityMode = getQuantityMode(rawUnit);
+  const link = entry.url || '';
+  const unitInfo = interpretUnit(entry.unite);
+  const unit = unitInfo.label;
+  const quantityMode = unitInfo.quantityMode;
   const category = entry.categorie || '';
+  const weight = Math.max(0, parseFrenchNumber(entry.poids));
+  const score = normaliseScore(entry.score);
   return {
-    id: entry.id_produit_sellsy,
+    id: reference,
     reference,
     name,
-    description,
+    description: '',
     price,
-    priceLabel: currencyFormatter.format(price),
+    ecotax,
     unit,
     quantityMode,
     image,
     link,
     category,
+    weight,
+    score,
   };
 }
 
@@ -279,7 +332,23 @@ function renderProducts() {
 
     card.querySelector('.product-reference').textContent = product.reference;
     card.querySelector('.product-name').textContent = product.name;
-    card.querySelector('.product-description').textContent = product.description || 'Pas de description fournie.';
+
+    const descriptionElement = card.querySelector('.product-description');
+    descriptionElement.textContent =
+      product.description && product.description.trim().length > 0
+        ? product.description
+        : 'Consultez la fiche produit pour plus d’informations.';
+
+    const weightElement = card.querySelector('.product-weight');
+    if (weightElement) {
+      if (product.weight > 0) {
+        weightElement.textContent = `Poids unitaire : ${numberFormatter.format(product.weight)} kg`;
+        weightElement.classList.remove('hidden');
+      } else {
+        weightElement.textContent = '';
+        weightElement.classList.add('hidden');
+      }
+    }
 
     const categoryBadge = card.querySelector('.product-category-badge');
     categoryBadge.classList.remove('is-muted');
@@ -290,25 +359,50 @@ function renderProducts() {
       categoryBadge.classList.add('is-muted');
     }
 
-    const unitLabel = product.unit ? ` / ${product.unit}` : '';
-    const priceLabel = `${currencyFormatter.format(product.price)}${unitLabel}`;
+    const scoreBadge = card.querySelector('.product-score-badge');
+    if (scoreBadge) {
+      if (product.score) {
+        scoreBadge.dataset.score = product.score;
+        scoreBadge.textContent = product.score;
+        scoreBadge.title = `Score positiv'ID : ${product.score}`;
+        scoreBadge.classList.remove('is-empty');
+      } else {
+        scoreBadge.dataset.score = 'NA';
+        scoreBadge.textContent = 'En attente';
+        scoreBadge.title = "Score positiv'ID : en attente";
+        scoreBadge.classList.add('is-empty');
+      }
+    }
+
+    const unitSuffix = product.unit && !/unité/i.test(product.unit) ? ` / ${product.unit}` : '';
     const discountedPrice = calculateDiscountedValue(product.price);
-    const discountedLabel = `${currencyFormatter.format(discountedPrice)}${unitLabel}`;
+    const originalPriceWithEcotax = product.price + product.ecotax;
+    const discountedPriceWithEcotax = discountedPrice + product.ecotax;
 
     const originalPriceElement = card.querySelector('.product-price-original');
     const discountedPriceElement = card.querySelector('.product-price-discounted');
+    const basePriceElement = card.querySelector('.product-base-price');
+    const ecotaxElement = card.querySelector('.product-ecotax');
+
+    if (basePriceElement) {
+      basePriceElement.textContent = `PU HT hors écotaxe : ${currencyFormatter.format(product.price)}${unitSuffix}`;
+    }
+    if (ecotaxElement) {
+      ecotaxElement.textContent = `Écotaxe unitaire : ${currencyFormatter.format(product.ecotax)}${unitSuffix}`;
+    }
+
     if (state.discountRate > 0) {
-      originalPriceElement.textContent = priceLabel;
+      originalPriceElement.textContent = `Avant remise (écotaxe incluse) : ${currencyFormatter.format(originalPriceWithEcotax)}${unitSuffix}`;
       originalPriceElement.style.display = 'block';
-      discountedPriceElement.textContent = discountedLabel;
+      discountedPriceElement.textContent = `Prix remisé écotaxe incluse : ${currencyFormatter.format(discountedPriceWithEcotax)}${unitSuffix}`;
     } else {
       originalPriceElement.textContent = '';
       originalPriceElement.style.display = 'none';
-      discountedPriceElement.textContent = priceLabel;
+      discountedPriceElement.textContent = `Prix HT écotaxe incluse : ${currencyFormatter.format(originalPriceWithEcotax)}${unitSuffix}`;
     }
 
     const unit = card.querySelector('.product-unit');
-    unit.textContent = product.unit ? `Unité de vente : ${product.unit}` : "Unité de vente : à l'article";
+    unit.textContent = `Unité de vente : ${formatUnitLabel(product.unit)}`;
 
     const viewButton = card.querySelector('.view-details');
     viewButton.dataset.productId = product.id;
@@ -375,13 +469,20 @@ function renderQuote() {
       const unitPriceContainer = node.querySelector('.unit-price');
       const unitPriceOriginal = unitPriceContainer.querySelector('.unit-price-original');
       const unitPriceDiscounted = unitPriceContainer.querySelector('.unit-price-discounted');
+      const ecotaxContainer = node.querySelector('.ecotax-price');
+      const ecotaxUnitElement = ecotaxContainer?.querySelector('.ecotax-unit');
+      const ecotaxTotalElement = ecotaxContainer?.querySelector('.ecotax-total');
       const quantityValueElements = node.querySelectorAll('[data-role="quantity-value"]');
       const quantityUnitElements = node.querySelectorAll('[data-role="quantity-unit"]');
-      const unitLabel =
-        item.quantityMode === 'area' ? item.unit || 'm²' : item.unit || "à l'unité";
+      const baseUnitLabel =
+        item.quantityMode === 'area' ? item.unit || 'm²' : item.unit || 'pièce';
       quantityUnitElements.forEach((element) => {
-        element.textContent = unitLabel;
+        element.textContent = baseUnitLabel;
       });
+      const overallUnit = node.querySelector('.quote-unit span[data-role="quantity-unit"]');
+      if (overallUnit) {
+        overallUnit.textContent = formatUnitLabel(item.unit);
+      }
 
       const unitControls = node.querySelector('[data-mode="unit"]');
       const areaControls = node.querySelector('[data-mode="area"]');
@@ -392,10 +493,20 @@ function renderQuote() {
         const lineSubtotal = item.price * quantityValue;
         const discountedUnit = calculateDiscountedValue(item.price);
         const discountedLineSubtotal = calculateDiscountedValue(lineSubtotal);
+        const ecotaxUnit = item.ecotax || 0;
+        const ecotaxTotal = ecotaxUnit * quantityValue;
+        const unitSuffixDisplay = item.unit && !/unité/i.test(item.unit) ? ` / ${item.unit}` : '';
         const formattedUnitOriginal = currencyFormatter.format(item.price);
         const formattedUnitDiscounted = currencyFormatter.format(discountedUnit);
-        const formattedLineOriginal = currencyFormatter.format(lineSubtotal);
-        const formattedLineDiscounted = currencyFormatter.format(discountedLineSubtotal);
+        const formattedLineOriginal = currencyFormatter.format(lineSubtotal + ecotaxTotal);
+        const formattedLineDiscounted = currencyFormatter.format(discountedLineSubtotal + ecotaxTotal);
+
+        if (ecotaxUnitElement) {
+          ecotaxUnitElement.textContent = `Unitaire : ${currencyFormatter.format(ecotaxUnit)}${unitSuffixDisplay}`;
+        }
+        if (ecotaxTotalElement) {
+          ecotaxTotalElement.textContent = `Total : ${currencyFormatter.format(ecotaxTotal)}`;
+        }
 
         if (state.discountRate > 0) {
           unitPriceOriginal.textContent = formattedUnitOriginal;
@@ -534,6 +645,17 @@ function calculateDiscountedValue(amount) {
   return discounted;
 }
 
+function calculateItemEcotax(item) {
+  if (!item) return 0;
+  const quantity = Number.isFinite(item.quantity) ? item.quantity : 0;
+  const ecotax = Number.isFinite(item.ecotax) ? item.ecotax : 0;
+  const total = ecotax * quantity;
+  if (!Number.isFinite(total) || total < 0) {
+    return 0;
+  }
+  return total;
+}
+
 function handleGeneralCommentChange(event) {
   state.generalComment = event.target.value;
 }
@@ -542,14 +664,21 @@ function updateSummary() {
   const items = Array.from(state.quote.values());
   const subtotal = items.reduce((total, item) => total + item.price * (item.quantity || 0), 0);
   const discountAmount = subtotal * (state.discountRate / 100);
-  const net = subtotal - discountAmount;
+  const netProducts = subtotal - discountAmount;
+  const ecotaxTotal = items.reduce((total, item) => total + calculateItemEcotax(item), 0);
+  const net = netProducts + ecotaxTotal;
   const vat = net * state.vatRate;
   const total = net + vat;
   elements.summarySubtotal.textContent = currencyFormatter.format(subtotal);
   elements.summaryDiscount.textContent = `-${currencyFormatter.format(discountAmount)}`;
+  elements.summaryNetProducts?.textContent = currencyFormatter.format(netProducts);
+  elements.summaryEcotax?.textContent = currencyFormatter.format(ecotaxTotal);
   elements.summaryNet.textContent = currencyFormatter.format(net);
   elements.summaryVat.textContent = currencyFormatter.format(vat);
   elements.summaryTotal.textContent = currencyFormatter.format(total);
+  if (elements.footerEcotax) {
+    elements.footerEcotax.textContent = currencyFormatter.format(ecotaxTotal);
+  }
 }
 
 function generatePdf() {
@@ -561,10 +690,13 @@ function generatePdf() {
   const items = Array.from(state.quote.values());
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 0), 0);
   const discountAmount = subtotal * (state.discountRate / 100);
-  const net = subtotal - discountAmount;
+  const netProducts = subtotal - discountAmount;
+  const ecotaxTotal = items.reduce((sum, item) => sum + calculateItemEcotax(item), 0);
+  const net = netProducts + ecotaxTotal;
   const vat = net * state.vatRate;
   const total = net + vat;
 
+  const ecotaxLabel = currencyFormatter.format(ecotaxTotal);
   const issueDate = new Date();
   const issueDateLabel = issueDate.toLocaleDateString('fr-FR');
   const validityDate = new Date(issueDate);
@@ -619,10 +751,13 @@ function generatePdf() {
   doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, infoX, y + 54);
 
   const body = items.map((item) => {
+    const quantityValue = item.quantity || 0;
+    const unitSuffix = item.unit && !/unité/i.test(item.unit) ? ` / ${item.unit}` : '';
+    const itemEcotaxTotal = calculateItemEcotax(item);
     const quantityDetails =
       item.quantityMode === 'area'
-        ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(item.quantity || 0)} ${item.unit || 'm²'}`
-        : `${quantityFormatter.format(item.quantity || 0)} ${item.unit || ''}`.trim();
+        ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(quantityValue)} ${item.unit || 'm²'}`
+        : formatQuantityLabel(item);
 
     const designationLines = [item.name];
     if (item.comment) {
@@ -631,19 +766,30 @@ function generatePdf() {
     if (item.link) {
       designationLines.push(`Lien : ${item.link}`);
     }
+    if (item.weight > 0) {
+      designationLines.push(`Poids unitaire : ${numberFormatter.format(item.weight)} kg`);
+    }
+    designationLines.push(`Écotaxe unitaire : ${currencyFormatter.format(item.ecotax)}${unitSuffix}`);
+    designationLines.push(`Écotaxe totale : ${currencyFormatter.format(itemEcotaxTotal)}`);
+    designationLines.push(
+      item.score ? `Score positiv'ID : ${item.score}` : "Score positiv'ID : en attente",
+    );
+
+    const unitPriceWithEcotax = item.price + item.ecotax;
+    const lineTotalWithEcotax = item.price * quantityValue + itemEcotaxTotal;
 
     return [
       item.reference,
       designationLines.join('\n'),
       quantityDetails,
-      currencyFormatter.format(item.price),
-      currencyFormatter.format(item.price * (item.quantity || 0)),
+      currencyFormatter.format(unitPriceWithEcotax),
+      currencyFormatter.format(lineTotalWithEcotax),
     ];
   });
 
   doc.autoTable({
     startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Total HT']],
+    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT (écotaxe incluse)', 'Total HT']],
     body,
     styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
     headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
@@ -663,9 +809,11 @@ function generatePdf() {
     startY: summaryStartY,
     head: [['Récapitulatif', 'Montant']],
     body: [
-      ['Total HT', currencyFormatter.format(subtotal)],
+      ['Total HT produits', currencyFormatter.format(subtotal)],
       [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Base HT après remise', currencyFormatter.format(net)],
+      ['Base HT après remise (hors écotaxe)', currencyFormatter.format(netProducts)],
+      ['Écotaxe totale', currencyFormatter.format(ecotaxTotal)],
+      ['Base HT après remise + écotaxe', currencyFormatter.format(net)],
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
@@ -719,6 +867,7 @@ function generatePdf() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
+      doc.text(`Écotaxe totale incluse : ${ecotaxLabel}`, margin, pageHeight - 50);
       doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
       doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
       doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
@@ -785,7 +934,35 @@ function openProductModal(product) {
 
   elements.modalTitle.textContent = product.name;
   elements.modalReference.textContent = product.reference;
-  elements.modalDescription.textContent = product.description || 'Pas de description fournie.';
+  const modalDescription =
+    product.description && product.description.trim().length > 0
+      ? product.description
+      : 'Consultez la fiche produit pour plus d’informations.';
+  elements.modalDescription.textContent = modalDescription;
+
+  if (elements.modalUnit) {
+    elements.modalUnit.textContent = `Unité : ${formatUnitLabel(product.unit)}`;
+    elements.modalUnit.classList.remove('hidden');
+  }
+  if (elements.modalWeight) {
+    const weightText =
+      product.weight && product.weight > 0
+        ? `Poids unitaire : ${numberFormatter.format(product.weight)} kg`
+        : 'Poids : non communiqué';
+    elements.modalWeight.textContent = weightText;
+    elements.modalWeight.classList.remove('hidden');
+  }
+  if (elements.modalEcotax) {
+    const unitSuffix = product.unit && !/unité/i.test(product.unit) ? ` / ${product.unit}` : '';
+    elements.modalEcotax.textContent = `Écotaxe unitaire : ${currencyFormatter.format(product.ecotax)}${unitSuffix}`;
+    elements.modalEcotax.classList.remove('hidden');
+  }
+  if (elements.modalScore) {
+    elements.modalScore.textContent = product.score
+      ? `Score positiv'ID : ${product.score}`
+      : "Score positiv'ID : en attente";
+    elements.modalScore.classList.remove('hidden');
+  }
 
   if (product.link) {
     elements.modalLink.href = product.link;
@@ -996,8 +1173,14 @@ function formatQuantityLabel(item) {
     const unit = item.unit || 'm²';
     return `${quantity} ${unit}`;
   }
-  if (!item.unit || /unité/i.test(item.unit)) {
+  const unit = item.unit || 'pièce';
+  if (/pi[eè]ce/i.test(unit)) {
+    const rawQuantity = item.quantity ?? 0;
+    const plural = Math.abs(rawQuantity - 1) < 1e-6 ? 'pièce' : 'pièces';
+    return `${quantity} ${plural}`;
+  }
+  if (/unité/i.test(unit)) {
     return `${quantity} u.`;
   }
-  return `${quantity} ${item.unit}`;
+  return `${quantity} ${unit}`;
 }
