@@ -796,7 +796,7 @@ function generatePdf() {
   const margin = 48;
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFillColor(37, 99, 235);
+  doc.setFillColor(227, 6, 19);
   doc.rect(0, 0, pageWidth, 120, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
@@ -809,14 +809,14 @@ function generatePdf() {
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
+  doc.text('ID Group', pageWidth - margin, 52, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
+  doc.text('162 boulevard de Fourmies\n59100 Roubaix\ncontact@idgroup.com\n+33 3 20 45 98 00', pageWidth - margin, 72, {
     align: 'right',
   });
 
-  doc.setTextColor(30, 41, 59);
+  doc.setTextColor(29, 29, 27);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   let y = 150;
@@ -884,8 +884,8 @@ function generatePdf() {
     startY: y + 90,
     head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écotaxe', 'Total HT']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [29, 29, 27] },
+    headStyles: { fillColor: [227, 6, 19], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 70 },
       1: { cellWidth: 160 },
@@ -894,7 +894,7 @@ function generatePdf() {
       4: { halign: 'right', cellWidth: 60 },
       5: { halign: 'right', cellWidth: 70 },
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    alternateRowStyles: { fillColor: [255, 244, 240] },
     margin: { left: margin, right: margin },
   });
 
@@ -910,8 +910,8 @@ function generatePdf() {
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [29, 29, 27] },
+    headStyles: { fillColor: [255, 228, 214], textColor: [29, 29, 27], fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 200 },
       1: { halign: 'right', cellWidth: 120 },
@@ -920,7 +920,7 @@ function generatePdf() {
     didParseCell: (data) => {
       if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
         data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [226, 232, 240];
+        data.cell.styles.fillColor = [255, 228, 214];
       }
     },
   });
@@ -959,13 +959,13 @@ function generatePdf() {
       const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
+      doc.setTextColor(94, 86, 82);
+      doc.text('ID Group - SAS au capital de 50 000 € - SIREN 409 982 059', margin, pageHeight - 36);
+      doc.text('162 boulevard de Fourmies, 59100 Roubaix - www.idgroup.com', margin, pageHeight - 22);
       doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
       doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
     }
-    doc.setTextColor(30, 41, 59);
+    doc.setTextColor(29, 29, 27);
   };
 
   addFooter();
@@ -981,9 +981,9 @@ function toggleFeedback(message, type = 'info') {
     return;
   }
   const styles = {
-    info: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-blue-50 text-blue-700 border border-blue-100',
-    warning: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-amber-50 text-amber-700 border border-amber-100',
-    error: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-rose-50 text-rose-700 border border-rose-100',
+    info: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-[#fdf0f0] text-[#a3000d] border border-[#f2c4c4]',
+    warning: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-[#fff4e5] text-[#b45309] border border-[#fbd49d]',
+    error: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-[#fde8e8] text-[#9f1239] border border-[#f2b8c6]',
   };
   box.className = styles[type] || styles.info;
   box.textContent = message;

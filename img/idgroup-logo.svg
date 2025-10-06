@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-labelledby="title desc">
+  <title id="title">ID Group</title>
+  <desc id="desc">Logo du groupe ID Group</desc>
+  <g fill="none" fill-rule="evenodd">
+    <circle cx="60" cy="60" r="52" fill="#E30613" />
+    <g fill="#FFFFFF" font-family="'Montserrat', 'Arial', sans-serif" font-weight="700" font-size="54">
+      <text x="32" y="78">ID°</text>
+    </g>
+    <g fill="#1D1D1B" font-family="'Montserrat', 'Arial', sans-serif" font-size="52" font-weight="600">
+      <text x="128" y="82">ID</text>
+      <text x="205" y="82" letter-spacing="-0.5">GROUP</text>
+    </g>
+  </g>
+</svg>
