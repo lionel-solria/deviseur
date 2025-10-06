@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90" role="img" aria-labelledby="title desc">
+  <title id="title">Logo IDGROUP</title>
+  <desc id="desc">Logotype inspiré de l'identité IDGROUP avec lettrage bleu et accent orange</desc>
+  <defs>
+    <linearGradient id="brand-gradient" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#33b2e8" />
+      <stop offset="100%" stop-color="#007fb6" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="18" width="72" height="54" rx="12" fill="url(#brand-gradient)" />
+  <path
+    d="M40.4 34.4a14.2 14.2 0 0 0-14.4 14.4v6.2a14.4 14.4 0 0 0 28.8 0v-6.2A14.2 14.2 0 0 0 40.4 34.4Zm0 10.4a4 4 0 0 1 4 4v6.2a4 4 0 1 1-8 0v-6.2a4 4 0 0 1 4-4Z"
+    fill="#ffffff"
+  />
+  <g fill="#004165" font-family="'Montserrat', 'Segoe UI', sans-serif" font-weight="700" letter-spacing="4">
+    <text font-size="42" x="94" y="58">IDGROUP</text>
+  </g>
+  <circle cx="252" cy="30" r="10" fill="#f28f1d" />
+</svg>

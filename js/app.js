@@ -789,34 +789,39 @@ function generatePdf() {
   const validityDate = new Date(issueDate);
   validityDate.setDate(validityDate.getDate() + 30);
   const validityLabel = validityDate.toLocaleDateString('fr-FR');
-  const quoteNumber = `DEV-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
+  const quoteNumber = `IDG-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const margin = 48;
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 120, 'F');
+  doc.setFillColor(0, 145, 207);
+  doc.rect(0, 0, pageWidth, 126, 'F');
+  doc.setFillColor(242, 143, 29);
+  doc.rect(0, 126, pageWidth, 6, 'F');
+
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.text('DEVIS PROFESSIONNEL', margin, 60);
+  doc.setFontSize(26);
+  doc.text('IDGROUP', margin, 58);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(12);
-  doc.text(`Référence : ${quoteNumber}`, margin, 88);
-  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
+  doc.text('Solutions professionnelles', margin, 78);
+  doc.setFontSize(11);
+  doc.text(`Devis nº ${quoteNumber}`, margin, 98);
+  doc.text(`Émis le : ${issueDateLabel}`, margin, 114);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
+  doc.text('IDGROUP', pageWidth - margin, 50, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
+  doc.text('162 boulevard de l’Innovation\n59000 Lille\ncontact@idgroup.fr\n+33 3 20 00 00 00', pageWidth - margin, 70, {
     align: 'right',
   });
 
-  doc.setTextColor(30, 41, 59);
+  doc.setTextColor(2, 42, 69);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   let y = 150;
@@ -884,8 +889,8 @@ function generatePdf() {
     startY: y + 90,
     head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écotaxe', 'Total HT']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [2, 42, 69] },
+    headStyles: { fillColor: [0, 145, 207], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 70 },
       1: { cellWidth: 160 },
@@ -894,7 +899,7 @@ function generatePdf() {
       4: { halign: 'right', cellWidth: 60 },
       5: { halign: 'right', cellWidth: 70 },
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    alternateRowStyles: { fillColor: [240, 247, 251] },
     margin: { left: margin, right: margin },
   });
 
@@ -910,8 +915,8 @@ function generatePdf() {
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [2, 42, 69] },
+    headStyles: { fillColor: [216, 236, 245], textColor: [2, 42, 69], fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 200 },
       1: { halign: 'right', cellWidth: 120 },
@@ -920,7 +925,7 @@ function generatePdf() {
     didParseCell: (data) => {
       if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
         data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [226, 232, 240];
+        data.cell.styles.fillColor = [200, 227, 241];
       }
     },
   });
@@ -941,12 +946,12 @@ function generatePdf() {
 
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(11);
-  doc.text("Merci pour votre confiance. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
+  doc.text('Merci pour votre confiance. Ce devis reste modifiable jusqu’à validation écrite.', margin, closingY);
   closingY += 18;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text(
-    'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
+    'Les équipes IDGROUP restent disponibles pour toute précision technique ou logistique concernant les solutions listées.',
     margin,
     closingY,
     { maxWidth: pageWidth - margin * 2 },
@@ -959,13 +964,13 @@ function generatePdf() {
       const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
+      doc.setTextColor(82, 105, 124);
+      doc.text('IDGROUP · Groupe coopératif - SIREN 123 456 789', margin, pageHeight - 36);
+      doc.text('162 boulevard de l’Innovation, 59000 Lille - www.idgroup.fr', margin, pageHeight - 22);
       doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
       doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
     }
-    doc.setTextColor(30, 41, 59);
+    doc.setTextColor(2, 42, 69);
   };
 
   addFooter();
@@ -981,9 +986,9 @@ function toggleFeedback(message, type = 'info') {
     return;
   }
   const styles = {
-    info: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-blue-50 text-blue-700 border border-blue-100',
-    warning: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-amber-50 text-amber-700 border border-amber-100',
-    error: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-rose-50 text-rose-700 border border-rose-100',
+    info: 'rounded-2xl px-6 py-4 text-sm shadow-brand bg-brand-50 text-brand-700 border border-brand-100',
+    warning: 'rounded-2xl px-6 py-4 text-sm shadow-brand bg-accent/10 text-brand-800 border border-accent',
+    error: 'rounded-2xl px-6 py-4 text-sm shadow-brand bg-rose-50 text-rose-700 border border-rose-100',
   };
   box.className = styles[type] || styles.info;
   box.textContent = message;
