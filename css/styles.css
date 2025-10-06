@@ -89,23 +89,6 @@
   backdrop-filter: blur(4px);
 }
 
-.product-thumbnail {
-  position: relative;
-  flex-shrink: 0;
-  width: 4.5rem;
-  height: 4.5rem;
-  border-radius: 1rem;
-  overflow: hidden;
-  background: #e2e8f0;
-  box-shadow: inset 0 1px 1px rgba(148, 163, 184, 0.4);
-}
-
-.product-thumbnail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .product-category-badge {
   display: inline-flex;
   align-items: center;
@@ -127,9 +110,28 @@
 
 .product-card .product-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.product-price-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.product-price-original {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  display: none;
+}
+
+.product-price-discounted {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1d4ed8;
 }
 
 .category-filter-menu {
@@ -379,6 +381,21 @@
 .summary-total {
   color: #1d4ed8;
   margin-left: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.summary-total-original {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  display: none;
+}
+
+.summary-total-discounted {
+  font-weight: 600;
 }
 
 .quote-details {
@@ -512,6 +529,28 @@
   min-width: 6rem;
 }
 
+.unit-price,
+.line-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.unit-price-original,
+.line-total-original {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  display: none;
+}
+
+.unit-price-discounted,
+.line-total-discounted {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
 .price-label {
   font-size: 0.7rem;
   letter-spacing: 0.08em;
@@ -587,6 +626,19 @@
   height: 1rem;
 }
 
+.quote-summary-panel {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.6), #fff);
+  padding-bottom: 1rem;
+  z-index: 10;
+}
+
+.quote-summary-panel dl {
+  display: grid;
+  gap: 0.6rem;
+}
+
 @media (max-width: 1024px) {
   .main-layout {
     flex-direction: column;
@@ -594,5 +646,62 @@
 
   .gutter.gutter-horizontal {
     display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  nav .flex.flex-1 {
+    justify-content: flex-start;
+  }
+
+  #main-layout {
+    gap: 1rem;
+  }
+
+  #catalogue-panel,
+  #quote-panel {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  nav .flex.flex-1 {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #generate-pdf {
+    width: 100%;
+  }
+
+  .product-card {
+    padding: 1.25rem;
+  }
+
+  .product-card .product-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .product-card .product-actions .flex {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .product-card .product-actions button {
+    width: 100%;
+  }
+
+  .quote-row {
+    padding: 0.75rem;
+  }
+
+  .price-column {
+    width: 100%;
+  }
+
+  .quantity-column,
+  .price-column {
+    flex: 1 1 100%;
   }
 }

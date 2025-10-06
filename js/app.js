@@ -6,13 +6,18 @@ const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 
 const quantityFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const dimensionFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const UNIT_FILTER_ALL = '__all__';
+const UNIT_FILTER_NONE = '__none__';
+
 const state = {
   catalogue: [],
   filtered: [],
   catalogueById: new Map(),
   quote: new Map(),
   categories: [],
+  units: [],
   selectedCategories: new Set(),
+  selectedUnit: '__all__',
   searchQuery: '',
   discountRate: 0,
   vatRate: 0.2,
@@ -27,6 +32,7 @@ const elements = {
   cataloguePanel: document.getElementById('catalogue-panel'),
   quotePanel: document.getElementById('quote-panel'),
   search: document.getElementById('search'),
+  unitFilter: document.getElementById('unit-filter'),
   categoryFilterButton: document.getElementById('category-filter-button'),
   categoryFilterMenu: document.getElementById('category-filter-menu'),
   categoryFilterLabel: document.getElementById('category-filter-label'),
@@ -39,6 +45,7 @@ const elements = {
   quoteTemplate: document.getElementById('quote-item-template'),
   quoteList: document.getElementById('quote-list'),
   quoteEmpty: document.getElementById('quote-empty'),
+  headerDiscount: document.getElementById('header-discount'),
   discount: document.getElementById('discount'),
   generalComment: document.getElementById('general-comment'),
   summarySubtotal: document.getElementById('summary-subtotal'),
@@ -60,7 +67,8 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
-  elements.discount?.addEventListener('input', handleDiscountChange);
+  elements.headerDiscount?.addEventListener('input', handleDiscountChange);
+  elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   setupModal();
@@ -70,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.currentYear.textContent = new Date().getFullYear();
   }
   window.addEventListener('resize', setupResponsiveSplit);
+  syncDiscountInputs();
 });
 
 function setupResponsiveSplit() {
@@ -111,7 +120,9 @@ async function loadCatalogue() {
       .filter((item) => item && item.name);
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
+    state.units = deriveUnits(state.catalogue);
     populateCategoryFilter();
+    populateUnitFilter();
     applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
@@ -176,6 +187,15 @@ function normaliseUnitLabel(unit) {
     .trim();
 }
 
+function formatUnitLabel(unit) {
+  if (!unit) return "À l'unité";
+  return unit;
+}
+
+function getUnitFilterValue(unit) {
+  return unit ? unit : UNIT_FILTER_NONE;
+}
+
 function getQuantityMode(unit) {
   if (!unit) return 'unit';
   const normalised = unit.toLowerCase();
@@ -222,10 +242,16 @@ function handleSearch(event) {
 function applyFilters() {
   const selectedCategories = state.selectedCategories;
   const query = state.searchQuery;
+  const selectedUnit = state.selectedUnit;
   state.filtered = state.catalogue.filter((product) => {
     const matchesSearch = !query || `${product.name} ${product.reference}`.toLowerCase().includes(query);
     const matchesCategory = !selectedCategories.size || (product.category && selectedCategories.has(product.category));
-    return matchesSearch && matchesCategory;
+    const productUnitValue = getUnitFilterValue(product.unit);
+    const matchesUnit =
+      selectedUnit === UNIT_FILTER_ALL ||
+      (selectedUnit === UNIT_FILTER_NONE && productUnitValue === UNIT_FILTER_NONE) ||
+      (selectedUnit !== UNIT_FILTER_ALL && selectedUnit === productUnitValue);
+    return matchesSearch && matchesCategory && matchesUnit;
   });
   renderProducts();
 }
@@ -251,13 +277,6 @@ function renderProducts() {
       image.src = defaultImage;
     });
 
-    const thumbnail = card.querySelector('.product-thumbnail-image');
-    thumbnail.src = product.image || defaultImage;
-    thumbnail.alt = product.name;
-    thumbnail.addEventListener('error', () => {
-      thumbnail.src = defaultImage;
-    });
-
     card.querySelector('.product-reference').textContent = product.reference;
     card.querySelector('.product-name').textContent = product.name;
     card.querySelector('.product-description').textContent = product.description || 'Pas de description fournie.';
@@ -271,8 +290,22 @@ function renderProducts() {
       categoryBadge.classList.add('is-muted');
     }
 
-    const priceLabel = product.unit ? `${product.priceLabel} / ${product.unit}` : product.priceLabel;
-    card.querySelector('.product-price').textContent = priceLabel;
+    const unitLabel = product.unit ? ` / ${product.unit}` : '';
+    const priceLabel = `${currencyFormatter.format(product.price)}${unitLabel}`;
+    const discountedPrice = calculateDiscountedValue(product.price);
+    const discountedLabel = `${currencyFormatter.format(discountedPrice)}${unitLabel}`;
+
+    const originalPriceElement = card.querySelector('.product-price-original');
+    const discountedPriceElement = card.querySelector('.product-price-discounted');
+    if (state.discountRate > 0) {
+      originalPriceElement.textContent = priceLabel;
+      originalPriceElement.style.display = 'block';
+      discountedPriceElement.textContent = discountedLabel;
+    } else {
+      originalPriceElement.textContent = '';
+      originalPriceElement.style.display = 'none';
+      discountedPriceElement.textContent = priceLabel;
+    }
 
     const unit = card.querySelector('.product-unit');
     unit.textContent = product.unit ? `Unité de vente : ${product.unit}` : "Unité de vente : à l'article";
@@ -327,15 +360,21 @@ function renderQuote() {
       const referenceElement = node.querySelector('.quote-reference');
       nameElement.textContent = item.name;
       referenceElement.textContent = item.reference;
-      node.querySelector('.unit-price').textContent = currencyFormatter.format(item.price);
 
       const toggleButton = node.querySelector('.toggle-details');
       toggleButton.setAttribute('aria-expanded', String(Boolean(item.expanded)));
       toggleButton.addEventListener('click', () => toggleQuoteItem(item.id));
 
       const summaryQuantity = node.querySelector('[data-role="summary-quantity"]');
-      const summaryTotal = node.querySelector('[data-role="summary-total"]');
-      const lineTotal = node.querySelector('.line-total');
+      const summaryTotalContainer = node.querySelector('[data-role="summary-total"]');
+      const summaryTotalOriginal = summaryTotalContainer.querySelector('.summary-total-original');
+      const summaryTotalDiscounted = summaryTotalContainer.querySelector('.summary-total-discounted');
+      const lineTotalContainer = node.querySelector('.line-total');
+      const lineTotalOriginal = lineTotalContainer.querySelector('.line-total-original');
+      const lineTotalDiscounted = lineTotalContainer.querySelector('.line-total-discounted');
+      const unitPriceContainer = node.querySelector('.unit-price');
+      const unitPriceOriginal = unitPriceContainer.querySelector('.unit-price-original');
+      const unitPriceDiscounted = unitPriceContainer.querySelector('.unit-price-discounted');
       const quantityValueElements = node.querySelectorAll('[data-role="quantity-value"]');
       const quantityUnitElements = node.querySelectorAll('[data-role="quantity-unit"]');
       const unitLabel =
@@ -348,11 +387,42 @@ function renderQuote() {
       const areaControls = node.querySelector('[data-mode="area"]');
       const dimensions = node.querySelector('.quote-dimensions');
 
+      const updatePriceDisplays = () => {
+        const quantityValue = item.quantity || 0;
+        const lineSubtotal = item.price * quantityValue;
+        const discountedUnit = calculateDiscountedValue(item.price);
+        const discountedLineSubtotal = calculateDiscountedValue(lineSubtotal);
+        const formattedUnitOriginal = currencyFormatter.format(item.price);
+        const formattedUnitDiscounted = currencyFormatter.format(discountedUnit);
+        const formattedLineOriginal = currencyFormatter.format(lineSubtotal);
+        const formattedLineDiscounted = currencyFormatter.format(discountedLineSubtotal);
+
+        if (state.discountRate > 0) {
+          unitPriceOriginal.textContent = formattedUnitOriginal;
+          unitPriceOriginal.style.display = 'block';
+          lineTotalOriginal.textContent = formattedLineOriginal;
+          lineTotalOriginal.style.display = 'block';
+          summaryTotalOriginal.textContent = formattedLineOriginal;
+          summaryTotalOriginal.style.display = 'block';
+          unitPriceDiscounted.textContent = formattedUnitDiscounted;
+          lineTotalDiscounted.textContent = formattedLineDiscounted;
+          summaryTotalDiscounted.textContent = formattedLineDiscounted;
+        } else {
+          unitPriceOriginal.textContent = '';
+          unitPriceOriginal.style.display = 'none';
+          lineTotalOriginal.textContent = '';
+          lineTotalOriginal.style.display = 'none';
+          summaryTotalOriginal.textContent = '';
+          summaryTotalOriginal.style.display = 'none';
+          unitPriceDiscounted.textContent = formattedUnitOriginal;
+          lineTotalDiscounted.textContent = formattedLineOriginal;
+          summaryTotalDiscounted.textContent = formattedLineOriginal;
+        }
+      };
+
       const updateSummaryDisplays = () => {
         summaryQuantity.textContent = formatQuantityLabel(item);
-        const totalLabel = currencyFormatter.format(item.price * (item.quantity || 0));
-        summaryTotal.textContent = totalLabel;
-        lineTotal.textContent = totalLabel;
+        updatePriceDisplays();
       };
 
       if (item.quantityMode === 'area') {
@@ -434,14 +504,34 @@ function removeItem(productId) {
 }
 
 function handleDiscountChange(event) {
-  const value = parseFloat(String(event.target.value).replace(',', '.'));
-  if (Number.isNaN(value) || value < 0) {
-    state.discountRate = 0;
-  } else {
-    state.discountRate = Math.min(value, 100);
+  const inputValue = parseFloat(String(event.target.value).replace(',', '.'));
+  const normalised = Number.isNaN(inputValue) || inputValue < 0 ? 0 : Math.min(inputValue, 100);
+  updateDiscountRate(normalised);
+}
+
+function updateDiscountRate(rate) {
+  state.discountRate = rate;
+  syncDiscountInputs();
+  renderProducts();
+  renderQuote();
+}
+
+function syncDiscountInputs() {
+  if (elements.headerDiscount) {
+    elements.headerDiscount.value = String(state.discountRate);
   }
-  event.target.value = String(state.discountRate).replace('.', ',');
-  updateSummary();
+  if (elements.discount) {
+    elements.discount.value = quantityFormatter.format(state.discountRate);
+  }
+}
+
+function calculateDiscountedValue(amount) {
+  const rate = state.discountRate / 100;
+  const discounted = amount * (1 - rate);
+  if (!Number.isFinite(discounted) || discounted < 0) {
+    return 0;
+  }
+  return discounted;
 }
 
 function handleGeneralCommentChange(event) {
@@ -729,6 +819,14 @@ function deriveCategories(items) {
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 }
 
+function deriveUnits(items) {
+  const set = new Set();
+  items.forEach((item) => {
+    set.add(item.unit || '');
+  });
+  return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
+}
+
 function setupCategoryFilter() {
   if (!elements.categoryFilterButton || !elements.categoryFilterMenu) return;
   elements.categoryFilterButton.addEventListener('click', (event) => {
@@ -777,6 +875,36 @@ function populateCategoryFilter() {
   });
   elements.categoryFilterOptions.appendChild(fragment);
   updateCategoryFilterLabel();
+}
+
+function populateUnitFilter() {
+  const select = elements.unitFilter;
+  if (!select) return;
+  select.innerHTML = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = UNIT_FILTER_ALL;
+  defaultOption.textContent = 'Toutes les unités';
+  select.appendChild(defaultOption);
+
+  const availableValues = new Set([UNIT_FILTER_ALL]);
+  state.units.forEach((unit) => {
+    const option = document.createElement('option');
+    option.value = getUnitFilterValue(unit);
+    option.textContent = formatUnitLabel(unit);
+    select.appendChild(option);
+    availableValues.add(option.value);
+  });
+
+  if (!availableValues.has(state.selectedUnit)) {
+    state.selectedUnit = UNIT_FILTER_ALL;
+  }
+  select.value = state.selectedUnit;
+}
+
+function handleUnitFilterChange(event) {
+  const value = event.target?.value ?? UNIT_FILTER_ALL;
+  state.selectedUnit = value;
+  applyFilters();
 }
 
 function handleCategoryCheckboxChange(event, label) {
