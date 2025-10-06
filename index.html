@@ -110,8 +110,8 @@
           <footer class="quote-summary-panel border-b border-slate-200 pb-4">
             <dl class="space-y-2 text-sm text-slate-600">
               <div class="flex items-center justify-between">
-                <dt>Total HT</dt>
-                <dd id="summary-subtotal" class="font-semibold text-slate-900">0,00 €</dd>
+                <dt>Total HT produits</dt>
+                <dd id="summary-products" class="font-semibold text-slate-900">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between gap-3">
                 <dt class="flex-1">Remise (%)</dt>
@@ -124,7 +124,11 @@
                 <dd id="summary-discount" class="text-slate-900">-0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
-                <dt>Base HT après remise</dt>
+                <dt>Écotaxe totale</dt>
+                <dd id="summary-ecotax" class="text-amber-600">0,00 €</dd>
+              </div>
+              <div class="flex items-center justify-between">
+                <dt>Base HT après remise + écotaxe</dt>
                 <dd id="summary-net" class="text-slate-900">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
@@ -173,6 +177,7 @@
           <div class="flex flex-1 flex-col">
             <div class="flex flex-wrap items-center gap-2">
               <span class="product-category-badge"></span>
+              <span class="score-badge" data-score="NR"></span>
             </div>
             <h3 class="product-name mt-2 text-base font-semibold text-slate-900"></h3>
             <p class="product-description mt-2 line-clamp-3 text-sm text-slate-500"></p>
@@ -182,6 +187,8 @@
               <p class="product-price-original"></p>
               <p class="product-price-discounted"></p>
               <p class="product-unit text-xs text-slate-400"></p>
+              <p class="product-ecotax text-xs font-semibold text-amber-600"></p>
+              <p class="product-weight text-xs text-slate-400"></p>
             </div>
             <div class="flex flex-col items-end gap-2">
               <button class="view-details rounded-lg border border-transparent bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
@@ -218,6 +225,11 @@
             <p class="quote-unit text-xs text-slate-500">
               Unité de vente : <span data-role="quantity-unit"></span>
             </p>
+            <p class="quote-ecotax text-xs text-amber-600"></p>
+            <p class="quote-weight text-xs text-slate-500"></p>
+            <div class="quote-score">
+              <span class="score-badge" data-score="NR"></span>
+            </div>
           </div>
           <div class="quote-body">
             <div class="quantity-column">
@@ -254,10 +266,21 @@
                 </span>
               </div>
               <div>
-                <span class="price-label">Total ligne</span>
+                <span class="price-label">Écotaxe</span>
+                <span class="line-ecotax"></span>
+              </div>
+              <div>
+                <span class="price-label">Total ligne (hors écotaxe)</span>
                 <span class="line-total">
                   <span class="line-total-original"></span>
                   <span class="line-total-discounted"></span>
+                </span>
+              </div>
+              <div>
+                <span class="price-label">Total ligne + écotaxe</span>
+                <span class="line-total-with-ecotax">
+                  <span class="line-total-with-ecotax-original"></span>
+                  <span class="line-total-with-ecotax-discounted"></span>
                 </span>
               </div>
             </div>
@@ -270,20 +293,40 @@
       </div>
     </template>
 
-    <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
-      <div class="modal-card">
-        <img id="product-modal-image" alt="" />
-        <div class="modal-body">
-          <div class="flex flex-col gap-1">
-            <p id="product-modal-reference" class="text-xs uppercase tracking-wide text-slate-400"></p>
-            <h3 id="product-modal-title" class="text-xl font-semibold text-slate-900"></h3>
+      <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
+        <div class="modal-card">
+          <img id="product-modal-image" alt="" />
+          <div class="modal-body">
+            <div class="flex flex-col gap-1">
+              <p id="product-modal-reference" class="text-xs uppercase tracking-wide text-slate-400"></p>
+              <h3 id="product-modal-title" class="text-xl font-semibold text-slate-900"></h3>
+            </div>
+            <p id="product-modal-description" class="text-sm leading-relaxed text-slate-600"></p>
+            <dl class="modal-meta">
+              <div class="modal-meta-item">
+                <dt>Unité de vente</dt>
+                <dd id="product-modal-unit"></dd>
+              </div>
+              <div class="modal-meta-item">
+                <dt>Écotaxe applicable</dt>
+                <dd id="product-modal-ecotax"></dd>
+              </div>
+              <div class="modal-meta-item" data-role="modal-meta-weight">
+                <dt>Poids unitaire</dt>
+                <dd id="product-modal-weight"></dd>
+              </div>
+              <div class="modal-meta-item">
+                <dt>Score Positiv'ID</dt>
+                <dd>
+                  <span id="product-modal-score" class="score-badge" data-score="NR"></span>
+                </dd>
+              </div>
+            </dl>
+            <div class="modal-actions">
+              <a id="product-modal-link" class="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" target="_blank" rel="noopener">Consulter la fiche</a>
+              <button id="product-modal-close" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
+            </div>
           </div>
-          <p id="product-modal-description" class="text-sm leading-relaxed text-slate-600"></p>
-          <div class="modal-actions">
-            <a id="product-modal-link" class="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" target="_blank" rel="noopener">Consulter la fiche</a>
-            <button id="product-modal-close" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
-          </div>
-        </div>
       </div>
     </div>
 
