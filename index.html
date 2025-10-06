@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Générateur de devis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="css/styles.css" />
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
@@ -11,18 +17,18 @@
     <script src="https://unpkg.com/split.js/dist/split.min.js" defer></script>
     <script src="js/app.js" type="module" defer></script>
   </head>
-  <body class="bg-slate-100 text-slate-800 min-h-screen">
-    <nav class="fixed inset-x-0 top-0 z-40 bg-white shadow-sm">
+  <body class="brand-body min-h-screen">
+    <nav class="brand-nav fixed inset-x-0 top-0 z-40">
       <div class="mx-auto flex w-full max-w-[120rem] flex-wrap items-center justify-between gap-4 px-4 py-4 md:flex-nowrap">
-        <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-semibold">DV</div>
-          <div>
-            <p class="text-lg font-semibold text-slate-900">Deviseur Express</p>
-            <p class="text-sm text-slate-500">Créez vos devis en quelques clics</p>
+        <div class="flex items-center gap-4">
+          <img src="img/idgroup-logo.svg" alt="ID Group" class="brand-logo" />
+          <div class="brand-identity">
+            <p class="brand-title">Plateforme Devis ID&nbsp;Group</p>
+            <p class="brand-subtitle">Créez et partagez vos devis dans l'univers ID&nbsp;Group</p>
           </div>
         </div>
         <div class="flex flex-1 flex-wrap items-center justify-end gap-3 md:flex-none">
-          <label for="header-discount" class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-inner">
+          <label for="header-discount" class="brand-discount-control">
             <span>Remise (%)</span>
             <input
               id="header-discount"
@@ -31,22 +37,22 @@
               max="100"
               step="0.5"
               value="0"
-              class="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              class="brand-input w-20 text-right"
             />
           </label>
-          <button id="generate-pdf" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+          <button id="generate-pdf" class="brand-button">
             Générer le devis PDF
           </button>
         </div>
       </div>
     </nav>
-    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
+    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-32">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm">
+          <header class="brand-card flex flex-col gap-4">
             <div>
-              <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900">Catalogue produits</h1>
-              <p class="mt-1 text-sm text-slate-500">
+              <h1 id="catalogue-title" class="brand-heading">Catalogue produits</h1>
+              <p class="brand-text-muted">
                 Parcourez le catalogue et ajoutez les articles souhaités directement à votre devis.
               </p>
             </div>
@@ -57,7 +63,7 @@
                   id="search"
                   type="search"
                   placeholder="Rechercher par nom ou référence..."
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  class="brand-input w-full pl-11"
                 />
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
@@ -68,7 +74,7 @@
                   <button
                     id="category-filter-button"
                     type="button"
-                    class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                    class="brand-filter-trigger"
                     aria-haspopup="true"
                     aria-expanded="false"
                   >
@@ -85,28 +91,28 @@
                   >
                     <div class="category-filter-header">
                       <p class="text-sm font-semibold text-slate-900">Catégories</p>
-                      <button id="category-filter-clear" type="button" class="text-xs font-semibold text-blue-600 transition hover:text-blue-700">Réinitialiser</button>
+                      <button id="category-filter-clear" type="button" class="brand-link">Réinitialiser</button>
                     </div>
                     <div id="category-filter-options" class="category-filter-options" role="group" aria-label="Filtrer par catégories"></div>
                     <div class="category-filter-footer">
                       <p class="text-xs text-slate-500">Sélectionnez une ou plusieurs catégories pour affiner la liste.</p>
-                      <button id="category-filter-close" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
+                      <button id="category-filter-close" type="button" class="brand-button brand-button--ghost brand-button--tiny">Fermer</button>
                     </div>
                   </div>
                 </div>
-                <label for="unit-filter" class="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20">
-                  <span class="text-xs uppercase tracking-wide text-slate-500">Unité</span>
-                  <select id="unit-filter" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                <label for="unit-filter" class="brand-select">
+                  <span class="brand-select-label">Unité</span>
+                  <select id="unit-filter" class="brand-input">
                     <option value="">Toutes les unités</option>
                   </select>
                 </label>
               </div>
             </div>
           </header>
-          <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
+          <div id="product-feedback" class="brand-feedback hidden"></div>
           <div id="product-grid" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
         </section>
-        <aside id="quote-panel" class="split-panel rounded-2xl bg-white p-6 shadow-lg">
+        <aside id="quote-panel" class="split-panel brand-card">
           <footer class="quote-summary-panel border-b border-slate-200 pb-4">
             <dl class="space-y-2 text-sm text-slate-600">
               <div class="flex items-center justify-between">
@@ -143,8 +149,8 @@
           </footer>
           <header class="mt-4 flex items-start justify-between gap-2">
             <div>
-              <h2 class="text-xl font-semibold text-slate-900">Devis en cours</h2>
-              <p class="text-sm text-slate-500">Ajustez les quantités et vérifiez les totaux en temps réel.</p>
+              <h2 class="brand-heading brand-heading--small">Devis en cours</h2>
+              <p class="brand-text-muted">Ajustez les quantités et vérifiez les totaux en temps réel.</p>
             </div>
           </header>
           <div id="quote-empty" class="mt-4 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
@@ -156,9 +162,9 @@
           </div>
           <div id="quote-list" class="mt-4 hidden flex-1 space-y-4 overflow-y-auto pr-1"></div>
           <div class="mt-6 space-y-4">
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <label for="general-comment" class="text-sm font-medium text-slate-700">Commentaire général</label>
-              <textarea id="general-comment" class="general-comment mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
+            <div class="brand-subsection">
+              <label for="general-comment" class="brand-text-strong">Commentaire général</label>
+              <textarea id="general-comment" class="general-comment brand-textarea" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
             </div>
           </div>
         </aside>
@@ -191,10 +197,10 @@
               <p class="product-weight text-xs text-slate-400"></p>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <button class="view-details rounded-lg border border-transparent bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              <button class="view-details brand-button brand-button--ghost brand-button--tiny">
                 Voir les détails
               </button>
-              <button class="add-to-quote rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              <button class="add-to-quote brand-button brand-button--tiny">
                 Ajouter au devis
               </button>
             </div>
@@ -218,7 +224,7 @@
               <span class="summary-total-discounted"></span>
             </span>
           </button>
-          <button class="remove-item" type="button">Retirer</button>
+          <button class="remove-item brand-link brand-link--danger" type="button">Retirer</button>
         </div>
         <div class="quote-details">
           <div class="quote-meta">
@@ -323,8 +329,8 @@
               </div>
             </dl>
             <div class="modal-actions">
-              <a id="product-modal-link" class="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" target="_blank" rel="noopener">Consulter la fiche</a>
-              <button id="product-modal-close" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
+              <a id="product-modal-link" class="brand-button brand-button--tiny hidden" target="_blank" rel="noopener">Consulter la fiche</a>
+              <button id="product-modal-close" class="brand-button brand-button--ghost brand-button--tiny">Fermer</button>
             </div>
           </div>
       </div>
@@ -333,8 +339,8 @@
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <p class="text-lg font-semibold text-white">Deviseur Express</p>
-          <p class="mt-1 text-sm text-slate-300">Accélérez la création de vos devis et partagez-les en un instant.</p>
+          <p class="brand-footer-title">ID&nbsp;Group</p>
+          <p class="brand-footer-text">Solutions et accompagnement pour vos projets de surfaces professionnelles.</p>
         </div>
         <div class="footer-meta">
           <span>
@@ -348,17 +354,17 @@
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 7.5 12 12.75 2.25 7.5m19.5 0v9a2.25 2.25 0 0 1-2.25 2.25h-15A2.25 2.25 0 0 1 2.25 16.5v-9a2.25 2.25 0 0 1 2.25-2.25h15A2.25 2.25 0 0 1 21.75 7.5Z" />
             </svg>
-            contact@deviseurexpress.fr
+            contact@idgroup.fr
           </span>
           <span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 4.5h19.5M4.5 4.5h15a2.25 2.25 0 0 1 2.25 2.25v11.25A2.25 2.25 0 0 1 19.5 20.25h-15A2.25 2.25 0 0 1 2.25 18V6.75A2.25 2.25 0 0 1 4.5 4.5Z" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
             </svg>
-            12 avenue des Solutions, 75000 Paris
+            162 boulevard de Fourmies, 59100 Roubaix
           </span>
         </div>
-        <p class="text-xs text-slate-500">© <span id="current-year"></span> Deviseur Express — Tous droits réservés.</p>
+        <p class="brand-footer-note">© <span id="current-year"></span> ID&nbsp;Group — Tous droits réservés.</p>
       </div>
     </footer>
   </body>

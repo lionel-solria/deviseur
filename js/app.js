@@ -796,27 +796,29 @@ function generatePdf() {
   const margin = 48;
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 120, 'F');
+  doc.setFillColor(0, 132, 138);
+  doc.rect(0, 0, pageWidth, 130, 'F');
+  doc.setFillColor(244, 182, 58);
+  doc.rect(0, 124, pageWidth, 6, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(24);
-  doc.text('DEVIS PROFESSIONNEL', margin, 60);
+  doc.text('DEVIS ID GROUP', margin, 62);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(12);
-  doc.text(`Référence : ${quoteNumber}`, margin, 88);
-  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
+  doc.text(`Référence : ${quoteNumber}`, margin, 92);
+  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 110);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
+  doc.text('ID Group', pageWidth - margin, 54, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
+  doc.text('162 boulevard de Fourmies\n59100 Roubaix\ncontact@idgroup.fr\nwww.idgroup.fr', pageWidth - margin, 76, {
     align: 'right',
   });
 
-  doc.setTextColor(30, 41, 59);
+  doc.setTextColor(31, 54, 58);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   let y = 150;
@@ -884,8 +886,8 @@ function generatePdf() {
     startY: y + 90,
     head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écotaxe', 'Total HT']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [31, 54, 58] },
+    headStyles: { fillColor: [0, 132, 138], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 70 },
       1: { cellWidth: 160 },
@@ -894,7 +896,7 @@ function generatePdf() {
       4: { halign: 'right', cellWidth: 60 },
       5: { halign: 'right', cellWidth: 70 },
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    alternateRowStyles: { fillColor: [216, 240, 241] },
     margin: { left: margin, right: margin },
   });
 
@@ -910,8 +912,8 @@ function generatePdf() {
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [31, 54, 58] },
+    headStyles: { fillColor: [232, 243, 243], textColor: [31, 54, 58], fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 200 },
       1: { halign: 'right', cellWidth: 120 },
@@ -920,7 +922,8 @@ function generatePdf() {
     didParseCell: (data) => {
       if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
         data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [226, 232, 240];
+        data.cell.styles.fillColor = [0, 132, 138];
+        data.cell.styles.textColor = 255;
       }
     },
   });
@@ -941,12 +944,12 @@ function generatePdf() {
 
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(11);
-  doc.text("Merci pour votre confiance. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
+  doc.text("Merci pour votre confiance envers ID Group. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
   closingY += 18;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text(
-    'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
+    'Nos équipes ID Group restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
     margin,
     closingY,
     { maxWidth: pageWidth - margin * 2 },
@@ -960,12 +963,12 @@ function generatePdf() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
+      doc.text('ID Group — Experts en solutions de revêtements et de confort acoustique', margin, pageHeight - 36);
+      doc.text('162 boulevard de Fourmies, 59100 Roubaix — www.idgroup.fr', margin, pageHeight - 22);
       doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
       doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
     }
-    doc.setTextColor(30, 41, 59);
+    doc.setTextColor(31, 54, 58);
   };
 
   addFooter();
@@ -981,9 +984,9 @@ function toggleFeedback(message, type = 'info') {
     return;
   }
   const styles = {
-    info: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-blue-50 text-blue-700 border border-blue-100',
-    warning: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-amber-50 text-amber-700 border border-amber-100',
-    error: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-rose-50 text-rose-700 border border-rose-100',
+    info: 'brand-feedback brand-feedback--info',
+    warning: 'brand-feedback brand-feedback--warning',
+    error: 'brand-feedback brand-feedback--error',
   };
   box.className = styles[type] || styles.info;
   box.textContent = message;

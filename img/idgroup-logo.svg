@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="64" viewBox="0 0 200 64" role="img" aria-labelledby="title desc">
+  <title id="title">Logo ID Group</title>
+  <desc id="desc">Logotype stylisé d'ID Group avec un carré turquoise et le mot group en lettres capitales.</desc>
+  <defs>
+    <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00a7ad" />
+      <stop offset="100%" stop-color="#007c80" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="url(#brandGradient)" />
+  <g fill="#ffffff" font-family="'Montserrat', 'Helvetica Neue', Arial, sans-serif">
+    <text x="17" y="42" font-size="36" font-weight="700">id</text>
+  </g>
+  <text x="82" y="39" fill="#0f2f33" font-family="'Montserrat', 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="600" letter-spacing="2">GROUP</text>
+</svg>
