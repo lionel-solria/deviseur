@@ -110,11 +110,11 @@
           <footer class="quote-summary-panel border-b border-slate-200 pb-4">
             <dl class="space-y-2 text-sm text-slate-600">
               <div class="flex items-center justify-between">
-                <dt>Total HT</dt>
+                <dt>Total HT produits</dt>
                 <dd id="summary-subtotal" class="font-semibold text-slate-900">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <dt class="flex-1">Remise (%)</dt>
+                <dt class="flex-1">Remise produits (%)</dt>
                 <dd class="flex items-center gap-2">
                   <input id="discount" type="text" value="0" readonly class="h-9 w-20 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2 text-right text-sm text-slate-500" />
                 </dd>
@@ -124,7 +124,15 @@
                 <dd id="summary-discount" class="text-slate-900">-0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
-                <dt>Base HT après remise</dt>
+                <dt>Total HT après remise</dt>
+                <dd id="summary-net-products" class="text-slate-900">0,00 €</dd>
+              </div>
+              <div class="flex items-center justify-between">
+                <dt>Éco-participation</dt>
+                <dd id="summary-ecotax" class="text-slate-900">0,00 €</dd>
+              </div>
+              <div class="flex items-center justify-between">
+                <dt>Base HT à facturer</dt>
                 <dd id="summary-net" class="text-slate-900">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
@@ -173,9 +181,20 @@
           <div class="flex flex-1 flex-col">
             <div class="flex flex-wrap items-center gap-2">
               <span class="product-category-badge"></span>
+              <span class="product-score-badge" data-score="none">Indice Positiv'ID : Non noté</span>
             </div>
             <h3 class="product-name mt-2 text-base font-semibold text-slate-900"></h3>
             <p class="product-description mt-2 line-clamp-3 text-sm text-slate-500"></p>
+            <div class="product-metrics mt-3">
+              <div class="product-metric">
+                <span class="product-metric-label">Poids unitaire</span>
+                <span class="product-metric-value product-weight">—</span>
+              </div>
+              <div class="product-metric">
+                <span class="product-metric-label">Éco-participation</span>
+                <span class="product-metric-value product-ecotax">—</span>
+              </div>
+            </div>
           </div>
           <div class="product-actions">
             <div class="product-price-block">
@@ -260,6 +279,11 @@
                   <span class="line-total-discounted"></span>
                 </span>
               </div>
+              <div>
+                <span class="price-label">Éco-participation</span>
+                <span class="quote-ecotax text-sm font-medium text-emerald-600"></span>
+                <span class="quote-ecotax-unit"></span>
+              </div>
             </div>
           </div>
           <div class="quote-comment-block">
@@ -279,6 +303,13 @@
             <h3 id="product-modal-title" class="text-xl font-semibold text-slate-900"></h3>
           </div>
           <p id="product-modal-description" class="text-sm leading-relaxed text-slate-600"></p>
+          <ul class="modal-infos">
+            <li><span>Catégorie</span><span id="product-modal-category">—</span></li>
+            <li><span>Unité de vente</span><span id="product-modal-unit">—</span></li>
+            <li><span>Poids unitaire</span><span id="product-modal-weight">—</span></li>
+            <li><span>Éco-participation</span><span id="product-modal-ecotax">—</span></li>
+            <li><span>Indice Positiv'ID</span><span id="product-modal-score">Non noté</span></li>
+          </ul>
           <div class="modal-actions">
             <a id="product-modal-link" class="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" target="_blank" rel="noopener">Consulter la fiche</a>
             <button id="product-modal-close" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>

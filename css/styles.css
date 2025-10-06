@@ -108,6 +108,76 @@
   color: #64748b;
 }
 
+.product-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  background-color: rgba(148, 163, 184, 0.2);
+  color: #475569;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.product-score-badge[data-score='a'] {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #047857;
+}
+
+.product-score-badge[data-score='b'] {
+  background-color: rgba(20, 184, 166, 0.15);
+  color: #0f766e;
+}
+
+.product-score-badge[data-score='c'] {
+  background-color: rgba(251, 191, 36, 0.18);
+  color: #b45309;
+}
+
+.product-score-badge[data-score='d'] {
+  background-color: rgba(249, 115, 22, 0.18);
+  color: #c2410c;
+}
+
+.product-score-badge[data-score='e'] {
+  background-color: rgba(248, 113, 113, 0.18);
+  color: #b91c1c;
+}
+
+.product-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.product-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.product-metric-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.product-metric-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.product-metric-value.product-ecotax {
+  color: #047857;
+}
+
 .product-card .product-actions {
   display: flex;
   align-items: flex-end;
@@ -259,6 +329,36 @@
   gap: 1rem;
 }
 
+.modal-infos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.modal-infos li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.modal-infos li span:first-child {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.modal-infos li span:last-child {
+  font-weight: 600;
+  color: #1e293b;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -408,6 +508,18 @@
 
 .quote-row[data-expanded='true'] .quote-details {
   display: flex;
+}
+
+.quote-ecotax {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.quote-ecotax-unit {
+  display: block;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
 }
 
 .quote-body {
