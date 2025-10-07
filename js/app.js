@@ -60,6 +60,10 @@ const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357
 
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 
+const DEBUG_KEYWORD = 'debug';
+const DEBUG_MAX_LOGS = 150;
+const DEBUG_TOOLTIP_OFFSET = 16;
+
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
@@ -86,6 +90,11 @@ const state = {
   isIdentifyingClient: false,
   identifiedClient: null,
   webhookPanelTimeout: null,
+  debugMode: false,
+  debugPanel: null,
+  debugPanelContent: null,
+  debugTooltip: null,
+  debugHighlightTarget: null,
 };
 
 const elements = {
@@ -186,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
+  applyFieldTooltips();
 });
 
 function setupResponsiveSplit() {
@@ -222,6 +232,7 @@ function setupNavAutoHide() {
 }
 
 async function loadCatalogue() {
+  logDebug('Chargement du catalogue demandé.');
   toggleFeedback('Chargement du catalogue en cours...', 'info');
   try {
     const response = await fetch(catalogueUrl);
@@ -241,9 +252,13 @@ async function loadCatalogue() {
     populateCatalogueTree();
     applyFilters();
     toggleFeedback('', 'hide');
+    logDebug('Catalogue chargé avec succès.', { produits: state.catalogue.length });
   } catch (error) {
     console.error(error);
     toggleFeedback("Une erreur est survenue lors du chargement du catalogue. Vérifiez le fichier CSV et réessayez.", 'error');
+    logDebug('Erreur lors du chargement du catalogue.', {
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -572,6 +587,13 @@ function addToQuote(productId) {
       expanded: false,
     });
   }
+  const updatedItem = state.quote.get(productId);
+  logDebug("Ajout d'un produit au devis.", {
+    id: productId,
+    reference: product.reference,
+    nom: product.name,
+    quantite: updatedItem?.quantity,
+  });
   renderQuote();
 }
 
@@ -717,6 +739,16 @@ function renderQuote() {
         areaControls.classList.remove('hidden');
         const lengthInput = areaControls.querySelector('.length-input');
         const widthInput = areaControls.querySelector('.width-input');
+        areaControls.querySelectorAll('label').forEach((label) => {
+          const input = label.querySelector('input');
+          if (!input || input.title) {
+            return;
+          }
+          const labelText = label.textContent?.trim().replace(/\s+/g, ' ');
+          if (labelText) {
+            input.title = labelText;
+          }
+        });
         lengthInput.value = item.length ?? 1;
         widthInput.value = item.width ?? 1;
 
@@ -757,10 +789,21 @@ function renderQuote() {
       }
 
       const commentField = node.querySelector('.quote-comment');
-      commentField.value = item.comment || '';
-      commentField.addEventListener('input', (event) => {
-        item.comment = event.target.value;
-      });
+      if (commentField) {
+        const commentLabel = node.querySelector('.quote-comment-block label');
+        if (!commentField.title) {
+          const labelText = commentLabel?.textContent?.trim().replace(/\s+/g, ' ');
+          if (labelText) {
+            commentField.title = labelText;
+          } else if (commentField.placeholder) {
+            commentField.title = commentField.placeholder;
+          }
+        }
+        commentField.value = item.comment || '';
+        commentField.addEventListener('input', (event) => {
+          item.comment = event.target.value;
+        });
+      }
 
       node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
       fragment.appendChild(node);
@@ -774,7 +817,14 @@ function renderQuote() {
 function changeQuantity(productId, delta) {
   const item = state.quote.get(productId);
   if (!item || item.quantityMode !== 'unit') return;
+  const previousQuantity = item.quantity;
   item.quantity = Math.max(1, item.quantity + delta);
+  logDebug('Modification de la quantité.', {
+    id: productId,
+    variation: delta,
+    precedente: previousQuantity,
+    nouvelleQuantite: item.quantity,
+  });
   renderQuote();
 }
 
@@ -782,10 +832,23 @@ function toggleQuoteItem(productId) {
   const item = state.quote.get(productId);
   if (!item) return;
   item.expanded = !item.expanded;
+  logDebug('Basculement des détails de la ligne.', {
+    id: productId,
+    ouvert: item.expanded,
+  });
   renderQuote();
 }
 
 function removeItem(productId) {
+  const item = state.quote.get(productId);
+  if (!item) {
+    return;
+  }
+  logDebug("Suppression d'un produit du devis.", {
+    id: productId,
+    reference: item.reference,
+    nom: item.name,
+  });
   state.quote.delete(productId);
   renderQuote();
 }
@@ -859,12 +922,415 @@ function syncGeneralCommentInput() {
 function handleSaveNameInput(event) {
   const value = typeof event.target.value === 'string' ? event.target.value : '';
   state.saveName = value;
+  updateDebugModeFromSaveName(value);
 }
 
 function syncSaveNameInput() {
   if (elements.saveNameInput) {
     elements.saveNameInput.value = state.saveName || '';
+    updateDebugModeFromSaveName(elements.saveNameInput.value || '');
   }
+}
+
+function applyFieldTooltips(root = document) {
+  if (!root || typeof root.querySelectorAll !== 'function') {
+    return;
+  }
+  const labelMap = new Map();
+  root.querySelectorAll('label[for]').forEach((label) => {
+    const controlId = label.getAttribute('for');
+    if (!controlId) {
+      return;
+    }
+    const text = label.textContent?.trim().replace(/\s+/g, ' ');
+    if (!text) {
+      return;
+    }
+    labelMap.set(controlId, text);
+    const control = document.getElementById(controlId);
+    if (control && !control.title) {
+      control.title = text;
+    }
+  });
+  root.querySelectorAll('input, select, textarea').forEach((field) => {
+    if (field.title) {
+      return;
+    }
+    const fieldId = field.id;
+    let labelText = fieldId ? labelMap.get(fieldId) : '';
+    if (!labelText && fieldId) {
+      const selectorId = escapeCssIdentifier(fieldId);
+      const label = selectorId ? document.querySelector(`label[for="${selectorId}"]`) : null;
+      labelText = label?.textContent?.trim().replace(/\s+/g, ' ') ?? '';
+    }
+    if (!labelText && field.getAttribute('aria-label')) {
+      labelText = field.getAttribute('aria-label');
+    }
+    if (!labelText && field.placeholder) {
+      labelText = field.placeholder;
+    }
+    if (labelText) {
+      field.title = labelText.trim().replace(/\s+/g, ' ');
+    }
+  });
+}
+
+function updateDebugModeFromSaveName(rawValue) {
+  const value = typeof rawValue === 'string' ? rawValue : '';
+  const shouldEnable = value.toLowerCase().includes(DEBUG_KEYWORD);
+  if (shouldEnable && !state.debugMode) {
+    enableDebugMode();
+  } else if (!shouldEnable && state.debugMode) {
+    disableDebugMode();
+  }
+}
+
+function enableDebugMode() {
+  if (state.debugMode) {
+    return;
+  }
+  state.debugMode = true;
+  if (document.body) {
+    document.body.setAttribute('data-debug-mode', 'true');
+  }
+  const panel = ensureDebugPanel();
+  if (panel) {
+    panel.hidden = false;
+  }
+  ensureDebugTooltip();
+  document.addEventListener('pointerover', handleDebugPointerOver, true);
+  document.addEventListener('pointermove', handleDebugPointerMove, true);
+  logDebug('Mode debug activé.');
+}
+
+function disableDebugMode() {
+  if (!state.debugMode) {
+    return;
+  }
+  logDebug('Mode debug désactivé.');
+  state.debugMode = false;
+  if (document.body) {
+    document.body.removeAttribute('data-debug-mode');
+  }
+  document.removeEventListener('pointerover', handleDebugPointerOver, true);
+  document.removeEventListener('pointermove', handleDebugPointerMove, true);
+  clearDebugHighlight();
+  hideDebugTooltip();
+  if (state.debugPanel) {
+    state.debugPanel.hidden = true;
+  }
+}
+
+function ensureDebugPanel() {
+  if (state.debugPanel) {
+    return state.debugPanel;
+  }
+  if (!document.body) {
+    return null;
+  }
+  const panel = document.createElement('div');
+  panel.id = 'debug-panel';
+  panel.className = 'debug-panel';
+  panel.hidden = true;
+  const header = document.createElement('div');
+  header.className = 'debug-panel__header';
+  header.textContent = 'Mode debug';
+  const content = document.createElement('div');
+  content.className = 'debug-panel__content';
+  panel.appendChild(header);
+  panel.appendChild(content);
+  document.body.appendChild(panel);
+  makeDebugPanelDraggable(panel, header);
+  state.debugPanel = panel;
+  state.debugPanelContent = content;
+  return panel;
+}
+
+function makeDebugPanelDraggable(panel, handle) {
+  if (!panel || !handle) {
+    return;
+  }
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  const onPointerMove = (event) => {
+    if (!isDragging) {
+      return;
+    }
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || panel.offsetWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || panel.offsetHeight;
+    const newLeft = Math.min(
+      Math.max(event.clientX - offsetX, 0),
+      Math.max(viewportWidth - panel.offsetWidth, 0),
+    );
+    const newTop = Math.min(
+      Math.max(event.clientY - offsetY, 0),
+      Math.max(viewportHeight - panel.offsetHeight, 0),
+    );
+    panel.style.left = `${newLeft}px`;
+    panel.style.top = `${newTop}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  };
+
+  const onPointerUp = (event) => {
+    if (handle.releasePointerCapture && event.pointerId !== undefined) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+    isDragging = false;
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+  };
+
+  const onPointerDown = (event) => {
+    if (event.button !== undefined && event.button !== 0) {
+      return;
+    }
+    isDragging = true;
+    const rect = panel.getBoundingClientRect();
+    offsetX = event.clientX - rect.left;
+    offsetY = event.clientY - rect.top;
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    if (handle.setPointerCapture && event.pointerId !== undefined) {
+      handle.setPointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+  };
+
+  handle.addEventListener('pointerdown', onPointerDown);
+}
+
+function ensureDebugTooltip() {
+  if (state.debugTooltip) {
+    return state.debugTooltip;
+  }
+  if (!document.body) {
+    return null;
+  }
+  const tooltip = document.createElement('div');
+  tooltip.id = 'debug-tooltip';
+  tooltip.className = 'debug-tooltip';
+  tooltip.hidden = true;
+  document.body.appendChild(tooltip);
+  state.debugTooltip = tooltip;
+  return tooltip;
+}
+
+function positionDebugTooltip(x, y) {
+  const tooltip = state.debugTooltip;
+  if (!tooltip) {
+    return;
+  }
+  const width = tooltip.offsetWidth;
+  const height = tooltip.offsetHeight;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || width;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || height;
+  let left = x;
+  let top = y;
+  if (left + width > viewportWidth - 8) {
+    left = viewportWidth - width - 8;
+  }
+  if (top + height > viewportHeight - 8) {
+    top = viewportHeight - height - 8;
+  }
+  if (left < 8) {
+    left = 8;
+  }
+  if (top < 8) {
+    top = 8;
+  }
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function setDebugHighlight(element) {
+  if (!element || !(element instanceof Element)) {
+    return;
+  }
+  if (state.debugHighlightTarget === element) {
+    return;
+  }
+  clearDebugHighlight();
+  element.setAttribute('data-debug-highlight', 'true');
+  state.debugHighlightTarget = element;
+  element.addEventListener('pointerleave', handleDebugTargetLeave, { once: true });
+}
+
+function clearDebugHighlight() {
+  if (state.debugHighlightTarget && state.debugHighlightTarget instanceof Element) {
+    state.debugHighlightTarget.removeAttribute('data-debug-highlight');
+  }
+  state.debugHighlightTarget = null;
+}
+
+function hideDebugTooltip() {
+  if (state.debugTooltip) {
+    state.debugTooltip.hidden = true;
+  }
+}
+
+function handleDebugPointerOver(event) {
+  if (!state.debugMode) {
+    return;
+  }
+  const target = event.target;
+  if (!target || !(target instanceof Element)) {
+    hideDebugTooltip();
+    clearDebugHighlight();
+    return;
+  }
+  if (target === document.body || target === document.documentElement) {
+    hideDebugTooltip();
+    clearDebugHighlight();
+    return;
+  }
+  if (state.debugPanel && (target === state.debugPanel || state.debugPanel.contains(target))) {
+    hideDebugTooltip();
+    clearDebugHighlight();
+    return;
+  }
+  if (state.debugTooltip && target === state.debugTooltip) {
+    return;
+  }
+  const label = getDebugLabel(target);
+  if (!label) {
+    hideDebugTooltip();
+    clearDebugHighlight();
+    return;
+  }
+  const tooltip = ensureDebugTooltip();
+  if (!tooltip) {
+    return;
+  }
+  tooltip.textContent = label;
+  tooltip.hidden = false;
+  positionDebugTooltip(event.clientX + DEBUG_TOOLTIP_OFFSET, event.clientY + DEBUG_TOOLTIP_OFFSET);
+  setDebugHighlight(target);
+}
+
+function handleDebugPointerMove(event) {
+  if (!state.debugMode || !state.debugTooltip || state.debugTooltip.hidden) {
+    return;
+  }
+  positionDebugTooltip(event.clientX + DEBUG_TOOLTIP_OFFSET, event.clientY + DEBUG_TOOLTIP_OFFSET);
+}
+
+function handleDebugTargetLeave() {
+  hideDebugTooltip();
+  clearDebugHighlight();
+}
+
+function getDebugLabel(element) {
+  if (!element || !(element instanceof Element)) {
+    return '';
+  }
+  const descriptor = [];
+  descriptor.push(element.tagName.toLowerCase());
+  if (element.id) {
+    descriptor.push(`#${element.id}`);
+  }
+  const nameAttr = element.getAttribute('name');
+  if (nameAttr) {
+    descriptor.push(`name="${nameAttr}"`);
+  }
+  if (element.classList && element.classList.length) {
+    descriptor.push(`.${Array.from(element.classList).join('.')}`);
+  }
+  const label = findLabelText(element);
+  if (label) {
+    descriptor.push(`label: "${label}"`);
+  }
+  return descriptor.filter(Boolean).join(' ');
+}
+
+function findLabelText(element) {
+  if (!element || !(element instanceof Element)) {
+    return '';
+  }
+  if (element.id) {
+    const selectorId = escapeCssIdentifier(element.id);
+    if (selectorId) {
+      const explicitLabel = document.querySelector(`label[for="${selectorId}"]`);
+      const explicitText = explicitLabel?.textContent?.trim().replace(/\s+/g, ' ');
+      if (explicitText) {
+        return explicitText;
+      }
+    }
+  }
+  const parentLabel = element.closest('label');
+  const parentText = parentLabel?.textContent?.trim().replace(/\s+/g, ' ');
+  if (parentText) {
+    return parentText;
+  }
+  const ariaLabel = element.getAttribute('aria-label');
+  if (ariaLabel) {
+    return ariaLabel.trim();
+  }
+  if (element.getAttribute('placeholder')) {
+    return element.getAttribute('placeholder').trim();
+  }
+  return '';
+}
+
+function logDebug(message, details) {
+  if (!state.debugMode) {
+    return;
+  }
+  const panel = ensureDebugPanel();
+  const content = state.debugPanelContent;
+  if (!panel || !content) {
+    return;
+  }
+  const entry = document.createElement('div');
+  entry.className = 'debug-panel__entry';
+  const timestamp = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+  entry.innerHTML = `<span class="debug-panel__timestamp">${escapeHtml(timestamp)}</span> ${escapeHtml(message)}`;
+  if (details !== undefined) {
+    const detailBlock = document.createElement('pre');
+    detailBlock.className = 'debug-panel__details';
+    if (details === null) {
+      detailBlock.textContent = 'null';
+    } else if (typeof details === 'string') {
+      detailBlock.textContent = details;
+    } else {
+      try {
+        detailBlock.textContent = JSON.stringify(details, null, 2);
+      } catch (error) {
+        detailBlock.textContent = String(details);
+      }
+    }
+    entry.appendChild(detailBlock);
+  }
+  content.appendChild(entry);
+  while (content.childElementCount > DEBUG_MAX_LOGS) {
+    content.removeChild(content.firstElementChild);
+  }
+  content.scrollTop = content.scrollHeight;
+}
+
+function escapeCssIdentifier(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const stringValue = String(value);
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(stringValue);
+  }
+  return stringValue.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+}
+
+function escapeHtml(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function extractInitialsForFilename(value) {
@@ -1177,6 +1643,7 @@ async function handleSiretSubmit(event) {
   state.isIdentifyingClient = true;
   setIdentificationState('loading', 'Identification en cours...');
   try {
+    logDebug('Identification SIRET : requête envoyée.', { siret, endpoint });
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1201,6 +1668,11 @@ async function handleSiretSubmit(event) {
     state.identifiedClient = result;
     updateDiscountRate(typeof result.discountRate === 'number' ? result.discountRate : 0);
     updateIdentificationFromState();
+    logDebug('Identification SIRET : réponse reçue.', {
+      siret,
+      identifie: Boolean(result?.identified),
+      statut: result?.statusLabel || null,
+    });
     showWebhookPanel(result);
     if (result.identified) {
       closeClientFormPlaceholder();
@@ -1213,6 +1685,9 @@ async function handleSiretSubmit(event) {
     updateDiscountRate(0);
     closeWebhookPanel();
     closeClientFormPlaceholder();
+    logDebug("Identification SIRET : erreur lors de l'appel webhook.", {
+      message: error instanceof Error ? error.message : String(error),
+    });
   } finally {
     state.isIdentifyingClient = false;
   }
@@ -1557,6 +2032,22 @@ function renderClientIdentity() {
   }
 }
 
+function formatSiretErrorFeedback(message) {
+  const base = escapeHtml(message ?? '');
+  const trimmed = base.trim();
+  const link = `<a href="${NEW_CLIENT_URL}" target="_blank" rel="noopener">formulaire Nouveau client</a>`;
+  if (!trimmed) {
+    return `Merci de remplir ce ${link}.`;
+  }
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('nouveau client') || trimmed.includes('idgroup-france.com')) {
+    return trimmed;
+  }
+  const needsPunctuation = !/[.!?]$/.test(trimmed);
+  const suffix = needsPunctuation ? '.' : '';
+  return `${trimmed}${suffix} Merci de remplir ce ${link}.`;
+}
+
 function setIdentificationState(status, message = null) {
   if (elements.siretForm) {
     elements.siretForm.dataset.status = status;
@@ -1570,7 +2061,11 @@ function setIdentificationState(status, message = null) {
   }
   if (elements.siretFeedback) {
     if (message !== null) {
-      elements.siretFeedback.textContent = message;
+      if (status === 'error') {
+        elements.siretFeedback.innerHTML = formatSiretErrorFeedback(message);
+      } else {
+        elements.siretFeedback.textContent = message;
+      }
     } else if (status === 'idle') {
       elements.siretFeedback.textContent = '';
     }
@@ -1726,6 +2221,7 @@ async function handleSubmitOrder() {
     return;
   }
   toggleFeedback('Envoi de la commande en cours...', 'info');
+  logDebug('Préparation de la commande pour envoi.', { lignes: state.quote.size });
   try {
     const { doc, filename, quoteNumber } = await buildQuotePdfDocument();
     const pdfBlob = doc.output('blob');
@@ -1743,6 +2239,7 @@ async function handleSubmitOrder() {
       new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }),
       snapshotFilename,
     );
+    logDebug('Commande : envoi du webhook.', { quoteNumber, fichierPdf: filename, fichierPanier: snapshotFilename });
     const response = await fetch(ORDER_WEBHOOK_URL, {
       method: 'POST',
       body: formData,
@@ -1751,6 +2248,7 @@ async function handleSubmitOrder() {
       throw new Error(`Statut ${response.status}`);
     }
     toggleFeedback('La commande a été transmise à ID GROUP.', 'info');
+    logDebug('Commande envoyée avec succès.', { quoteNumber });
   } catch (error) {
     if (error instanceof Error && error.message === 'PANIER_VIDE') {
       toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
@@ -1758,6 +2256,9 @@ async function handleSubmitOrder() {
     }
     console.error(error);
     toggleFeedback("Impossible d'envoyer la commande. Merci de réessayer.", 'error');
+    logDebug('Erreur lors de l\'envoi de la commande.', {
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -2326,15 +2827,18 @@ function openClientFormPlaceholder(siret, options = {}) {
   if (!container) {
     return;
   }
+  const formattedSiret = formatSiret(siret);
   const paragraph = container.querySelector('p');
   if (paragraph) {
-    const formatted = formatSiret(siret);
     const link = `<a href="${NEW_CLIENT_URL}" target="_blank" rel="noopener">vous enregistrer comme nouveau client</a>`;
-    paragraph.innerHTML = formatted
-      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Vous pouvez ${link} pour accéder à nos services.`
+    paragraph.innerHTML = formattedSiret
+      ? `Le client n'a pas été reconnu pour le SIRET ${formattedSiret}. Vous pouvez ${link} pour accéder à nos services.`
       : `Le client n'a pas été reconnu. Vous pouvez ${link} pour accéder à nos services.`;
   }
   container.dataset.open = 'true';
+  logDebug('Affichage du rappel formulaire nouveau client.', {
+    siret: formattedSiret || null,
+  });
   if (options.scroll !== false) {
     container.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -2345,6 +2849,7 @@ function closeClientFormPlaceholder() {
     return;
   }
   elements.clientFormPlaceholder.dataset.open = 'false';
+  logDebug('Masquage du rappel formulaire nouveau client.');
 }
 
 function setupModal() {
