@@ -232,10 +232,10 @@ function formatEcotaxUnitText(item) {
   const amount = Number.isFinite(item?.baseEcotax) ? item.baseEcotax : 0;
   const formatted = currencyFormatter.format(amount);
   if (item?.quantityMode === 'area') {
-    return `Écotaxe : ${formatted} / m²`;
+    return `Ecopart : ${formatted} / m²`;
   }
   const unitLabel = item?.unit ? item.unit.toLowerCase() : "pièce";
-  return `Écotaxe : ${formatted} / ${unitLabel}`;
+  return `Ecopart : ${formatted} / ${unitLabel}`;
 }
 
 function formatWeightLabel(weight) {
@@ -556,7 +556,7 @@ function renderQuote() {
         );
 
         if (lineEcotaxElement) {
-          lineEcotaxElement.textContent = formattedEcotax;
+          lineEcotaxElement.textContent = `Ecopart : ${formattedEcotax}`;
         }
 
         if (state.discountRate > 0) {
@@ -853,7 +853,7 @@ function generatePdf() {
     const unitEcotax = getUnitEcotax(item);
     const ecotaxUnitLabel =
       item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Écotaxe : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
+    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
     const weightValue = formatWeightValue(item.weight);
     if (weightValue) {
       designationLines.push(`Poids unitaire : ${weightValue}`);
@@ -882,7 +882,7 @@ function generatePdf() {
 
   doc.autoTable({
     startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écotaxe', 'Total HT']],
+    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Ecopart', 'Total HT']],
     body,
     styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
     headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
@@ -905,8 +905,8 @@ function generatePdf() {
     body: [
       ['Total HT produits', currencyFormatter.format(productsSubtotal)],
       [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Écotaxe totale', currencyFormatter.format(ecotaxTotal)],
-      ['Base HT après remise + écotaxe', currencyFormatter.format(net)],
+      ['Ecopart totale', currencyFormatter.format(ecotaxTotal)],
+      ['Base HT après remise + Ecopart', currencyFormatter.format(net)],
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
