@@ -232,10 +232,10 @@ function formatEcotaxUnitText(item) {
   const amount = Number.isFinite(item?.baseEcotax) ? item.baseEcotax : 0;
   const formatted = currencyFormatter.format(amount);
   if (item?.quantityMode === 'area') {
-    return `Écotaxe : ${formatted} / m²`;
+    return `Ecopart : ${formatted} / m²`;
   }
   const unitLabel = item?.unit ? item.unit.toLowerCase() : "pièce";
-  return `Écotaxe : ${formatted} / ${unitLabel}`;
+  return `Ecopart : ${formatted} / ${unitLabel}`;
 }
 
 function formatWeightLabel(weight) {
@@ -853,7 +853,7 @@ function generatePdf() {
     const unitEcotax = getUnitEcotax(item);
     const ecotaxUnitLabel =
       item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Écotaxe : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
+    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
     const weightValue = formatWeightValue(item.weight);
     if (weightValue) {
       designationLines.push(`Poids unitaire : ${weightValue}`);
@@ -882,10 +882,10 @@ function generatePdf() {
 
   doc.autoTable({
     startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écotaxe', 'Total HT']],
+    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Ecopart', 'Total HT']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
+    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 70 },
       1: { cellWidth: 160 },
@@ -894,7 +894,7 @@ function generatePdf() {
       4: { halign: 'right', cellWidth: 60 },
       5: { halign: 'right', cellWidth: 70 },
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    alternateRowStyles: { fillColor: [246, 247, 250] },
     margin: { left: margin, right: margin },
   });
 
@@ -905,13 +905,13 @@ function generatePdf() {
     body: [
       ['Total HT produits', currencyFormatter.format(productsSubtotal)],
       [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Écotaxe totale', currencyFormatter.format(ecotaxTotal)],
-      ['Base HT après remise + écotaxe', currencyFormatter.format(net)],
+      ['Ecopart totale', currencyFormatter.format(ecotaxTotal)],
+      ['Base HT après remise + Ecopart', currencyFormatter.format(net)],
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
+    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 200 },
       1: { halign: 'right', cellWidth: 120 },
@@ -920,7 +920,7 @@ function generatePdf() {
     didParseCell: (data) => {
       if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
         data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [226, 232, 240];
+        data.cell.styles.fillColor = [253, 234, 227];
       }
     },
   });
@@ -1037,7 +1037,7 @@ function openProductModal(product) {
       product.quantityMode === 'area'
         ? `${currencyFormatter.format(unitEcotax)} / m²`
         : `${currencyFormatter.format(unitEcotax)} / ${(product.unit || 'pièce').toLowerCase()}`;
-    elements.modalEcotax.textContent = ecotaxLabel;
+    elements.modalEcotax.textContent = `Ecopart : ${ecotaxLabel}`;
   }
   if (elements.modalWeight && elements.modalWeightRow) {
     const weightValue = formatWeightValue(product.weight);
