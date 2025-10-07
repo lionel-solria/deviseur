@@ -1118,6 +1118,20 @@ function normaliseWebhookResponse(payload, siret) {
     return result;
   }
 
+  if (Array.isArray(payload)) {
+    const firstObject = payload.find(
+      (item) => item && typeof item === 'object' && !Array.isArray(item),
+    );
+    if (firstObject) {
+      return normaliseWebhookResponse(firstObject, siret);
+    }
+    const firstString = payload.find((item) => typeof item === 'string' && item.trim().length > 0);
+    if (typeof firstString === 'string') {
+      return normaliseWebhookResponse(firstString, siret);
+    }
+    return result;
+  }
+
   if (typeof payload === 'string') {
     const label = payload.trim();
     if (label) {
@@ -1166,7 +1180,10 @@ function normaliseWebhookResponse(payload, siret) {
     payload.raisonSociale ??
     payload.nomSociete ??
     payload.societe ??
-    payload.name;
+    payload.name ??
+    payload.Nom ??
+    payload.nom ??
+    payload['Raison sociale'];
   if (typeof companyCandidate === 'string') {
     result.companyName = companyCandidate.trim();
   }
@@ -1214,7 +1231,10 @@ function normaliseWebhookResponse(payload, siret) {
       pushAddress(payload[key]);
     }
   });
-  const cityParts = [payload.postalCode ?? payload.zipCode ?? payload.codePostal, payload.city ?? payload.ville]
+  const cityParts = [
+    payload.postalCode ?? payload.zipCode ?? payload.codePostal ?? payload.CP ?? payload['Code Postal'],
+    payload.city ?? payload.ville ?? payload.Ville,
+  ]
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .filter(Boolean);
   if (cityParts.length) {
