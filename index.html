@@ -22,9 +22,8 @@
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
-          <div>
+          <div class="site-nav__brand-text">
             <p class="brand-title">ID GROUP Devis</p>
-            <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
           </div>
           <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
@@ -45,26 +44,31 @@
             </div>
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
-          <div class="site-nav__cart-actions">
-            <button id="save-cart" type="button" class="btn-secondary">Sauvegarder mon panier</button>
-            <button id="restore-cart" type="button" class="btn-secondary">Restaurer un panier</button>
-            <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+          <div class="site-nav__toolbar">
+            <label for="save-name" class="save-name-field">
+              <span class="save-name-field__label">Nom de sauvegarde</span>
+              <input
+                id="save-name"
+                type="text"
+                maxlength="60"
+                placeholder="Nom personnalisé"
+                class="save-name-field__input"
+              />
+            </label>
+            <div class="site-nav__cart-actions">
+              <button id="save-cart" type="button" class="btn-secondary">Sauvegarder</button>
+              <button id="restore-cart" type="button" class="btn-secondary">Restaurer</button>
+              <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+            </div>
+            <div class="discount-field" aria-live="polite">
+              <span class="discount-field__label">Remise client</span>
+              <span id="header-discount-display" class="discount-field__value">0&nbsp;%</span>
+              <input id="header-discount" type="hidden" value="0" />
+            </div>
+            <button id="generate-pdf" class="btn-primary">
+              Générer le devis PDF
+            </button>
           </div>
-          <label for="header-discount" class="discount-field">
-            <span>Remise (%)</span>
-            <input
-              id="header-discount"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value="0"
-              class="discount-field__input"
-            />
-          </label>
-          <button id="generate-pdf" class="btn-primary">
-            Générer le devis PDF
-          </button>
           <div class="site-nav__tree">
             <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
             <select id="catalogue-tree" class="site-nav__tree-select">
@@ -326,6 +330,36 @@
         </div>
       </div>
     </template>
+
+    <div
+      id="webhook-dialog"
+      class="webhook-dialog"
+      role="dialog"
+      aria-live="assertive"
+      aria-labelledby="webhook-dialog-title"
+      tabindex="-1"
+      hidden
+    >
+      <div class="webhook-dialog__card">
+        <div class="webhook-dialog__header">
+          <h2 id="webhook-dialog-title">Réponse du webhook</h2>
+          <button id="webhook-dialog-close" type="button" class="webhook-dialog__close" aria-label="Fermer la fenêtre">
+            ×
+          </button>
+        </div>
+        <div id="webhook-dialog-content" class="webhook-dialog__content"></div>
+      </div>
+    </div>
+
+    <section id="client-form-placeholder" class="client-form-placeholder" hidden>
+      <div class="client-form-placeholder__inner">
+        <h2>Formulaire client à venir</h2>
+        <p>
+          Ce client n'est pas encore référencé dans notre base. Un formulaire de mise à jour sera bientôt disponible. En
+          attendant, merci de contacter le support commercial pour finaliser la demande.
+        </p>
+      </div>
+    </section>
 
       <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
         <div class="modal-card">

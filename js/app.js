@@ -72,6 +72,7 @@ const state = {
   discountRate: 0,
   vatRate: 0.2,
   generalComment: '',
+  saveLabel: '',
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
@@ -79,6 +80,7 @@ const state = {
   webhookMode: 'production',
   isIdentifyingClient: false,
   identifiedClient: null,
+  webhookDialogTimer: null,
 };
 
 const elements = {
@@ -101,6 +103,7 @@ const elements = {
   quoteList: document.getElementById('quote-list'),
   quoteEmpty: document.getElementById('quote-empty'),
   headerDiscount: document.getElementById('header-discount'),
+  headerDiscountDisplay: document.getElementById('header-discount-display'),
   discount: document.getElementById('discount'),
   generalComment: document.getElementById('general-comment'),
   summaryDiscount: document.getElementById('summary-discount'),
@@ -128,21 +131,26 @@ const elements = {
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
+  saveName: document.getElementById('save-name'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
   siretFeedback: document.getElementById('siret-feedback'),
+  webhookDialog: document.getElementById('webhook-dialog'),
+  webhookDialogContent: document.getElementById('webhook-dialog-content'),
+  webhookDialogClose: document.getElementById('webhook-dialog-close'),
+  clientFormPlaceholder: document.getElementById('client-form-placeholder'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
-  elements.headerDiscount?.addEventListener('input', handleDiscountChange);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
+  elements.saveName?.addEventListener('input', handleSaveNameChange);
   elements.restoreCart?.addEventListener('click', () => {
     elements.restoreCartInput?.click();
   });
@@ -150,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.webhookDialogClose?.addEventListener('click', hideWebhookDialog);
+  elements.webhookDialog?.addEventListener('mouseenter', clearWebhookDialogTimer);
+  elements.webhookDialog?.addEventListener('mouseleave', scheduleWebhookDialogDismiss);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
@@ -159,8 +170,11 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', setupResponsiveSplit);
   syncDiscountInputs();
   syncGeneralCommentInput();
+  syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
+  hideClientFormPlaceholder();
+  document.addEventListener('keydown', handleGlobalKeydown);
 });
 
 function setupResponsiveSplit() {
@@ -757,14 +771,8 @@ function removeItem(productId) {
   renderQuote();
 }
 
-function handleDiscountChange(event) {
-  const inputValue = parseFloat(String(event.target.value).replace(',', '.'));
-  const normalised = Number.isNaN(inputValue) || inputValue < 0 ? 0 : Math.min(inputValue, 100);
-  updateDiscountRate(normalised);
-}
-
 function updateDiscountRate(rate) {
-  state.discountRate = rate;
+  state.discountRate = clampPercentage(rate);
   syncDiscountInputs();
   renderProducts();
   renderQuote();
@@ -776,6 +784,10 @@ function syncDiscountInputs() {
   }
   if (elements.discount) {
     elements.discount.value = quantityFormatter.format(state.discountRate);
+  }
+  if (elements.headerDiscountDisplay) {
+    const formatted = numberFormatter.format(state.discountRate);
+    elements.headerDiscountDisplay.textContent = `${formatted}\u00A0%`;
   }
 }
 
@@ -826,6 +838,16 @@ function syncGeneralCommentInput() {
   }
 }
 
+function handleSaveNameChange(event) {
+  state.saveLabel = typeof event.target?.value === 'string' ? event.target.value : '';
+}
+
+function syncSaveNameInput() {
+  if (elements.saveName) {
+    elements.saveName.value = state.saveLabel || '';
+  }
+}
+
 function updateSummary() {
   const items = Array.from(state.quote.values());
   const productsSubtotal = items.reduce((total, item) => total + getProductSubtotal(item), 0);
@@ -860,11 +882,21 @@ function handleSaveCart() {
     return;
   }
   try {
-    const snapshot = buildCartSnapshot();
+    const label = (state.saveLabel || '').trim();
+    if (!label) {
+      toggleFeedback('Indiquez un nom de sauvegarde avant d’exporter votre panier.', 'warning');
+      elements.saveName?.focus();
+      return;
+    }
+    state.saveLabel = label;
+    syncSaveNameInput();
+    const now = new Date();
+    const saveMeta = buildSaveMetadata(label, now);
+    const snapshot = buildCartSnapshot(saveMeta);
     const json = JSON.stringify(snapshot, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${CART_FILENAME_PREFIX}-${timestamp}.json`;
+    const filenameParts = [CART_FILENAME_PREFIX, saveMeta.code, saveMeta.dateCode, saveMeta.slug];
+    const filename = `${filenameParts.join('-')}.json`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -879,6 +911,35 @@ function handleSaveCart() {
     console.error(error);
     toggleFeedback('Impossible de sauvegarder le panier. Merci de réessayer.', 'error');
   }
+}
+
+function buildSaveMetadata(label, date = new Date()) {
+  const trimmed = label.trim();
+  const reference = stripDiacritics(trimmed).replace(/[^A-Za-z0-9]/g, '');
+  const code = (reference.slice(0, 3).toUpperCase() || 'GEN').padEnd(3, 'X');
+  const dateCode = formatSaveDateCode(date);
+  const slug = slugifyLabel(trimmed);
+  return { label: trimmed, code, dateCode, slug };
+}
+
+function stripDiacritics(value) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function slugifyLabel(value) {
+  const base = stripDiacritics(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+  return base || 'sans-nom';
+}
+
+function formatSaveDateCode(date) {
+  const year = String(date.getFullYear()).slice(-2);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
 }
 
 async function handleRestoreCartInput(event) {
@@ -905,7 +966,7 @@ async function handleRestoreCartInput(event) {
   }
 }
 
-function buildCartSnapshot() {
+function buildCartSnapshot(saveMeta = null) {
   const items = Array.from(state.quote.values()).map((item) => ({
     id: item.id,
     quantityMode: item.quantityMode,
@@ -941,6 +1002,23 @@ function buildCartSnapshot() {
       statusLabel: state.identifiedClient.statusLabel || '',
     };
   }
+  if (saveMeta) {
+    snapshot.saveLabel = saveMeta.label;
+    snapshot.saveCode = saveMeta.code;
+    snapshot.saveDateCode = saveMeta.dateCode;
+    snapshot.saveSlug = saveMeta.slug;
+    snapshot.saveReference = `${saveMeta.code}${saveMeta.dateCode}`;
+  } else {
+    const label = (state.saveLabel || '').trim();
+    if (label) {
+      const fallbackMeta = buildSaveMetadata(label, new Date(snapshot.generatedAt));
+      snapshot.saveLabel = fallbackMeta.label;
+      snapshot.saveCode = fallbackMeta.code;
+      snapshot.saveDateCode = fallbackMeta.dateCode;
+      snapshot.saveSlug = fallbackMeta.slug;
+      snapshot.saveReference = `${fallbackMeta.code}${fallbackMeta.dateCode}`;
+    }
+  }
   return snapshot;
 }
 
@@ -964,6 +1042,8 @@ function applyCartSnapshot(snapshot) {
     state.generalComment = snapshot.generalComment;
     syncGeneralCommentInput();
   }
+  state.saveLabel = typeof snapshot.saveLabel === 'string' ? snapshot.saveLabel.trim() : '';
+  syncSaveNameInput();
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
@@ -1046,9 +1126,13 @@ function handleSiretInputChange(event) {
     if (!digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
+      updateDiscountRate(0);
+      hideClientFormPlaceholder();
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
+      updateDiscountRate(0);
+      hideClientFormPlaceholder();
     }
   }
 }
@@ -1089,13 +1173,21 @@ async function handleSiretSubmit(event) {
     }
     const result = normaliseWebhookResponse(payload, siret);
     state.identifiedClient = result;
-    if (typeof result.discountRate === 'number') {
-      updateDiscountRate(result.discountRate);
-    }
+    const discountRate = typeof result.discountRate === 'number' ? result.discountRate : 0;
+    updateDiscountRate(discountRate);
     updateIdentificationFromState();
+    showWebhookDialogForResult(result);
+    if (result.identified) {
+      hideClientFormPlaceholder();
+    } else {
+      showClientFormPlaceholder();
+    }
   } catch (error) {
     console.error(error);
     setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    showWebhookDialogMessage('Erreur lors de l’identification', [
+      { label: 'Détail', value: 'Merci de réessayer dans quelques instants.' },
+    ]);
   } finally {
     state.isIdentifyingClient = false;
   }
@@ -1303,6 +1395,7 @@ function normaliseWebhookResponse(payload, siret) {
   result.conditionsLines = conditionsLines;
 
   const discountCandidates = [
+    getValue('Tarif'),
     getValue('discountRate'),
     getValue('remise'),
     getValue('Remise'),
@@ -1312,13 +1405,17 @@ function normaliseWebhookResponse(payload, siret) {
     rawConditions?.discountRate,
     rawConditions?.remise,
     rawConditions?.discountPercent,
+    rawConditions?.Tarif,
     rawConditions?.remisePourcentage,
     conditionsCandidate?.discountRate,
     conditionsCandidate?.remise,
+    conditionsCandidate?.Tarif,
     payload.conditions?.discountRate,
     payload.conditions?.remise,
+    payload.conditions?.Tarif,
     payload.conditionsTarifaires?.discountRate,
     payload.conditionsTarifaires?.remise,
+    payload.conditionsTarifaires?.Tarif,
   ];
   for (const candidate of discountCandidates) {
     const parsed = parsePercentageValue(candidate);
@@ -1382,6 +1479,24 @@ function setIdentificationState(status, message = null) {
   }
 }
 
+function showClientFormPlaceholder() {
+  if (!elements.clientFormPlaceholder) {
+    return;
+  }
+  const wasHidden = elements.clientFormPlaceholder.hidden;
+  elements.clientFormPlaceholder.hidden = false;
+  if (wasHidden) {
+    elements.clientFormPlaceholder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function hideClientFormPlaceholder() {
+  if (!elements.clientFormPlaceholder) {
+    return;
+  }
+  elements.clientFormPlaceholder.hidden = true;
+}
+
 function updateIdentificationFromState() {
   if (!elements.siretInput) {
     return;
@@ -1391,17 +1506,26 @@ function updateIdentificationFromState() {
   }
   if (!state.identifiedClient) {
     setIdentificationState('idle');
+    hideClientFormPlaceholder();
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
   setIdentificationState(state.identifiedClient.identified ? 'success' : 'error', message);
+  if (state.identifiedClient.identified) {
+    hideClientFormPlaceholder();
+  } else {
+    showClientFormPlaceholder();
+  }
 }
 
 function toggleWebhookMode() {
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
+  updateDiscountRate(0);
   updateWebhookModeIndicator();
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
+  hideClientFormPlaceholder();
+  hideWebhookDialog();
 }
 
 function updateWebhookModeIndicator() {
@@ -1419,6 +1543,125 @@ function updateWebhookModeIndicator() {
 
 function getActiveWebhookUrl() {
   return WEBHOOK_ENDPOINTS[state.webhookMode] || WEBHOOK_ENDPOINTS.production;
+}
+
+function showWebhookDialogForResult(result) {
+  if (!result) {
+    showWebhookDialogMessage('Réponse du webhook indisponible');
+    return;
+  }
+  const statusLabel = result.statusLabel
+    ? result.statusLabel.trim()
+    : result.identified
+    ? 'Client identifié'
+    : 'Client non identifié';
+  const details = [];
+  if (result.companyName) {
+    details.push({ label: 'Société', value: result.companyName });
+  }
+  if (result.siret) {
+    details.push({ label: 'SIRET', value: formatSiret(result.siret) });
+  }
+  if (result.contactName) {
+    details.push({ label: 'Contact', value: result.contactName });
+  }
+  if (result.contactEmail) {
+    details.push({ label: 'Email', value: result.contactEmail });
+  }
+  if (Array.isArray(result.conditionsLines) && result.conditionsLines.length > 0) {
+    details.push({ label: 'Conditions', value: result.conditionsLines[0] });
+  }
+  const discountValue = numberFormatter.format(state.discountRate);
+  details.push({ label: 'Remise appliquée', value: `${discountValue}\u00A0%` });
+  showWebhookDialogMessage(statusLabel, details);
+}
+
+function showWebhookDialogMessage(status, detailEntries = []) {
+  if (!elements.webhookDialog || !elements.webhookDialogContent) {
+    return;
+  }
+  const safeStatus = status ? escapeHtml(status) : '';
+  const entries = Array.isArray(detailEntries) ? detailEntries : [];
+  const listItems = entries
+    .filter((entry) => entry && typeof entry.value === 'string' && entry.value.trim().length > 0)
+    .map(
+      (entry) =>
+        `<li><strong>${escapeHtml(entry.label || '')}\u00A0:</strong> ${escapeHtml(entry.value)}</li>`,
+    )
+    .join('');
+  const contentParts = [];
+  if (safeStatus) {
+    contentParts.push(`<div class="webhook-dialog__badge">${safeStatus}</div>`);
+  }
+  if (listItems) {
+    contentParts.push(`<ul>${listItems}</ul>`);
+  }
+  if (!listItems && !safeStatus) {
+    contentParts.push('<p>Aucune information disponible.</p>');
+  }
+  elements.webhookDialogContent.innerHTML = contentParts.join('');
+  elements.webhookDialog.hidden = false;
+  elements.webhookDialog.classList.add('is-visible');
+  clearWebhookDialogTimer();
+  requestAnimationFrame(() => {
+    try {
+      elements.webhookDialog?.focus({ preventScroll: true });
+    } catch (error) {
+      // Ignored
+    }
+  });
+  scheduleWebhookDialogDismiss();
+}
+
+function hideWebhookDialog() {
+  if (!elements.webhookDialog) {
+    return;
+  }
+  elements.webhookDialog.classList.remove('is-visible');
+  elements.webhookDialog.hidden = true;
+  clearWebhookDialogTimer();
+}
+
+function scheduleWebhookDialogDismiss() {
+  if (!elements.webhookDialog || elements.webhookDialog.hidden) {
+    return;
+  }
+  clearWebhookDialogTimer();
+  state.webhookDialogTimer = window.setTimeout(() => {
+    hideWebhookDialog();
+  }, 10000);
+}
+
+function clearWebhookDialogTimer() {
+  if (state.webhookDialogTimer) {
+    window.clearTimeout(state.webhookDialogTimer);
+    state.webhookDialogTimer = null;
+  }
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key === 'Escape') {
+    hideWebhookDialog();
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatSiret(value) {
+  const digits = String(value || '')
+    .replace(/\D/g, '')
+    .slice(0, 14);
+  if (!digits) {
+    return '';
+  }
+  return digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
 }
 
 function readFileAsText(file) {

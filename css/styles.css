@@ -14,7 +14,7 @@
   --color-muted: #9297aa;
   --color-muted-strong: #4a5364;
   --color-border: #a5b7c6;
-  --site-nav-height: 6.25rem;
+  --site-nav-height: 5.5rem;
 }
 
 .site-body {
@@ -118,9 +118,23 @@ textarea {
 }
 
 .site-nav {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border-bottom: 4px solid var(--color-primary);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 2px solid var(--color-primary);
+  box-shadow: 0 8px 30px -24px rgba(25, 63, 96, 0.45);
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+@media (min-width: 768px) {
+  .site-nav {
+    transform: translateY(calc(-100% + 3.25rem));
+  }
+
+  .site-nav:hover,
+  .site-nav:focus-within {
+    transform: translateY(0);
+    box-shadow: 0 20px 35px -20px rgba(25, 63, 96, 0.45);
+  }
 }
 
 .site-nav__inner {
@@ -129,15 +143,21 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
   max-width: 120rem;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1.5rem;
 }
 
 .site-nav__branding {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.site-nav__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .brand-logo {
@@ -155,19 +175,23 @@ textarea {
 }
 
 .brand-subtitle {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--color-muted);
-  letter-spacing: 0.02em;
+  display: none;
 }
 
 .site-nav__actions {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 0.75rem;
+}
+
+.site-nav__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
 }
 
 .site-nav__tree {
@@ -178,6 +202,37 @@ textarea {
   flex: 0 1 12rem;
   width: min(100%, 14rem);
   margin-left: auto;
+}
+
+.save-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12rem;
+}
+
+.save-name-field__label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.save-name-field__input {
+  border-radius: 0.65rem;
+  border: 1px solid rgba(25, 63, 96, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-muted-strong);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.save-name-field__input:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.15);
 }
 
 .site-nav__tree-label {
@@ -342,36 +397,28 @@ textarea {
 }
 
 .discount-field {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.9rem;
   background: var(--color-soft);
-  border: 1px solid rgba(25, 63, 96, 0.15);
-  text-transform: uppercase;
+  border: 1px solid rgba(25, 63, 96, 0.12);
+  min-width: 11rem;
+}
+
+.discount-field__label {
   font-size: 0.65rem;
-  letter-spacing: 0.14em;
   font-weight: 600;
-  color: var(--color-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
 }
 
-.discount-field__input {
-  width: 5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(25, 63, 96, 0.2);
-  background: #fff;
+.discount-field__value {
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--color-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-align: right;
-}
-
-.discount-field__input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(228, 30, 40, 0.15);
 }
 
 .btn-primary,
@@ -598,6 +645,140 @@ textarea {
 .score-badge::before {
   content: 'Score';
   font-weight: 600;
+}
+
+.webhook-dialog {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 50;
+  display: none;
+}
+
+.webhook-dialog.is-visible {
+  display: block;
+}
+
+.webhook-dialog__card {
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 1rem;
+  border: 1px solid rgba(25, 63, 96, 0.1);
+  box-shadow: 0 25px 45px -25px rgba(25, 63, 96, 0.45);
+  max-width: min(24rem, 90vw);
+  padding: 1.25rem;
+}
+
+.webhook-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.webhook-dialog__header h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+
+.webhook-dialog__close {
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-muted-strong);
+}
+
+.webhook-dialog__close:hover,
+.webhook-dialog__close:focus {
+  color: var(--color-primary);
+}
+
+.webhook-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-muted-strong);
+}
+
+.webhook-dialog__content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.webhook-dialog__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(25, 63, 96, 0.08);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.client-form-placeholder {
+  margin: 2rem auto 0;
+  max-width: 48rem;
+  padding: 0 1.5rem 2rem;
+}
+
+.client-form-placeholder__inner {
+  border-radius: 1.25rem;
+  border: 1px dashed rgba(25, 63, 96, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.client-form-placeholder__inner h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+
+.client-form-placeholder__inner p {
+  font-size: 0.95rem;
+  color: var(--color-muted-strong);
+}
+
+@media (max-width: 767px) {
+  .site-nav {
+    transform: none !important;
+  }
+
+  .site-nav__actions {
+    align-items: stretch;
+  }
+
+  .site-nav__toolbar {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .save-name-field {
+    flex: 1;
+  }
+
+  .discount-field {
+    flex: 1;
+  }
+
+  .webhook-dialog {
+    left: 1.5rem;
+    right: 1.5rem;
+  }
 }
 
 .score-badge[data-score='A'] {
