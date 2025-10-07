@@ -1,4 +1,5 @@
 const catalogueUrl = './catalogue/export.csv';
+const logoUrl = './media/ID GROUP.png';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 
 const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -16,6 +17,7 @@ const state = {
   quote: new Map(),
   categories: [],
   units: [],
+  hierarchy: new Map(),
   selectedCategories: new Set(),
   selectedUnit: '__all__',
   searchQuery: '',
@@ -31,6 +33,7 @@ const elements = {
   layout: document.getElementById('main-layout'),
   cataloguePanel: document.getElementById('catalogue-panel'),
   quotePanel: document.getElementById('quote-panel'),
+  catalogueTree: document.getElementById('catalogue-tree'),
   search: document.getElementById('search'),
   unitFilter: document.getElementById('unit-filter'),
   categoryFilterButton: document.getElementById('category-filter-button'),
@@ -70,11 +73,15 @@ const elements = {
   currentYear: document.getElementById('current-year'),
 };
 
+const highlightTimers = new Map();
+let cachedLogoInfo = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.headerDiscount?.addEventListener('input', handleDiscountChange);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
+  elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   setupModal();
@@ -125,10 +132,12 @@ async function loadCatalogue() {
       .map(toProduct)
       .filter((item) => item && item.name);
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
+    state.hierarchy = buildCatalogueHierarchy(state.catalogue);
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
     populateCategoryFilter();
     populateUnitFilter();
+    populateCatalogueTree();
     applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
@@ -354,6 +363,8 @@ function applyFilters() {
 function renderProducts() {
   const { productGrid } = elements;
   productGrid.innerHTML = '';
+  highlightTimers.forEach((timer) => clearTimeout(timer));
+  highlightTimers.clear();
   if (!state.filtered.length) {
     const empty = document.createElement('div');
     empty.className = 'col-span-full rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500';
@@ -365,6 +376,7 @@ function renderProducts() {
   const fragment = document.createDocumentFragment();
   for (const product of state.filtered) {
     const card = elements.productTemplate.content.firstElementChild.cloneNode(true);
+    card.dataset.productId = product.id;
     const image = card.querySelector('.product-image');
     image.src = product.image || defaultImage;
     image.alt = product.name;
@@ -770,7 +782,7 @@ function updateSummary() {
   }
 }
 
-function generatePdf() {
+async function generatePdf() {
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
     return;
@@ -793,67 +805,129 @@ function generatePdf() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 48;
+  const margin = 46;
   const pageWidth = doc.internal.pageSize.getWidth();
+  const headerHeight = 132;
 
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 120, 'F');
+  doc.setFillColor(25, 63, 96);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
+
+  const logoInfo = await getLogoInfo();
+  let headerContentX = margin;
+  if (logoInfo?.dataUrl) {
+    const targetWidth = 88;
+    const ratio = logoInfo.width > 0 ? logoInfo.height / logoInfo.width : 1;
+    const height = targetWidth * ratio;
+    doc.addImage(logoInfo.dataUrl, logoInfo.type || 'PNG', margin, margin - 8, targetWidth, height);
+    headerContentX += targetWidth + 18;
+  }
+
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.text('DEVIS PROFESSIONNEL', margin, 60);
+  doc.setFontSize(22);
+  doc.text('DEVIS COMMERCIAL', headerContentX, margin + 10);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.text(`Référence : ${quoteNumber}`, margin, 88);
-  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
+  doc.setFontSize(11);
+  doc.text(`Référence : ${quoteNumber}`, headerContentX, margin + 34);
+  doc.text(`Date d'édition : ${issueDateLabel}`, headerContentX, margin + 50);
+  doc.text(`Validité de l'offre : ${validityLabel}`, headerContentX, margin + 66);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
+  doc.text('ID GROUP', pageWidth - margin, margin + 8, { align: 'right' });
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
-    align: 'right',
-  });
+  doc.setFontSize(10);
+  doc.text(
+    'TIN SARL - Prendre RDV pour livraison\nZI du Pré de la Barre\n38440 Saint-Jean-de-Bournay\nFrance',
+    pageWidth - margin,
+    margin + 28,
+    { align: 'right' },
+  );
+  doc.text(
+    'SASU au capital de 1 000 000 €\nSIRET 403 401 854 00035\nTVA intracom : FR 12 403401854\nTél. : +33 (0)4 79 84 36 06',
+    pageWidth - margin,
+    margin + 78,
+    { align: 'right' },
+  );
+
+  let cursorY = headerHeight + 28;
+  const messageFr =
+    'Cher client, nous avons bien reçu votre demande de devis et nous vous en remercions. Vous trouverez ci-dessous nos meilleures conditions. Sincères salutations. Le service commercial.';
+  const messageEn =
+    'Dear customer, we well received your request and we thank you for that. Please find below our best price offer. Best regards. The sales department.';
 
   doc.setTextColor(30, 41, 59);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  let y = 150;
-  doc.text('Informations client', margin, y);
+  doc.text('Message commercial', margin, cursorY - 12);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('Nom du client\nAdresse\nCode postal - Ville\nclient@email.com', margin, y + 18);
+  doc.setFontSize(10);
+  const messageWidth = pageWidth - margin * 2 - 24;
+  const frLines = doc.splitTextToSize(messageFr, messageWidth);
+  const enLines = doc.splitTextToSize(messageEn, messageWidth);
+  const frDim = doc.getTextDimensions(frLines);
+  const enDim = doc.getTextDimensions(enLines);
+  const messageBoxHeight = frDim.h + enDim.h + 32;
+  doc.setFillColor(246, 248, 252);
+  doc.roundedRect(margin, cursorY, pageWidth - margin * 2, messageBoxHeight, 6, 6, 'F');
+  let textY = cursorY + 18;
+  doc.setTextColor(71, 85, 105);
+  doc.text(frLines, margin + 12, textY);
+  textY += frDim.h + 10;
+  doc.text(enLines, margin + 12, textY);
+  cursorY += messageBoxHeight + 24;
 
-  const infoX = pageWidth / 2 + 10;
+  doc.setTextColor(30, 41, 59);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Conditions du devis', infoX, y);
+  doc.text('Informations client', margin, cursorY);
+  doc.text('Informations devis', pageWidth / 2 + 12, cursorY);
+
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text(`Validité de l'offre : ${validityLabel}`, infoX, y + 18);
-  doc.text('Conditions de paiement : 30% à la commande, solde à la livraison', infoX, y + 36, {
-    maxWidth: pageWidth - infoX - margin,
-  });
-  doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, infoX, y + 54);
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Nom du client\nAdresse\nCode postal - Ville\nEmail', margin, cursorY + 18);
+  const infoX = pageWidth / 2 + 12;
+  doc.text(
+    [
+      `Référence devis : ${quoteNumber}`,
+      `Date d'édition : ${issueDateLabel}`,
+      `Validité de l'offre : ${validityLabel}`,
+      `Remise globale : ${numberFormatter.format(state.discountRate)} %`,
+      'Conditions de paiement : 30% à la commande, solde à la livraison',
+    ],
+    infoX,
+    cursorY + 18,
+  );
+  cursorY += 92;
+
+  doc.setTextColor(30, 41, 59);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Détail du devis', margin, cursorY);
 
   const body = items.map((item) => {
-    const quantityDetails =
-      item.quantityMode === 'area'
-        ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(item.quantity || 0)} ${item.unit || 'm²'}`
-        : `${quantityFormatter.format(item.quantity || 0)} ${item.unit || ''}`.trim();
-
+    const quantityValue = getItemQuantity(item);
+    const unitPriceValue = Number(item.price) || 0;
+    const discountedUnit = calculateDiscountedValue(unitPriceValue);
+    const unitEcotax = getUnitEcotax(item);
+    const ecotaxSubtotal = unitEcotax * quantityValue;
+    const discountedSubtotal = discountedUnit * quantityValue;
+    const totalWithEcotax = discountedSubtotal + ecotaxSubtotal;
+    const discountValue = unitPriceValue - discountedUnit;
     const designationLines = [item.name];
     if (item.comment) {
       designationLines.push(`Commentaire : ${item.comment}`);
     }
-    if (item.link) {
-      designationLines.push(`Lien : ${item.link}`);
+    if (item.quantityMode === 'area') {
+      designationLines.push(
+        `Surface : ${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(quantityValue)} ${item.unit || 'm²'}`,
+      );
+    } else {
+      designationLines.push(`Quantité : ${quantityFormatter.format(quantityValue)} ${item.unit || 'Pièce'}`);
     }
-    const unitEcotax = getUnitEcotax(item);
-    const ecotaxUnitLabel =
-      item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
+    const unitLabel = item.unit ? item.unit.toLowerCase() : "pièce";
+    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)} / ${item.quantityMode === 'area' ? 'm²' : unitLabel}`);
     const weightValue = formatWeightValue(item.weight);
     if (weightValue) {
       designationLines.push(`Poids unitaire : ${weightValue}`);
@@ -862,18 +936,16 @@ function generatePdf() {
     designationLines.push(
       scoreValue === 'NR' ? "Score Positiv'ID : N.C." : `Score Positiv'ID : ${scoreValue}`,
     );
-
-    const quantityValue = getItemQuantity(item);
-    const unitPriceValue = Number(item.price) || 0;
-    const discountedUnit = calculateDiscountedValue(unitPriceValue);
-    const discountedSubtotal = discountedUnit * quantityValue;
-    const ecotaxSubtotal = unitEcotax * quantityValue;
-    const totalWithEcotax = discountedSubtotal + ecotaxSubtotal;
-
+    if (discountValue > 0) {
+      designationLines.push(`Remise unitaire : -${currencyFormatter.format(discountValue)}`);
+    }
+    if (item.link) {
+      designationLines.push(`Lien : ${item.link}`);
+    }
     return [
       item.reference,
       designationLines.join('\n'),
-      quantityDetails,
+      quantityFormatter.format(quantityValue),
       currencyFormatter.format(discountedUnit),
       currencyFormatter.format(ecotaxSubtotal),
       currencyFormatter.format(totalWithEcotax),
@@ -881,24 +953,24 @@ function generatePdf() {
   });
 
   doc.autoTable({
-    startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Ecopart', 'Total HT']],
+    startY: cursorY + 12,
+    head: [['Référence', 'Désignation & détails', 'Quantité', 'PU net HT', 'Ecopart', 'Total HT + Eco']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 6, textColor: [30, 41, 59] },
+    headStyles: { fillColor: [25, 63, 96], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
-      0: { cellWidth: 70 },
-      1: { cellWidth: 160 },
-      2: { cellWidth: 150 },
-      3: { halign: 'right', cellWidth: 60 },
-      4: { halign: 'right', cellWidth: 60 },
-      5: { halign: 'right', cellWidth: 70 },
+      0: { cellWidth: 55 },
+      1: { cellWidth: 200 },
+      2: { halign: 'right', cellWidth: 55 },
+      3: { halign: 'right', cellWidth: 70 },
+      4: { halign: 'right', cellWidth: 55 },
+      5: { halign: 'right', cellWidth: 68 },
     },
-    alternateRowStyles: { fillColor: [246, 247, 250] },
+    alternateRowStyles: { fillColor: [247, 249, 252] },
     margin: { left: margin, right: margin },
   });
 
-  const summaryStartY = doc.lastAutoTable.finalY + 24;
+  const summaryStartY = doc.lastAutoTable.finalY + 18;
   doc.autoTable({
     startY: summaryStartY,
     head: [['Récapitulatif', 'Montant']],
@@ -910,10 +982,10 @@ function generatePdf() {
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
     headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
-      0: { cellWidth: 200 },
+      0: { cellWidth: 220 },
       1: { halign: 'right', cellWidth: 120 },
     },
     margin: { left: margin, right: margin },
@@ -925,51 +997,107 @@ function generatePdf() {
     },
   });
 
-  let closingY = doc.lastAutoTable.finalY + 28;
+  let closingY = doc.lastAutoTable.finalY + 24;
   if (state.generalComment && state.generalComment.trim().length > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
+    doc.setTextColor(30, 41, 59);
     doc.text('Commentaire général', margin, closingY);
     closingY += 18;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(state.generalComment.trim(), margin, closingY, {
+    doc.setTextColor(71, 85, 105);
+    const commentLines = doc.splitTextToSize(state.generalComment.trim(), pageWidth - margin * 2);
+    doc.text(commentLines, margin, closingY, {
       maxWidth: pageWidth - margin * 2,
     });
-    closingY += 24;
+    closingY += doc.getTextDimensions(commentLines.join('\n')).h + 16;
   }
 
-  doc.setFont('helvetica', 'italic');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text("Merci pour votre confiance. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
-  closingY += 18;
+  doc.setTextColor(30, 41, 59);
+  doc.text('Conditions générales de vente', margin, closingY);
+  closingY += 16;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(
-    'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
-    margin,
-    closingY,
-    { maxWidth: pageWidth - margin * 2 },
-  );
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  const terms =
+    "Nos conditions générales de vente en vigueur s'appliquent à ce document et sont disponibles sur simple demande. Toute commande implique leur acceptation. En cas de retard de paiement, une pénalité équivalente à trois fois le taux légal et une indemnité forfaitaire de 40 € seront appliquées.";
+  const termsEn =
+    'Our general terms and conditions of sale apply to this document and are available on request. Placing an order implies their acceptance. In case of late payment, penalties equal to three times the legal interest rate and a fixed €40 recovery fee will be applied.';
+  const termsLinesFr = doc.splitTextToSize(terms, pageWidth - margin * 2);
+  doc.text(termsLinesFr, margin, closingY, { maxWidth: pageWidth - margin * 2 });
+  const termsHeight = doc.getTextDimensions(termsLinesFr.join('\n')).h;
+  closingY += termsHeight + 6;
+  const termsLinesEn = doc.splitTextToSize(termsEn, pageWidth - margin * 2);
+  doc.text(termsLinesEn, margin, closingY, {
+    maxWidth: pageWidth - margin * 2,
+  });
 
-  const addFooter = () => {
-    const pageCount = doc.getNumberOfPages();
-    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      doc.setPage(pageNumber);
-      const pageHeight = doc.internal.pageSize.getHeight();
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
-      doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
-      doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
-    }
-    doc.setTextColor(30, 41, 59);
-  };
-
-  addFooter();
+  addFooter(doc, issueDateLabel, margin, pageWidth);
   doc.save(`devis-${quoteNumber}.pdf`);
+}
+
+function addFooter(doc, issueDateLabel, margin, pageWidth) {
+  const pageCount = doc.getNumberOfPages();
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    doc.setPage(pageNumber);
+    const pageHeight = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('ID GROUP - SASU au capital de 1 000 000 € - SIRET 403 401 854 00035', margin, pageHeight - 36);
+    doc.text('ZI du Pré de la Barre, 38440 Saint-Jean-de-Bournay - ids@ids-france.net - www.id-mat.com', margin, pageHeight - 22);
+    doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
+    doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
+  }
+  doc.setTextColor(30, 41, 59);
+}
+
+async function getLogoInfo() {
+  if (cachedLogoInfo) {
+    return cachedLogoInfo;
+  }
+  try {
+    const response = await fetch(logoUrl);
+    if (!response.ok) {
+      throw new Error(`Impossible de charger le logo (${response.status})`);
+    }
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    const dimensions = await getImageDimensions(dataUrl);
+    cachedLogoInfo = {
+      dataUrl,
+      type: blob.type && blob.type.toLowerCase().includes('png') ? 'PNG' : 'JPEG',
+      width: dimensions.width,
+      height: dimensions.height,
+    };
+  } catch (error) {
+    console.warn('Logo indisponible pour le PDF.', error);
+    cachedLogoInfo = { dataUrl: null, type: null, width: 0, height: 0 };
+  }
+  return cachedLogoInfo;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture du logo impossible'));
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function getImageDimensions(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      resolve({ width: image.naturalWidth || image.width, height: image.naturalHeight || image.height });
+    };
+    image.onerror = () => reject(new Error('Impossible de déterminer la taille du logo'));
+    image.src = dataUrl;
+  });
 }
 
 function toggleFeedback(message, type = 'info') {
@@ -1095,6 +1223,143 @@ function deriveUnits(items) {
     set.add(item.unit || '');
   });
   return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
+}
+
+function buildCatalogueHierarchy(items) {
+  const tree = new Map();
+  items.forEach((item) => {
+    const categoryKey = item.category || 'Divers';
+    if (!tree.has(categoryKey)) {
+      tree.set(categoryKey, []);
+    }
+    tree.get(categoryKey).push(item);
+  });
+  tree.forEach((products, key) => {
+    products.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    tree.set(key, products);
+  });
+  return new Map(
+    Array.from(tree.entries()).sort((a, b) => a[0].localeCompare(b[0], 'fr', { sensitivity: 'base' })),
+  );
+}
+
+function populateCatalogueTree() {
+  const select = elements.catalogueTree;
+  if (!select) return;
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Sélectionnez un article…';
+  select.appendChild(placeholder);
+
+  if (!(state.hierarchy instanceof Map) || state.hierarchy.size === 0) {
+    const disabled = document.createElement('option');
+    disabled.disabled = true;
+    disabled.textContent = 'Catalogue indisponible';
+    select.appendChild(disabled);
+    return;
+  }
+
+  state.hierarchy.forEach((products, category) => {
+    const group = document.createElement('optgroup');
+    group.label = category;
+    products.forEach((product) => {
+      const option = document.createElement('option');
+      option.value = product.id;
+      option.textContent = `${product.reference} — ${product.name}`;
+      group.appendChild(option);
+    });
+    select.appendChild(group);
+  });
+}
+
+function handleCatalogueTreeChange(event) {
+  const select = event?.target;
+  const productId = select?.value;
+  if (!productId) {
+    return;
+  }
+  const product = state.catalogueById.get(productId);
+  if (!product) {
+    select.value = '';
+    return;
+  }
+  const filtersChanged = resetFiltersForNavigation();
+  if (filtersChanged) {
+    applyFilters();
+  }
+  highlightProductInGrid(productId);
+  openProductModal(product);
+  select.value = '';
+}
+
+function resetFiltersForNavigation() {
+  let filtersChanged = false;
+  if (state.searchQuery) {
+    state.searchQuery = '';
+    if (elements.search) {
+      elements.search.value = '';
+    }
+    filtersChanged = true;
+  }
+
+  if (state.selectedCategories.size) {
+    state.selectedCategories.clear();
+    const checkboxes = elements.categoryFilterOptions?.querySelectorAll('input[type="checkbox"]');
+    checkboxes?.forEach((checkbox) => {
+      checkbox.checked = false;
+      checkbox.parentElement?.classList.remove('is-active');
+    });
+    updateCategoryFilterLabel();
+    filtersChanged = true;
+  }
+
+  if (state.selectedUnit !== UNIT_FILTER_ALL) {
+    state.selectedUnit = UNIT_FILTER_ALL;
+    if (elements.unitFilter) {
+      elements.unitFilter.value = UNIT_FILTER_ALL;
+    }
+    filtersChanged = true;
+  }
+
+  return filtersChanged;
+}
+
+function highlightProductInGrid(productId, attempt = 0) {
+  if (!elements.productGrid) return;
+  const selector = `[data-product-id="${escapeSelector(productId)}"]`;
+  const card = elements.productGrid.querySelector(selector);
+  if (!card) {
+    if (attempt < 3) {
+      window.requestAnimationFrame(() => highlightProductInGrid(productId, attempt + 1));
+    }
+    return;
+  }
+  elements.productGrid.querySelectorAll('.product-card.is-highlighted').forEach((node) => {
+    node.classList.remove('is-highlighted');
+    const timer = highlightTimers.get(node);
+    if (timer) {
+      clearTimeout(timer);
+      highlightTimers.delete(node);
+    }
+  });
+  card.classList.add('is-highlighted');
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (highlightTimers.has(card)) {
+    clearTimeout(highlightTimers.get(card));
+  }
+  const timer = setTimeout(() => {
+    card.classList.remove('is-highlighted');
+    highlightTimers.delete(card);
+  }, 2500);
+  highlightTimers.set(card, timer);
+}
+
+function escapeSelector(value) {
+  if (window.CSS && typeof window.CSS.escape === 'function') {
+    return window.CSS.escape(value);
+  }
+  return String(value).replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~ ])/g, '\\$1');
 }
 
 function setupCategoryFilter() {

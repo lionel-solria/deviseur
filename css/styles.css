@@ -16,6 +16,18 @@
   --color-border: #a5b7c6;
 }
 
+.rounded-2xl {
+  border-radius: 0.75rem !important;
+}
+
+.rounded-xl {
+  border-radius: 0.65rem !important;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem !important;
+}
+
 .site-body {
   background: var(--color-background);
   color: var(--color-muted-strong);
@@ -156,12 +168,60 @@ textarea {
   gap: 0.75rem;
 }
 
+.nav-tree-select {
+  min-width: 15rem;
+  flex: 1 1 15rem;
+  max-width: 24rem;
+}
+
+.nav-tree-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.65rem;
+  background: rgba(246, 248, 252, 0.95);
+  border: 1px solid rgba(25, 63, 96, 0.12);
+  box-shadow: 0 6px 16px -12px rgba(25, 63, 96, 0.5);
+}
+
+.nav-tree-title {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.nav-tree-control {
+  width: 100%;
+  border: 1px solid rgba(25, 63, 96, 0.18);
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.85rem;
+  color: var(--color-secondary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.nav-tree-control:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(228, 30, 40, 0.18);
+}
+
+@media (max-width: 768px) {
+  .nav-tree-select {
+    order: 3;
+  }
+}
+
 .discount-field {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  border-radius: 999px;
+  border-radius: 1.25rem;
   background: var(--color-soft);
   border: 1px solid rgba(25, 63, 96, 0.15);
   text-transform: uppercase;
@@ -174,7 +234,7 @@ textarea {
 .discount-field__input {
   width: 5rem;
   padding: 0.35rem 0.5rem;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   border: 1px solid rgba(25, 63, 96, 0.2);
   background: #fff;
   color: var(--color-secondary);
@@ -195,7 +255,7 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  border-radius: 0.75rem;
+  border-radius: 0.55rem;
   padding: 0.65rem 1.25rem;
   font-size: 0.9rem;
   font-weight: 600;
@@ -259,7 +319,7 @@ textarea {
 
 .gutter.gutter-horizontal {
   background: rgba(25, 63, 96, 0.12);
-  border-radius: 9999px;
+  border-radius: 0.5rem;
   cursor: col-resize;
   width: 12px !important;
   margin: 0 0.5rem;
@@ -278,7 +338,7 @@ textarea {
 .product-image-frame {
   position: relative;
   height: 9rem;
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   overflow: hidden;
   background: linear-gradient(135deg, rgba(228, 30, 40, 0.12), rgba(25, 63, 96, 0.08));
 }
@@ -311,7 +371,7 @@ textarea {
   inset-inline: 0.75rem;
   inset-block-end: 0.75rem;
   padding: 0.35rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: 1.25rem;
   background-color: rgba(15, 23, 42, 0.6);
   color: #fff;
   font-size: 0.65rem;
@@ -319,6 +379,11 @@ textarea {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   backdrop-filter: blur(4px);
+}
+
+.product-card.is-highlighted {
+  border: 1px solid rgba(228, 30, 40, 0.45);
+  box-shadow: 0 20px 44px -28px rgba(228, 30, 40, 0.6), 0 0 0 1px rgba(228, 30, 40, 0.2);
 }
 
 #product-feedback {
@@ -341,7 +406,7 @@ textarea {
   align-items: center;
   gap: 0.35rem;
   padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
+  border-radius: 1.1rem;
   background-color: rgba(25, 63, 96, 0.12);
   color: var(--color-secondary);
   font-size: 0.65rem;
@@ -395,7 +460,7 @@ textarea {
   justify-content: center;
   gap: 0.25rem;
   padding: 0.2rem 0.6rem;
-  border-radius: 9999px;
+  border-radius: 1rem;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
