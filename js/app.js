@@ -1118,6 +1118,18 @@ function normaliseWebhookResponse(payload, siret) {
     return result;
   }
 
+  if (Array.isArray(payload)) {
+    for (const entry of payload) {
+      if (entry === null || entry === undefined) {
+        continue;
+      }
+      if (typeof entry === 'string' || typeof entry === 'object') {
+        return normaliseWebhookResponse(entry, siret);
+      }
+    }
+    return result;
+  }
+
   if (typeof payload === 'string') {
     const label = payload.trim();
     if (label) {
@@ -1132,25 +1144,42 @@ function normaliseWebhookResponse(payload, siret) {
     return result;
   }
 
-  const statusCandidate = [payload.status, payload.result, payload.message, payload.state]
-    .find((value) => typeof value === 'string' && value.trim().length > 0);
+  const statusCandidate = findFirstStringValue(payload, [
+    'status',
+    'result',
+    'message',
+    'state',
+    'statut',
+    'etat',
+  ]);
   if (statusCandidate) {
-    result.statusLabel = statusCandidate.trim();
+    result.statusLabel = statusCandidate;
   }
 
-  const identifiedCandidate =
-    payload.identified ??
-    payload.clientIdentified ??
-    payload.isIdentified ??
-    payload.success ??
-    payload.isValid ??
-    payload.estIdentifie ??
-    payload.client;
+  const identifiedCandidate = findFirstValue(payload, [
+    'identified',
+    'clientIdentified',
+    'isIdentified',
+    'success',
+    'isValid',
+    'estIdentifie',
+    'client',
+    'identification',
+    'is_identified',
+  ]);
   if (typeof identifiedCandidate === 'boolean') {
     result.identified = identifiedCandidate;
   } else if (typeof identifiedCandidate === 'string') {
-    const lower = identifiedCandidate.toLowerCase();
-    result.identified = lower.includes('identifi') && !lower.includes('non');
+    const lower = identifiedCandidate.trim().toLowerCase();
+    if (['true', '1', 'oui', 'yes'].includes(lower)) {
+      result.identified = true;
+    } else if (['false', '0', 'non', 'no'].includes(lower)) {
+      result.identified = false;
+    } else {
+      result.identified = lower.includes('identifi') && !lower.includes('non');
+    }
+  } else if (typeof identifiedCandidate === 'number') {
+    result.identified = identifiedCandidate > 0;
   }
 
   if (!result.identified && typeof result.statusLabel === 'string') {
@@ -1160,34 +1189,43 @@ function normaliseWebhookResponse(payload, siret) {
     }
   }
 
-  const companyCandidate =
-    payload.companyName ??
-    payload.company ??
-    payload.raisonSociale ??
-    payload.nomSociete ??
-    payload.societe ??
-    payload.name;
+  const companyCandidate = findFirstStringValue(payload, [
+    'companyName',
+    'company',
+    'raisonSociale',
+    'raison sociale',
+    'raison_sociale',
+    'nomSociete',
+    'societe',
+    'name',
+    'nom',
+    'denomination',
+    'enseigne',
+  ]);
   if (typeof companyCandidate === 'string') {
-    result.companyName = companyCandidate.trim();
+    result.companyName = companyCandidate;
   }
 
-  const emailCandidate =
-    payload.contactEmail ??
-    payload.email ??
-    payload.mail ??
-    payload.contact?.email ??
-    payload.coordonnees?.email;
+  const emailCandidate = findFirstStringValue(payload, [
+    'contactEmail',
+    'email',
+    'mail',
+    'contact.email',
+    'coordonnees.email',
+  ]);
   if (typeof emailCandidate === 'string') {
-    result.contactEmail = emailCandidate.trim();
+    result.contactEmail = emailCandidate;
   }
 
-  const contactCandidate =
-    payload.contactName ??
-    payload.contact?.name ??
-    payload.contact ??
-    payload.coordonnees?.contact;
+  const contactCandidate = findFirstStringValue(payload, [
+    'contactName',
+    'contact.name',
+    'contact',
+    'coordonnees.contact',
+    'interlocuteur',
+  ]);
   if (typeof contactCandidate === 'string') {
-    result.contactName = contactCandidate.trim();
+    result.contactName = contactCandidate;
   }
 
   const addressLines = new Set();
@@ -1200,34 +1238,52 @@ function normaliseWebhookResponse(payload, siret) {
     }
   };
 
-  if (Array.isArray(payload.address)) {
-    payload.address.forEach(pushAddress);
+  const rawAddress = getPayloadValue(payload, 'address');
+  if (Array.isArray(rawAddress)) {
+    rawAddress.forEach(pushAddress);
+  } else if (typeof rawAddress === 'string') {
+    pushAddress(rawAddress);
   }
-  if (Array.isArray(payload.addressLines)) {
-    payload.addressLines.forEach(pushAddress);
+  const explicitAddressLines = getPayloadValue(payload, 'addressLines');
+  if (Array.isArray(explicitAddressLines)) {
+    explicitAddressLines.forEach(pushAddress);
   }
-  if (typeof payload.address === 'string') {
-    pushAddress(payload.address);
-  }
-  ['addressLine1', 'addressLine2', 'addressLine3', 'adresse', 'adresse1', 'adresse2'].forEach((key) => {
-    if (typeof payload[key] === 'string') {
-      pushAddress(payload[key]);
+  [
+    'addressLine1',
+    'addressLine2',
+    'addressLine3',
+    'adresse',
+    'adresse1',
+    'adresse2',
+    'adresse3',
+    'ligne1',
+    'ligne2',
+    'ligne3',
+    'rue',
+  ].forEach((key) => {
+    const value = getPayloadValue(payload, key);
+    if (typeof value === 'string') {
+      pushAddress(value);
     }
   });
-  const cityParts = [payload.postalCode ?? payload.zipCode ?? payload.codePostal, payload.city ?? payload.ville]
-    .map((value) => (typeof value === 'string' ? value.trim() : ''))
-    .filter(Boolean);
+  const cityParts = [
+    findFirstStringValue(payload, ['postalCode', 'zipCode', 'codePostal', 'code_postal', 'cp']),
+    findFirstStringValue(payload, ['city', 'ville', 'commune', 'localite']),
+  ].filter(Boolean);
   if (cityParts.length) {
     pushAddress(cityParts.join(' '));
   }
   result.addressLines = Array.from(addressLines);
 
-  const conditionsCandidate =
-    payload.conditions ??
-    payload.pricing ??
-    payload.pricingConditions ??
-    payload.conditionsTarifaires ??
-    payload.conditions_tarifaires;
+  const conditionsCandidate = findFirstValue(payload, [
+    'conditions',
+    'pricing',
+    'pricingConditions',
+    'conditionsTarifaires',
+    'conditions_tarifaires',
+    'conditionsCommerciales',
+    'conditions_commerciales',
+  ]);
 
   const conditionsLines = [];
   if (Array.isArray(conditionsCandidate)) {
@@ -1262,17 +1318,23 @@ function normaliseWebhookResponse(payload, siret) {
   result.conditionsLines = conditionsLines;
 
   const discountCandidates = [
-    payload.discountRate,
-    payload.remise,
-    payload.remisePourcentage,
-    payload.remisePercent,
-    payload.remiseClient,
-    conditionsCandidate?.discountRate,
-    conditionsCandidate?.remise,
-    payload.conditions?.discountRate,
-    payload.conditions?.remise,
-    payload.conditionsTarifaires?.discountRate,
-    payload.conditionsTarifaires?.remise,
+    getPayloadValue(payload, 'discountRate'),
+    getPayloadValue(payload, 'remise'),
+    getPayloadValue(payload, 'remisePourcentage'),
+    getPayloadValue(payload, 'remisePercent'),
+    getPayloadValue(payload, 'remise_percent'),
+    getPayloadValue(payload, 'remiseClient'),
+    getPayloadValue(payload, 'tauxRemise'),
+    getPayloadValue(payload, 'taux_remise'),
+    getPayloadValue(conditionsCandidate, 'discountRate'),
+    getPayloadValue(conditionsCandidate, 'remise'),
+    getPayloadValue(conditionsCandidate, 'taux'),
+    getPayloadValue(conditionsCandidate, 'tauxRemise'),
+    getPayloadValue(payload, 'conditions.discountRate'),
+    getPayloadValue(payload, 'conditions.remise'),
+    getPayloadValue(payload, 'conditions.tauxRemise'),
+    getPayloadValue(payload, 'conditionsTarifaires.discountRate'),
+    getPayloadValue(payload, 'conditionsTarifaires.remise'),
   ];
   for (const candidate of discountCandidates) {
     const parsed = parsePercentageValue(candidate);
@@ -1287,6 +1349,68 @@ function normaliseWebhookResponse(payload, siret) {
   }
 
   return result;
+}
+
+function normaliseKeyToken(token) {
+  return String(token ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_');
+}
+
+function getPayloadValue(payload, key) {
+  if (!payload || typeof key !== 'string') {
+    return undefined;
+  }
+  if (Array.isArray(payload) || typeof payload !== 'object') {
+    return undefined;
+  }
+  const parts = key.split('.').map((part) => normaliseKeyToken(part));
+  let current = payload;
+  for (const part of parts) {
+    if (!current || typeof current !== 'object') {
+      return undefined;
+    }
+    const matchKey = Object.keys(current).find(
+      (candidate) => normaliseKeyToken(candidate) === part,
+    );
+    if (!matchKey) {
+      return undefined;
+    }
+    current = current[matchKey];
+  }
+  return current;
+}
+
+function findFirstStringValue(payload, keys) {
+  if (!Array.isArray(keys)) {
+    return undefined;
+  }
+  for (const key of keys) {
+    const value = getPayloadValue(payload, key);
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return undefined;
+}
+
+function findFirstValue(payload, keys) {
+  if (!Array.isArray(keys)) {
+    return undefined;
+  }
+  for (const key of keys) {
+    const value = getPayloadValue(payload, key);
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function buildIdentificationMessage(result) {
