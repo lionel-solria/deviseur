@@ -57,7 +57,6 @@ const WEBHOOK_ENDPOINTS = {
 };
 
 const CART_SNAPSHOT_VERSION = 1;
-const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
 
 const state = {
@@ -137,6 +136,11 @@ const elements = {
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
   siretFeedback: document.getElementById('siret-feedback'),
+  clientSummary: document.getElementById('client-summary'),
+  clientSummaryName: document.getElementById('client-summary-name'),
+  clientSummaryStatus: document.getElementById('client-summary-status'),
+  clientSummaryAction: document.getElementById('client-summary-action'),
+  clientSummaryReset: document.getElementById('client-summary-reset'),
   webhookPanel: document.getElementById('webhook-panel'),
   webhookPanelContent: document.getElementById('webhook-panel-content'),
   webhookPanelClose: document.getElementById('webhook-panel-close'),
@@ -158,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
+  elements.clientSummaryReset?.addEventListener('click', resetClientIdentification);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   setupModal();
@@ -173,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
+  renderClientSummary();
 });
 
 function setupResponsiveSplit() {
@@ -206,36 +212,7 @@ function setupNavAutoHide() {
     return;
   }
 
-  if (window.matchMedia('(pointer: coarse)').matches) {
-    nav.dataset.collapsed = 'false';
-    return;
-  }
-
-  const collapse = () => {
-    nav.dataset.collapsed = 'true';
-  };
-  const expand = () => {
-    nav.dataset.collapsed = 'false';
-  };
-
-  collapse();
-  nav.addEventListener('mouseenter', expand);
-  nav.addEventListener('mouseleave', () => {
-    if (!nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
-  nav.addEventListener('focusin', expand);
-  nav.addEventListener('focusout', () => {
-    if (!nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
-  window.addEventListener('scroll', () => {
-    if (!nav.matches(':hover') && !nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
+  nav.dataset.collapsed = 'false';
 }
 
 async function loadCatalogue() {
@@ -883,17 +860,6 @@ function syncSaveNameInput() {
   }
 }
 
-function extractInitialsForFilename(value) {
-  if (!value) {
-    return '';
-  }
-  const letters = String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z]/g, '');
-  return letters.slice(0, 3).toUpperCase();
-}
-
 function normaliseFileSegment(value) {
   return String(value || '')
     .normalize('NFD')
@@ -901,6 +867,28 @@ function normaliseFileSegment(value) {
     .replace(/[^a-zA-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase();
+}
+
+function getClientCodeForFilename() {
+  const client = state.identifiedClient;
+  if (client && client.identified) {
+    const base = String(client.companyName || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const lettersOnly = base.replace(/[^A-Za-z]/g, '').toUpperCase();
+    if (lettersOnly.length >= 3) {
+      return lettersOnly.slice(0, 3);
+    }
+    const alphaNumeric = base.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (alphaNumeric.length >= 3) {
+      return alphaNumeric.slice(0, 3);
+    }
+    const siretDigits = String(client.siret || '').replace(/\D/g, '');
+    if (siretDigits.length >= 3) {
+      return siretDigits.slice(0, 3);
+    }
+  }
+  return 'NOU';
 }
 
 function formatDateForFilename(date) {
@@ -944,13 +932,8 @@ function handleSaveCart() {
     return;
   }
   const saveName = (state.saveName || '').trim();
-  const initials = extractInitialsForFilename(saveName);
   if (!saveName) {
     toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
-    return;
-  }
-  if (initials.length < 3) {
-    toggleFeedback('Le nom doit contenir au moins trois lettres pour générer le fichier.', 'warning');
     return;
   }
   try {
@@ -960,8 +943,9 @@ function handleSaveCart() {
     const now = new Date();
     const dateSegment = formatDateForFilename(now);
     const slug = normaliseFileSegment(saveName);
-    const filenameBase = `${CART_FILENAME_PREFIX}-${initials}${dateSegment}`;
-    const filename = `${slug ? `${filenameBase}-${slug}` : filenameBase}.json`;
+    const clientCode = getClientCodeForFilename();
+    const baseSegment = slug || 'sauvegarde';
+    const filename = `${baseSegment}-${clientCode}-${dateSegment}.json`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -1150,12 +1134,14 @@ function handleSiretInputChange(event) {
       updateDiscountRate(0);
       closeWebhookPanel();
       closeClientFormPlaceholder();
+      renderClientSummary();
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
       updateDiscountRate(0);
       closeWebhookPanel();
       closeClientFormPlaceholder();
+      renderClientSummary();
     }
   }
 }
@@ -1208,6 +1194,8 @@ async function handleSiretSubmit(event) {
     console.error(error);
     setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
     updateDiscountRate(0);
+    state.identifiedClient = null;
+    renderClientSummary();
     closeWebhookPanel();
     closeClientFormPlaceholder();
   } finally {
@@ -1219,7 +1207,7 @@ function normaliseWebhookResponse(payload, siret) {
   const result = {
     identified: false,
     statusLabel: 'Client non identifié',
-    companyName: '',
+    companyName: null,
     contactEmail: '',
     contactName: '',
     addressLines: [],
@@ -1316,7 +1304,12 @@ function normaliseWebhookResponse(payload, siret) {
     getValue('name') ??
     getValue('Nom');
   if (typeof companyCandidate === 'string') {
-    result.companyName = companyCandidate.trim();
+    const trimmed = companyCandidate.trim();
+    if (trimmed && trimmed.toLowerCase() !== 'null') {
+      result.companyName = trimmed;
+    } else {
+      result.companyName = null;
+    }
   }
 
   const contactField = payload.contact ?? getValue('contact');
@@ -1527,6 +1520,7 @@ function updateIdentificationFromState() {
   if (!state.identifiedClient) {
     setIdentificationState('idle');
     closeClientFormPlaceholder();
+    renderClientSummary();
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
@@ -1536,6 +1530,94 @@ function updateIdentificationFromState() {
   } else if (state.identifiedClient.siret) {
     openClientFormPlaceholder(state.identifiedClient.siret, { scroll: false });
   }
+  renderClientSummary();
+}
+
+function renderClientSummary() {
+  const summary = elements.clientSummary;
+  const form = elements.siretForm;
+  const client = state.identifiedClient;
+  const isIdentified = Boolean(client?.identified);
+
+  if (summary) {
+    summary.hidden = !isIdentified;
+  }
+  if (form) {
+    form.hidden = isIdentified;
+  }
+
+  if (!isIdentified || !summary) {
+    if (elements.clientSummaryName) {
+      elements.clientSummaryName.textContent = '';
+    }
+    if (elements.clientSummaryStatus) {
+      elements.clientSummaryStatus.textContent = '';
+    }
+    if (elements.clientSummaryAction) {
+      elements.clientSummaryAction.hidden = true;
+      elements.clientSummaryAction.innerHTML = '';
+    }
+    return;
+  }
+
+  const companyName =
+    typeof client.companyName === 'string' && client.companyName.trim().length > 0
+      ? client.companyName.trim()
+      : '';
+
+  if (elements.clientSummaryName) {
+    elements.clientSummaryName.textContent = companyName || 'Client identifié';
+  }
+
+  if (elements.clientSummaryStatus) {
+    const details = [];
+    if (client.statusLabel) {
+      details.push(client.statusLabel);
+    }
+    if (client.siret) {
+      details.push(`SIRET : ${formatSiret(client.siret)}`);
+    }
+    if (client.contactName) {
+      details.push(`Contact : ${client.contactName}`);
+    }
+    if (client.contactEmail) {
+      details.push(client.contactEmail);
+    }
+    if (
+      typeof client.discountRate === 'number' &&
+      Number.isFinite(client.discountRate) &&
+      client.discountRate > 0
+    ) {
+      details.push(`Remise : ${numberFormatter.format(client.discountRate)} %`);
+    }
+    elements.clientSummaryStatus.textContent = details.join(' • ') || 'Client identifié';
+  }
+
+  if (elements.clientSummaryAction) {
+    if (companyName) {
+      elements.clientSummaryAction.hidden = true;
+      elements.clientSummaryAction.innerHTML = '';
+    } else {
+      const link =
+        '<a href="https://www.idgroup-france.com/bao/NouveauClient.html" target="_blank" rel="noopener">S\'enregistrer comme nouveau client</a>';
+      elements.clientSummaryAction.hidden = false;
+      elements.clientSummaryAction.innerHTML = `Nom du client non communiqué. ${link}`;
+    }
+  }
+}
+
+function resetClientIdentification() {
+  state.identifiedClient = null;
+  state.isIdentifyingClient = false;
+  if (elements.siretInput) {
+    elements.siretInput.value = '';
+  }
+  updateDiscountRate(0);
+  setIdentificationState('idle');
+  renderClientSummary();
+  closeWebhookPanel();
+  closeClientFormPlaceholder();
+  elements.siretInput?.focus();
 }
 
 function toggleWebhookMode() {
@@ -1544,6 +1626,7 @@ function toggleWebhookMode() {
   updateDiscountRate(0);
   updateWebhookModeIndicator();
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
+  renderClientSummary();
   closeWebhookPanel();
   closeClientFormPlaceholder();
 }
@@ -1595,11 +1678,14 @@ function parsePercentageValue(value) {
     return Number.isFinite(value) ? value : null;
   }
   if (typeof value === 'string') {
-    const cleaned = value.replace(/%/g, '').replace(',', '.').trim();
-    if (!cleaned) {
+    let cleaned = value.trim();
+    cleaned = cleaned.replace(/^https?:\/\/twitter\.com\//i, '');
+    cleaned = cleaned.replace(/%/g, '');
+    const match = cleaned.match(/-?\d+(?:[\.,]\d+)?/);
+    if (!match) {
       return null;
     }
-    const parsed = parseFloat(cleaned);
+    const parsed = parseFloat(match[0].replace(',', '.'));
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
@@ -2152,8 +2238,8 @@ function showWebhookPanel(result) {
 
   if (!result?.identified) {
     const warning = document.createElement('p');
-    warning.textContent =
-      "Client non reconnu. Merci de préparer les informations complémentaires via le formulaire dès sa disponibilité.";
+    warning.innerHTML =
+      "Client non reconnu. <a href=\"https://www.idgroup-france.com/bao/NouveauClient.html\" target=\"_blank\" rel=\"noopener\">S'enregistrer comme nouveau client</a>.";
     elements.webhookPanelContent.appendChild(warning);
   }
 
@@ -2182,9 +2268,11 @@ function openClientFormPlaceholder(siret, options = {}) {
   const paragraph = container.querySelector('p');
   if (paragraph) {
     const formatted = formatSiret(siret);
-    paragraph.textContent = formatted
-      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.`
-      : "Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.";
+    const registerLink =
+      '<a href="https://www.idgroup-france.com/bao/NouveauClient.html" target="_blank" rel="noopener">S\'enregistrer comme nouveau client</a>';
+    paragraph.innerHTML = formatted
+      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. ${registerLink}.`
+      : `Le client n'a pas été reconnu. ${registerLink}.`;
   }
   container.dataset.open = 'true';
   if (options.scroll !== false) {

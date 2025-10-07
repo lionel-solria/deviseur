@@ -22,6 +22,7 @@
   color: var(--color-muted-strong);
   font-family: var(--font-body);
   line-height: 1.6;
+  padding-top: calc(var(--site-nav-height) + 1.5rem);
 }
 
 ::selection {
@@ -341,6 +342,54 @@ textarea {
   font-weight: 600;
 }
 
+.site-nav__client-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(25, 63, 96, 0.12);
+  min-width: 18rem;
+}
+
+.site-nav__client-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.site-nav__client-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  margin: 0;
+}
+
+.site-nav__client-status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted-strong);
+}
+
+.site-nav__client-action {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.site-nav__client-action a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.site-nav__client-action a:hover,
+.site-nav__client-action a:focus-visible {
+  color: var(--color-primary-dark);
+}
+
 .site-nav__identity button[disabled] {
   opacity: 0.6;
   cursor: progress;
@@ -355,6 +404,10 @@ textarea {
 
 .site-nav__cart-actions .btn-secondary {
   white-space: nowrap;
+}
+
+.site-main {
+  margin-top: 1rem;
 }
 
 .webhook-panel {
