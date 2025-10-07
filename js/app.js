@@ -1118,6 +1118,18 @@ function normaliseWebhookResponse(payload, siret) {
     return result;
   }
 
+  if (Array.isArray(payload)) {
+    const firstObject = payload.find((item) => item && typeof item === 'object' && !Array.isArray(item));
+    if (!firstObject) {
+      const firstPrimitive = payload.find((item) => typeof item === 'string' && item.trim().length > 0);
+      if (typeof firstPrimitive === 'string') {
+        return normaliseWebhookResponse(firstPrimitive, siret);
+      }
+      return result;
+    }
+    return normaliseWebhookResponse(firstObject, siret);
+  }
+
   if (typeof payload === 'string') {
     const label = payload.trim();
     if (label) {
@@ -1132,20 +1144,41 @@ function normaliseWebhookResponse(payload, siret) {
     return result;
   }
 
-  const statusCandidate = [payload.status, payload.result, payload.message, payload.state]
+  const getValue = (...keys) => {
+    for (const key of keys) {
+      if (key === null || key === undefined) {
+        continue;
+      }
+      if (key in payload) {
+        return payload[key];
+      }
+      if (typeof key === 'string') {
+        const lowerKey = key.toLowerCase();
+        const foundEntry = Object.entries(payload).find(
+          ([entryKey]) => typeof entryKey === 'string' && entryKey.toLowerCase() === lowerKey,
+        );
+        if (foundEntry) {
+          return foundEntry[1];
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const statusCandidate = [getValue('status'), getValue('result'), getValue('message'), getValue('state')]
     .find((value) => typeof value === 'string' && value.trim().length > 0);
   if (statusCandidate) {
     result.statusLabel = statusCandidate.trim();
   }
 
   const identifiedCandidate =
-    payload.identified ??
-    payload.clientIdentified ??
-    payload.isIdentified ??
-    payload.success ??
-    payload.isValid ??
-    payload.estIdentifie ??
-    payload.client;
+    getValue('identified') ??
+    getValue('clientIdentified') ??
+    getValue('isIdentified') ??
+    getValue('success') ??
+    getValue('isValid') ??
+    getValue('estIdentifie') ??
+    getValue('client');
   if (typeof identifiedCandidate === 'boolean') {
     result.identified = identifiedCandidate;
   } else if (typeof identifiedCandidate === 'string') {
@@ -1161,31 +1194,36 @@ function normaliseWebhookResponse(payload, siret) {
   }
 
   const companyCandidate =
-    payload.companyName ??
-    payload.company ??
-    payload.raisonSociale ??
-    payload.nomSociete ??
-    payload.societe ??
-    payload.name;
+    getValue('companyName') ??
+    getValue('company') ??
+    getValue('raisonSociale') ??
+    getValue('nomSociete') ??
+    getValue('societe') ??
+    getValue('name') ??
+    getValue('Nom');
   if (typeof companyCandidate === 'string') {
     result.companyName = companyCandidate.trim();
   }
 
+  const contactField = payload.contact ?? getValue('contact');
+  const coordonneesField = payload.coordonnees ?? getValue('coordonnees');
+
   const emailCandidate =
-    payload.contactEmail ??
-    payload.email ??
-    payload.mail ??
-    payload.contact?.email ??
-    payload.coordonnees?.email;
+    getValue('contactEmail') ??
+    getValue('email') ??
+    getValue('mail') ??
+    getValue('Mail') ??
+    (contactField && typeof contactField === 'object' ? contactField.email : undefined) ??
+    (coordonneesField && typeof coordonneesField === 'object' ? coordonneesField.email : undefined);
   if (typeof emailCandidate === 'string') {
     result.contactEmail = emailCandidate.trim();
   }
 
   const contactCandidate =
-    payload.contactName ??
-    payload.contact?.name ??
-    payload.contact ??
-    payload.coordonnees?.contact;
+    getValue('contactName') ??
+    (contactField && typeof contactField === 'object' ? contactField.name : undefined) ??
+    (typeof contactField === 'string' ? contactField : undefined) ??
+    (coordonneesField && typeof coordonneesField === 'object' ? coordonneesField.contact : undefined);
   if (typeof contactCandidate === 'string') {
     result.contactName = contactCandidate.trim();
   }
@@ -1193,10 +1231,11 @@ function normaliseWebhookResponse(payload, siret) {
   const addressLines = new Set();
   const pushAddress = (value) => {
     if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed) {
-        addressLines.add(trimmed);
-      }
+      value
+        .split(/\r?\n/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .forEach((part) => addressLines.add(part));
     }
   };
 
@@ -1210,11 +1249,12 @@ function normaliseWebhookResponse(payload, siret) {
     pushAddress(payload.address);
   }
   ['addressLine1', 'addressLine2', 'addressLine3', 'adresse', 'adresse1', 'adresse2'].forEach((key) => {
-    if (typeof payload[key] === 'string') {
-      pushAddress(payload[key]);
+    const value = getValue(key);
+    if (typeof value === 'string') {
+      pushAddress(value);
     }
   });
-  const cityParts = [payload.postalCode ?? payload.zipCode ?? payload.codePostal, payload.city ?? payload.ville]
+  const cityParts = [getValue('postalCode', 'zipCode', 'codePostal', 'CP'), getValue('city', 'ville', 'Ville')]
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .filter(Boolean);
   if (cityParts.length) {
@@ -1222,12 +1262,13 @@ function normaliseWebhookResponse(payload, siret) {
   }
   result.addressLines = Array.from(addressLines);
 
+  const rawConditions = getValue('conditions');
   const conditionsCandidate =
-    payload.conditions ??
-    payload.pricing ??
-    payload.pricingConditions ??
-    payload.conditionsTarifaires ??
-    payload.conditions_tarifaires;
+    rawConditions ??
+    getValue('pricing') ??
+    getValue('pricingConditions') ??
+    getValue('conditionsTarifaires') ??
+    getValue('conditions_tarifaires');
 
   const conditionsLines = [];
   if (Array.isArray(conditionsCandidate)) {
@@ -1262,11 +1303,16 @@ function normaliseWebhookResponse(payload, siret) {
   result.conditionsLines = conditionsLines;
 
   const discountCandidates = [
-    payload.discountRate,
-    payload.remise,
-    payload.remisePourcentage,
-    payload.remisePercent,
-    payload.remiseClient,
+    getValue('discountRate'),
+    getValue('remise'),
+    getValue('Remise'),
+    getValue('remisePourcentage'),
+    getValue('remisePercent'),
+    getValue('remiseClient'),
+    rawConditions?.discountRate,
+    rawConditions?.remise,
+    rawConditions?.discountPercent,
+    rawConditions?.remisePourcentage,
     conditionsCandidate?.discountRate,
     conditionsCandidate?.remise,
     payload.conditions?.discountRate,
@@ -1280,6 +1326,13 @@ function normaliseWebhookResponse(payload, siret) {
       result.discountRate = clampPercentage(parsed);
       break;
     }
+  }
+
+  if (
+    !result.identified &&
+    (result.companyName || result.addressLines.length > 0 || result.contactEmail || result.contactName)
+  ) {
+    result.identified = true;
   }
 
   if (result.identified && (!result.statusLabel || result.statusLabel.toLowerCase().includes('non'))) {
