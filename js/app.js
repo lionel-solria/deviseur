@@ -56,6 +56,8 @@ const WEBHOOK_ENDPOINTS = {
   test: 'https://aiid.app.n8n.cloud/webhook-test/deviseur',
 };
 
+const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
+
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 
 const CART_SNAPSHOT_VERSION = 1;
@@ -116,6 +118,7 @@ const elements = {
   summaryEcotax: document.getElementById('summary-ecotax'),
   summaryProducts: document.getElementById('summary-products'),
   generatePdf: document.getElementById('generate-pdf'),
+  submitOrder: document.getElementById('submit-order'),
   modalBackdrop: document.getElementById('product-modal'),
   modalImage: document.getElementById('product-modal-image'),
   modalTitle: document.getElementById('product-modal-title'),
@@ -156,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
+  elements.submitOrder?.addEventListener('click', handleSubmitOrder);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
   elements.saveNameInput?.addEventListener('input', handleSaveNameInput);
@@ -1699,6 +1703,68 @@ async function generatePdf() {
     return;
   }
   toggleFeedback('', 'hide');
+  try {
+    const { doc, filename } = await buildQuotePdfDocument();
+    doc.save(filename);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'PANIER_VIDE') {
+      toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
+      return;
+    }
+    console.error(error);
+    toggleFeedback("Impossible de générer le PDF. Merci de réessayer.", 'error');
+  }
+}
+
+async function handleSubmitOrder() {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
+    return;
+  }
+  const confirmed = window.confirm('Confirmez-vous vouloir passer la commande à ID GROUP ?');
+  if (!confirmed) {
+    return;
+  }
+  toggleFeedback('Envoi de la commande en cours...', 'info');
+  try {
+    const { doc, filename, quoteNumber } = await buildQuotePdfDocument();
+    const pdfBlob = doc.output('blob');
+    const snapshot = buildCartSnapshot();
+    const now = new Date();
+    const dateSegment = formatDateForFilename(now);
+    const slug = normaliseFileSegment(state.saveName) || CART_FILENAME_PREFIX;
+    const clientCode = getClientCodeForFilename();
+    const snapshotFilename = `${slug}-${clientCode}-${dateSegment}.json`;
+    const formData = new FormData();
+    formData.append('quoteNumber', quoteNumber);
+    formData.append('pdf', pdfBlob, filename);
+    formData.append(
+      'cart',
+      new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }),
+      snapshotFilename,
+    );
+    const response = await fetch(ORDER_WEBHOOK_URL, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error(`Statut ${response.status}`);
+    }
+    toggleFeedback('La commande a été transmise à ID GROUP.', 'info');
+  } catch (error) {
+    if (error instanceof Error && error.message === 'PANIER_VIDE') {
+      toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
+      return;
+    }
+    console.error(error);
+    toggleFeedback("Impossible d'envoyer la commande. Merci de réessayer.", 'error');
+  }
+}
+
+async function buildQuotePdfDocument() {
+  if (!state.quote.size) {
+    throw new Error('PANIER_VIDE');
+  }
   const items = Array.from(state.quote.values());
   const productsSubtotal = items.reduce((sum, item) => sum + getProductSubtotal(item), 0);
   const ecotaxTotal = items.reduce((sum, item) => sum + getEcotaxTotal(item), 0);
@@ -2089,7 +2155,8 @@ async function generatePdf() {
   };
 
   addFooter();
-  doc.save(`devis-${quoteNumber}.pdf`);
+  const filename = `devis-${quoteNumber}.pdf`;
+  return { doc, filename, quoteNumber, issueDate };
 }
 
 async function getBrandLogoDataUrl() {
