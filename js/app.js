@@ -1,5 +1,47 @@
 const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
+const brandLogoAssetPath = 'media/ID%20GROUP.png';
+
+const COMPANY_IDENTITY = {
+  name: 'ID GROUP',
+  legal: [
+    'SASU au capital de 1 000 000 €',
+    'RCS Chambéry',
+    'N° SIRET : 403 401 854 00035',
+    'N° EORI : FR403401854',
+    'N.A.F. : 4669B',
+    'TVA intracommunautaire : FR12403401854',
+  ],
+  contacts: [
+    {
+      title: 'Service commercial',
+      lines: [
+        'ALPESPACE-FRANCIN',
+        '47 Voie St Exupéry',
+        '73800 Porte de Savoie - France',
+        'Téléphone : 00 33 4 79 84 36 06',
+        'Télécopie : 00 33 4 79 84 36 10',
+        'Email : ids@ids-france.net',
+      ],
+    },
+    {
+      title: 'Support ID MAT',
+      lines: [
+        'Téléphone : 00 33 4 79 84 14 18',
+        'Télécopie : 00 33 4 79 84 14 19',
+        'Email : idmat@id-mat.com',
+      ],
+    },
+  ],
+};
+
+const TERMS_AND_CONDITIONS = [
+  'Nos conditions générales de vente en vigueur s\'appliquent à ce document et sont disponibles sur simple demande.',
+  "Toute commande et son paiement valent acceptation des conditions générales de vente.",
+  "En cas de retard de paiement, une pénalité équivalente à trois (3) fois le taux d'intérêt légal sera appliquée, ainsi qu'une indemnité forfaitaire de 40 € pour frais de recouvrement.",
+];
+
+const CATALOGUE_MISC_CATEGORY = '__uncategorized__';
 
 const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,6 +67,7 @@ const state = {
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
+  brandLogoDataUrl: undefined,
 };
 
 const elements = {
@@ -39,6 +82,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
@@ -77,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
+  elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
@@ -129,6 +174,7 @@ async function loadCatalogue() {
     state.units = deriveUnits(state.catalogue);
     populateCategoryFilter();
     populateUnitFilter();
+    populateCatalogueTree();
     applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
@@ -365,6 +411,7 @@ function renderProducts() {
   const fragment = document.createDocumentFragment();
   for (const product of state.filtered) {
     const card = elements.productTemplate.content.firstElementChild.cloneNode(true);
+    card.dataset.productId = product.id;
     const image = card.querySelector('.product-image');
     image.src = product.image || defaultImage;
     image.alt = product.name;
@@ -770,7 +817,7 @@ function updateSummary() {
   }
 }
 
-function generatePdf() {
+async function generatePdf() {
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
     return;
@@ -780,7 +827,8 @@ function generatePdf() {
   const productsSubtotal = items.reduce((sum, item) => sum + getProductSubtotal(item), 0);
   const ecotaxTotal = items.reduce((sum, item) => sum + getEcotaxTotal(item), 0);
   const discountAmount = productsSubtotal * (state.discountRate / 100);
-  const net = productsSubtotal - discountAmount + ecotaxTotal;
+  const baseAfterDiscount = productsSubtotal - discountAmount;
+  const net = baseAfterDiscount + ecotaxTotal;
   const vat = net * state.vatRate;
   const total = net + vat;
 
@@ -793,56 +841,119 @@ function generatePdf() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 48;
+  const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 120, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.text('DEVIS PROFESSIONNEL', margin, 60);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.text(`Référence : ${quoteNumber}`, margin, 88);
-  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
+  const colors = {
+    primary: [228, 30, 40],
+    secondary: [25, 63, 96],
+    text: [33, 37, 41],
+    muted: [100, 116, 139],
+    soft: [248, 249, 252],
+    border: [224, 228, 236],
+  };
 
+  const logoDataUrl = await getBrandLogoDataUrl();
+
+  const headerTop = margin;
+  const headerHeight = 128;
+  const headerWidth = pageWidth - margin * 2;
+  doc.setFillColor(...colors.soft);
+  doc.setDrawColor(...colors.primary);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(margin, headerTop, headerWidth, headerHeight, 10, 10, 'FD');
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, 'PNG', margin + 18, headerTop + 22, 84, 48);
+  }
+
+  const titleX = margin + 122;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...colors.secondary);
+  doc.text('Devis / Price offer', titleX, headerTop + 36);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...colors.muted);
+  doc.text(`N° de devis : ${quoteNumber}`, titleX, headerTop + 54);
+  doc.text(`Date : ${issueDateLabel}`, titleX, headerTop + 68);
+  doc.text(`Validité de l'offre : ${validityLabel}`, titleX, headerTop + 82);
+  doc.text('Réf / Ref : À renseigner', titleX, headerTop + 96);
+  doc.text('Représentant : Service commercial ID GROUP', titleX, headerTop + 110);
+
+  const companyX = margin + headerWidth - 18;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
+  doc.setTextColor(...colors.secondary);
+  doc.text(COMPANY_IDENTITY.name, companyX, headerTop + 34, { align: 'right' });
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.muted);
+  doc.text(COMPANY_IDENTITY.legal, companyX, headerTop + 50, {
     align: 'right',
+    lineHeightFactor: 1.35,
   });
 
-  doc.setTextColor(30, 41, 59);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  let y = 150;
-  doc.text('Informations client', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('Nom du client\nAdresse\nCode postal - Ville\nclient@email.com', margin, y + 18);
+  const infoTop = headerTop + headerHeight + 22;
+  const infoHeight = 140;
+  const infoWidth = headerWidth;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...colors.border);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(margin, infoTop, infoWidth, infoHeight, 8, 8, 'S');
 
-  const infoX = pageWidth / 2 + 10;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Conditions du devis', infoX, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text(`Validité de l'offre : ${validityLabel}`, infoX, y + 18);
-  doc.text('Conditions de paiement : 30% à la commande, solde à la livraison', infoX, y + 36, {
-    maxWidth: pageWidth - infoX - margin,
+  const infoColumns = [
+    {
+      title: 'Client / Customer',
+      lines: ['Nom du client', 'Adresse', 'Code postal - Ville', 'Email', 'Téléphone'],
+    },
+    {
+      title: 'Livraison / Shipping',
+      lines: ['Adresse de livraison', 'Code postal - Ville', 'Référent sur place', 'Téléphone'],
+    },
+    {
+      title: 'Conditions du devis',
+      lines: [
+        `Validité de l'offre : ${validityLabel}`,
+        'Conditions de paiement : À définir',
+        'Représentant : Service commercial ID GROUP',
+        `Remise appliquée : ${numberFormatter.format(state.discountRate)} %`,
+      ],
+    },
+  ];
+
+  const infoGap = 20;
+  const columnWidth = (infoWidth - 48 - infoGap * (infoColumns.length - 1)) / infoColumns.length;
+  let columnX = margin + 24;
+  infoColumns.forEach((column) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...colors.secondary);
+    doc.text(column.title, columnX, infoTop + 28);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...colors.text);
+    doc.text(column.lines, columnX, infoTop + 46, { lineHeightFactor: 1.5 });
+    columnX += columnWidth + infoGap;
   });
-  doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, infoX, y + 54);
 
+  const introY = infoTop + infoHeight + 20;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(10);
+  doc.setTextColor(...colors.muted);
+  doc.text(
+    [
+      'Cher Client, nous vous remercions pour votre demande. Vous trouverez ci-dessous notre meilleure proposition commerciale.',
+      'Dear Customer, thank you for your request. Please find below our best price offer.',
+    ],
+    margin,
+    introY,
+    { maxWidth: pageWidth - margin * 2, lineHeightFactor: 1.45 },
+  );
+
+  const bodyStartY = introY + 28;
   const body = items.map((item) => {
-    const quantityDetails =
-      item.quantityMode === 'area'
-        ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(item.quantity || 0)} ${item.unit || 'm²'}`
-        : `${quantityFormatter.format(item.quantity || 0)} ${item.unit || ''}`.trim();
-
     const designationLines = [item.name];
     if (item.comment) {
       designationLines.push(`Commentaire : ${item.comment}`);
@@ -850,107 +961,192 @@ function generatePdf() {
     if (item.link) {
       designationLines.push(`Lien : ${item.link}`);
     }
+    const quantityValue = getItemQuantity(item);
+    if (item.quantityMode === 'area') {
+      const lengthValue = dimensionFormatter.format(item.length || 0);
+      const widthValue = dimensionFormatter.format(item.width || 0);
+      const areaValue = quantityFormatter.format(item.quantity || 0);
+      designationLines.push(`Découpe : ${lengthValue} m × ${widthValue} m (${areaValue} m²)`);
+    } else {
+      designationLines.push(
+        `Quantité saisie : ${quantityFormatter.format(quantityValue)} ${item.unit || 'pièce'}`,
+      );
+    }
     const unitEcotax = getUnitEcotax(item);
-    const ecotaxUnitLabel =
-      item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
+    designationLines.push(`Ecopart unitaire : ${currencyFormatter.format(unitEcotax)}`);
     const weightValue = formatWeightValue(item.weight);
     if (weightValue) {
-      designationLines.push(`Poids unitaire : ${weightValue}`);
+      designationLines.push(`Poids : ${weightValue}`);
     }
     const scoreValue = getScoreBadgeValue(item.score);
     designationLines.push(
       scoreValue === 'NR' ? "Score Positiv'ID : N.C." : `Score Positiv'ID : ${scoreValue}`,
     );
 
-    const quantityValue = getItemQuantity(item);
     const unitPriceValue = Number(item.price) || 0;
     const discountedUnit = calculateDiscountedValue(unitPriceValue);
     const discountedSubtotal = discountedUnit * quantityValue;
     const ecotaxSubtotal = unitEcotax * quantityValue;
-    const totalWithEcotax = discountedSubtotal + ecotaxSubtotal;
 
     return [
       item.reference,
       designationLines.join('\n'),
-      quantityDetails,
+      quantityFormatter.format(quantityValue),
+      currencyFormatter.format(unitPriceValue),
       currencyFormatter.format(discountedUnit),
+      currencyFormatter.format(discountedSubtotal),
       currencyFormatter.format(ecotaxSubtotal),
-      currencyFormatter.format(totalWithEcotax),
     ];
   });
 
   doc.autoTable({
-    startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Ecopart', 'Total HT']],
+    startY: bodyStartY,
+    head: [['Référence', 'Désignation / Détails', 'Qté', 'PU HT', 'PU Net', 'Montant HT', 'Ecopart']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 70 },
-      1: { cellWidth: 160 },
-      2: { cellWidth: 150 },
-      3: { halign: 'right', cellWidth: 60 },
-      4: { halign: 'right', cellWidth: 60 },
-      5: { halign: 'right', cellWidth: 70 },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+      textColor: colors.text,
+      lineColor: colors.border,
+      lineWidth: 0.4,
     },
-    alternateRowStyles: { fillColor: [246, 247, 250] },
-    margin: { left: margin, right: margin },
-  });
-
-  const summaryStartY = doc.lastAutoTable.finalY + 24;
-  doc.autoTable({
-    startY: summaryStartY,
-    head: [['Récapitulatif', 'Montant']],
-    body: [
-      ['Total HT produits', currencyFormatter.format(productsSubtotal)],
-      [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Ecopart totale', currencyFormatter.format(ecotaxTotal)],
-      ['Base HT après remise + Ecopart', currencyFormatter.format(net)],
-      [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
-      ['Total TTC', currencyFormatter.format(total)],
-    ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
+    headStyles: { fillColor: colors.primary, textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [250, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 200 },
-      1: { halign: 'right', cellWidth: 120 },
+      0: { cellWidth: 60 },
+      1: { cellWidth: 185 },
+      2: { halign: 'right', cellWidth: 38 },
+      3: { halign: 'right', cellWidth: 52 },
+      4: { halign: 'right', cellWidth: 52 },
+      5: { halign: 'right', cellWidth: 64 },
+      6: { halign: 'right', cellWidth: 52 },
     },
     margin: { left: margin, right: margin },
-    didParseCell: (data) => {
-      if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [253, 234, 227];
-      }
-    },
+    tableWidth: pageWidth - margin * 2,
   });
 
-  let closingY = doc.lastAutoTable.finalY + 28;
+  let cursorY = doc.lastAutoTable.finalY + 24;
+  const getPageHeight = () => doc.internal.pageSize.getHeight();
+  const ensureSpace = (height) => {
+    if (cursorY + height > getPageHeight() - margin) {
+      doc.addPage();
+      cursorY = margin;
+    }
+  };
+
+  const summaryEntries = [
+    ['Total HT produits', currencyFormatter.format(productsSubtotal)],
+    [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
+    ['Base HT après remise', currencyFormatter.format(baseAfterDiscount)],
+    ['Ecopart totale', currencyFormatter.format(ecotaxTotal)],
+    ['Base HT + Ecopart', currencyFormatter.format(net)],
+    [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
+    ['Total TTC', currencyFormatter.format(total)],
+  ];
+  const summaryLineHeight = 18;
+  const summaryHeight = 48 + summaryEntries.length * summaryLineHeight + 16;
+  ensureSpace(summaryHeight);
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...colors.primary);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(margin, cursorY, pageWidth - margin * 2, summaryHeight, 8, 8, 'S');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...colors.secondary);
+  doc.text('Synthèse financière', margin + 18, cursorY + 26);
+
+  let summaryY = cursorY + 50;
+  summaryEntries.forEach((entry, index) => {
+    const [label, amount] = entry;
+    const isTotal = index === summaryEntries.length - 1;
+    doc.setFont('helvetica', isTotal ? 'bold' : 'normal');
+    doc.setFontSize(isTotal ? 11 : 10);
+    doc.setTextColor(...(isTotal ? colors.primary : colors.text));
+    doc.text(label, margin + 18, summaryY);
+    doc.text(amount, pageWidth - margin - 18, summaryY, { align: 'right' });
+    if (!isTotal) {
+      doc.setDrawColor(...colors.border);
+      doc.setLineWidth(0.35);
+      doc.line(margin + 18, summaryY + 4, pageWidth - margin - 18, summaryY + 4);
+    }
+    summaryY += summaryLineHeight;
+  });
+  cursorY += summaryHeight + 24;
+
   if (state.generalComment && state.generalComment.trim().length > 0) {
+    const cleanedComment = state.generalComment.trim();
+    const commentLines = doc.splitTextToSize(cleanedComment, pageWidth - margin * 2 - 36);
+    const commentHeight = 48 + commentLines.length * 14;
+    ensureSpace(commentHeight);
+    doc.setDrawColor(...colors.border);
+    doc.setFillColor(255, 255, 255);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, cursorY, pageWidth - margin * 2, commentHeight, 8, 8, 'S');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Commentaire général', margin, closingY);
-    closingY += 18;
+    doc.setFontSize(11);
+    doc.setTextColor(...colors.secondary);
+    doc.text('Commentaire général', margin + 18, cursorY + 26);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(state.generalComment.trim(), margin, closingY, {
-      maxWidth: pageWidth - margin * 2,
-    });
-    closingY += 24;
+    doc.setTextColor(...colors.text);
+    doc.text(commentLines, margin + 18, cursorY + 46, { lineHeightFactor: 1.45 });
+    cursorY += commentHeight + 24;
   }
 
-  doc.setFont('helvetica', 'italic');
+  const conditionsHeight = 44 + TERMS_AND_CONDITIONS.length * 16;
+  ensureSpace(conditionsHeight);
+  doc.setDrawColor(...colors.border);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(margin, cursorY, pageWidth - margin * 2, conditionsHeight, 8, 8, 'S');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text("Merci pour votre confiance. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
-  closingY += 18;
+  doc.setTextColor(...colors.secondary);
+  doc.text('Conditions générales', margin + 18, cursorY + 26);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(
-    'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
-    margin,
-    closingY,
-    { maxWidth: pageWidth - margin * 2 },
-  );
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.muted);
+  doc.text(TERMS_AND_CONDITIONS, margin + 18, cursorY + 44, {
+    lineHeightFactor: 1.5,
+    maxWidth: pageWidth - margin * 2 - 36,
+  });
+  cursorY += conditionsHeight + 24;
+
+  if (COMPANY_IDENTITY.contacts?.length) {
+    const contactEntries = COMPANY_IDENTITY.contacts;
+    const maxLines = contactEntries.reduce(
+      (max, entry) => Math.max(max, entry.lines.length),
+      0,
+    );
+    const contactHeight = 46 + (maxLines + 1) * 14 + 18;
+    ensureSpace(contactHeight);
+    doc.setDrawColor(...colors.border);
+    doc.setFillColor(255, 255, 255);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, cursorY, pageWidth - margin * 2, contactHeight, 8, 8, 'S');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...colors.secondary);
+    doc.text('Coordonnées ID GROUP', margin + 18, cursorY + 26);
+
+    const contactGap = 28;
+    const contactAvailableWidth = pageWidth - margin * 2 - 36 - contactGap * (contactEntries.length - 1);
+    const contactColumnWidth = contactAvailableWidth / contactEntries.length;
+    let contactX = margin + 18;
+    contactEntries.forEach((entry) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...colors.text);
+      doc.text(entry.title, contactX, cursorY + 46);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...colors.muted);
+      doc.text(entry.lines, contactX, cursorY + 62, { lineHeightFactor: 1.45 });
+      contactX += contactColumnWidth + contactGap;
+    });
+    cursorY += contactHeight + 24;
+  }
 
   const addFooter = () => {
     const pageCount = doc.getNumberOfPages();
@@ -958,18 +1154,62 @@ function generatePdf() {
       doc.setPage(pageNumber);
       const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
-      doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
-      doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
+      doc.setFontSize(8);
+      doc.setTextColor(...colors.muted);
+      doc.text(
+        'ID GROUP - SASU au capital de 1 000 000 € - RCS Chambéry 403 401 854',
+        margin,
+        pageHeight - 36,
+      );
+      doc.text(
+        'TVA intracommunautaire : FR12403401854 - N° EORI : FR403401854 - N.A.F. : 4669B',
+        margin,
+        pageHeight - 22,
+      );
+      doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, {
+        align: 'right',
+      });
+      doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, {
+        align: 'right',
+      });
     }
-    doc.setTextColor(30, 41, 59);
   };
 
   addFooter();
   doc.save(`devis-${quoteNumber}.pdf`);
+}
+
+async function getBrandLogoDataUrl() {
+  if (typeof state.brandLogoDataUrl === 'string') {
+    return state.brandLogoDataUrl || null;
+  }
+  try {
+    const response = await fetch(brandLogoAssetPath);
+    if (!response.ok) {
+      throw new Error(`Statut ${response.status}`);
+    }
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    state.brandLogoDataUrl = dataUrl;
+    return dataUrl;
+  } catch (error) {
+    console.warn('Impossible de charger le logo de la marque pour le PDF.', error);
+    state.brandLogoDataUrl = '';
+    return null;
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.onerror = () => {
+      reject(new Error('Erreur lors de la conversion du logo en base64.'));
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function toggleFeedback(message, type = 'info') {
@@ -1171,6 +1411,60 @@ function populateUnitFilter() {
   select.value = state.selectedUnit;
 }
 
+function populateCatalogueTree() {
+  const select = elements.catalogueTree;
+  if (!select) return;
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  if (!state.catalogue.length) {
+    placeholder.textContent = 'Catalogue indisponible';
+    placeholder.disabled = true;
+    select.appendChild(placeholder);
+    select.disabled = true;
+    return;
+  }
+  placeholder.textContent = 'Sélectionner une catégorie ou un article';
+  select.appendChild(placeholder);
+  select.disabled = false;
+
+  const tree = buildCatalogueTree(state.catalogue);
+  const indent = '\u00A0\u00A0\u2022 ';
+  tree.forEach((entry) => {
+    const categoryOption = document.createElement('option');
+    categoryOption.value = `category|${entry.key}`;
+    categoryOption.textContent = `📁 ${entry.label}`;
+    select.appendChild(categoryOption);
+
+    entry.products
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+      .forEach((product) => {
+        const option = document.createElement('option');
+        option.value = `product|${product.id}`;
+        option.textContent = `${indent}${product.reference} — ${product.name}`;
+        option.dataset.category = product.category || CATALOGUE_MISC_CATEGORY;
+        select.appendChild(option);
+      });
+  });
+}
+
+function buildCatalogueTree(items) {
+  const map = new Map();
+  items.forEach((product) => {
+    const key = product.category || CATALOGUE_MISC_CATEGORY;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        label: product.category || 'Hors catégorie',
+        products: [],
+      });
+    }
+    map.get(key).products.push(product);
+  });
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+}
+
 function handleUnitFilterChange(event) {
   const value = event.target?.value ?? UNIT_FILTER_ALL;
   state.selectedUnit = value;
@@ -1207,14 +1501,31 @@ function updateCategoryFilterLabel() {
 }
 
 function clearCategorySelection() {
-  state.selectedCategories.clear();
-  const checkboxes = elements.categoryFilterOptions?.querySelectorAll('input[type="checkbox"]');
-  checkboxes?.forEach((checkbox) => {
-    checkbox.checked = false;
-    checkbox.parentElement?.classList.remove('is-active');
-  });
-  updateCategoryFilterLabel();
+  setCategorySelection([]);
   applyFilters();
+}
+
+function setCategorySelection(categories) {
+  state.selectedCategories.clear();
+  categories.forEach((category) => {
+    if (category) {
+      state.selectedCategories.add(category);
+    }
+  });
+  refreshCategoryCheckboxStates();
+  updateCategoryFilterLabel();
+}
+
+function refreshCategoryCheckboxStates() {
+  if (!elements.categoryFilterOptions) return;
+  const checkboxes = elements.categoryFilterOptions.querySelectorAll('input[type="checkbox"]');
+  checkboxes.forEach((checkbox) => {
+    const isChecked = state.selectedCategories.has(checkbox.value);
+    checkbox.checked = isChecked;
+    if (checkbox.parentElement) {
+      checkbox.parentElement.classList.toggle('is-active', isChecked);
+    }
+  });
 }
 
 function toggleCategoryMenu() {
@@ -1237,6 +1548,50 @@ function closeCategoryMenu() {
   elements.categoryFilterMenu.dataset.open = 'false';
   elements.categoryFilterButton.setAttribute('aria-expanded', 'false');
   state.categoryMenuOpen = false;
+}
+
+function handleCatalogueTreeChange(event) {
+  const { value } = event.target;
+  if (!value) return;
+  const [type, key] = value.split('|');
+
+  state.searchQuery = '';
+  if (elements.search) {
+    elements.search.value = '';
+  }
+  state.selectedUnit = UNIT_FILTER_ALL;
+  if (elements.unitFilter) {
+    elements.unitFilter.value = UNIT_FILTER_ALL;
+  }
+
+  if (type === 'category') {
+    if (key === CATALOGUE_MISC_CATEGORY) {
+      setCategorySelection([]);
+    } else {
+      setCategorySelection([key]);
+    }
+    applyFilters();
+  } else if (type === 'product') {
+    const product = state.catalogueById.get(key);
+    if (product) {
+      if (product.category) {
+        setCategorySelection([product.category]);
+      } else {
+        setCategorySelection([]);
+      }
+      applyFilters();
+      requestAnimationFrame(() => {
+        const card = elements.productGrid?.querySelector(`[data-product-id="${product.id}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('is-highlighted');
+          window.setTimeout(() => card.classList.remove('is-highlighted'), 2200);
+        }
+      });
+    }
+  }
+
+  event.target.value = '';
 }
 
 function handleCategoryMenuOutsideClick(event) {
