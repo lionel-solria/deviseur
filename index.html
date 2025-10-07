@@ -22,7 +22,7 @@
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
-          <p class="brand-title">ID GROUP Devis</p>
+          <p class="brand-title">ID GROUP</p>
         </div>
         <div class="site-nav__actions">
           <form id="siret-form" class="site-nav__identity" autocomplete="off">
@@ -338,7 +338,7 @@
       </div>
     </template>
 
-      <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
+      <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title" data-open="false">
         <div class="modal-card">
           <img id="product-modal-image" alt="" />
           <div class="modal-body">
@@ -375,6 +375,29 @@
       </div>
     </div>
 
+    <div
+      id="siret-error-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="siret-error-title"
+      data-open="false"
+    >
+      <div class="modal-card siret-modal-card">
+        <div class="modal-body siret-modal-body">
+          <h2 id="siret-error-title" class="siret-modal-title">Client non identifié</h2>
+          <p id="siret-error-message" class="siret-modal-message"></p>
+          <p class="siret-modal-note">
+            Si vous ne disposez pas encore de compte, vous pouvez faire une demande via notre formulaire dédié.
+          </p>
+          <div class="modal-actions siret-modal-actions">
+            <a id="siret-error-link" class="btn-primary" target="_blank" rel="noopener">Accéder au formulaire</a>
+            <button id="siret-error-close" type="button" class="btn-secondary">Fermer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <section id="client-form-placeholder" class="client-form-placeholder" aria-live="polite" data-open="false">
       <div class="client-form-placeholder__content">
         <h2>Formulaire client</h2>
@@ -399,29 +422,30 @@
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <p class="text-lg font-semibold text-white">ID GROUP Devis</p>
-          <p class="mt-1 text-sm text-slate-300">Un outil rapide et fiable pour composer vos offres professionnelles.</p>
+          <p class="text-lg font-semibold text-white">ID GROUP</p>
+          <p class="mt-1 text-sm text-slate-300">
+            SASU au capital de 1&nbsp;000&nbsp;000&nbsp;€ • RCS Chambéry 403&nbsp;401&nbsp;854 • SIRET 403&nbsp;401&nbsp;854&nbsp;00035
+          </p>
         </div>
         <div class="footer-meta">
           <span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9 12 12.75 9.75 10.5" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 11.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
             </svg>
-            Lundi - Vendredi : 9h - 18h
+            ALPESPACE-FRANCIN • 47 Voie Saint-Exupéry • 73800 Porte de Savoie — France
           </span>
           <span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 7.5 12 12.75 2.25 7.5m19.5 0v9a2.25 2.25 0 0 1-2.25 2.25h-15A2.25 2.25 0 0 1 2.25 16.5v-9a2.25 2.25 0 0 1 2.25-2.25h15A2.25 2.25 0 0 1 21.75 7.5Z" />
             </svg>
-            contact@idgroup.fr
+            Tél. : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;36&nbsp;06 • Fax : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;36&nbsp;10 • ids@ids-france.net
           </span>
           <span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 4.5h19.5M4.5 4.5h15a2.25 2.25 0 0 1 2.25 2.25v11.25A2.25 2.25 0 0 1 19.5 20.25h-15A2.25 2.25 0 0 1 2.25 18V6.75A2.25 2.25 0 0 1 4.5 4.5Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 0 0 1.5-1.5v-2.25a1.5 1.5 0 0 0-1.282-1.482l-3.986-.665a1.5 1.5 0 0 0-1.516.757l-.97 1.692a11.25 11.25 0 0 1-5.368-5.368l1.692-.97a1.5 1.5 0 0 0 .757-1.516l-.665-3.986A1.5 1.5 0 0 0 8.999 3h-2.25a1.5 1.5 0 0 0-1.5 1.5V6.75Z" />
             </svg>
-            12 avenue des Solutions, 59000 Lille
+            Tél. : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;14&nbsp;18 • Fax : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;14&nbsp;19 • idmat@id-mat.com
           </span>
         </div>
         <p class="text-xs text-slate-500">© <span id="current-year"></span> ID GROUP — Tous droits réservés.</p>

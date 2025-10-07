@@ -990,6 +990,36 @@ textarea {
   gap: 0.75rem;
 }
 
+#siret-error-modal .modal-card {
+  max-width: 32rem;
+}
+
+.siret-modal-body {
+  gap: 1.25rem;
+}
+
+.siret-modal-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.siret-modal-message {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--color-secondary);
+}
+
+.siret-modal-note {
+  font-size: 0.85rem;
+  color: var(--color-muted-strong);
+}
+
+.siret-modal-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
 .quote-row {
   display: flex;
   flex-direction: column;
