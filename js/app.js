@@ -1101,8 +1101,8 @@ async function handleSiretSubmit(event) {
   }
 }
 
-function normaliseWebhookResponse(payload, siret) {
-  const result = {
+function createEmptyIdentificationResult(siret) {
+  return {
     identified: false,
     statusLabel: 'Client non identifié',
     companyName: '',
@@ -1113,13 +1113,33 @@ function normaliseWebhookResponse(payload, siret) {
     discountRate: undefined,
     siret,
   };
+}
 
+function normaliseWebhookResponse(payload, siret) {
   if (payload === null || payload === undefined) {
-    return result;
+    return createEmptyIdentificationResult(siret);
+  }
+
+  if (Array.isArray(payload)) {
+    const firstObject = payload.find((item) => item && typeof item === 'object' && !Array.isArray(item));
+    if (firstObject) {
+      return normaliseWebhookResponse(firstObject, siret);
+    }
+    const labelCandidate = payload.find((item) => typeof item === 'string' && item.trim().length > 0);
+    if (labelCandidate) {
+      const label = labelCandidate.trim();
+      const base = createEmptyIdentificationResult(siret);
+      base.statusLabel = label;
+      const lower = label.toLowerCase();
+      base.identified = lower.includes('identifi') && !lower.includes('non');
+      return base;
+    }
+    return createEmptyIdentificationResult(siret);
   }
 
   if (typeof payload === 'string') {
     const label = payload.trim();
+    const result = createEmptyIdentificationResult(siret);
     if (label) {
       result.statusLabel = label;
     }
@@ -1129,8 +1149,10 @@ function normaliseWebhookResponse(payload, siret) {
   }
 
   if (typeof payload !== 'object') {
-    return result;
+    return createEmptyIdentificationResult(siret);
   }
+
+  const result = createEmptyIdentificationResult(siret);
 
   const statusCandidate = [payload.status, payload.result, payload.message, payload.state]
     .find((value) => typeof value === 'string' && value.trim().length > 0);
@@ -1166,7 +1188,9 @@ function normaliseWebhookResponse(payload, siret) {
     payload.raisonSociale ??
     payload.nomSociete ??
     payload.societe ??
-    payload.name;
+    payload.name ??
+    payload.Nom ??
+    payload.nom;
   if (typeof companyCandidate === 'string') {
     result.companyName = companyCandidate.trim();
   }
@@ -1193,10 +1217,13 @@ function normaliseWebhookResponse(payload, siret) {
   const addressLines = new Set();
   const pushAddress = (value) => {
     if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed) {
-        addressLines.add(trimmed);
-      }
+      value
+        .split(/\r?\n+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .forEach((line) => {
+          addressLines.add(line);
+        });
     }
   };
 
@@ -1214,7 +1241,10 @@ function normaliseWebhookResponse(payload, siret) {
       pushAddress(payload[key]);
     }
   });
-  const cityParts = [payload.postalCode ?? payload.zipCode ?? payload.codePostal, payload.city ?? payload.ville]
+  const cityParts = [
+    payload.postalCode ?? payload.zipCode ?? payload.codePostal ?? payload.CP,
+    payload.city ?? payload.ville ?? payload.Ville,
+  ]
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .filter(Boolean);
   if (cityParts.length) {
@@ -1280,6 +1310,16 @@ function normaliseWebhookResponse(payload, siret) {
       result.discountRate = clampPercentage(parsed);
       break;
     }
+  }
+
+  if (
+    !result.identified &&
+    !String(result.statusLabel || '')
+      .toLowerCase()
+      .includes('non') &&
+    (result.companyName || result.addressLines.length || result.contactEmail || result.contactName)
+  ) {
+    result.identified = true;
   }
 
   if (result.identified && (!result.statusLabel || result.statusLabel.toLowerCase().includes('non'))) {
