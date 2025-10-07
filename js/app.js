@@ -6,6 +6,43 @@ const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 
 const quantityFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const dimensionFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const pdfAssets = {
+  logo: null,
+};
+
+const pdfBranding = {
+  headerReference: 'MKC/PR1/ER3 - Indice B',
+  legalLines: [
+    'SASU AU CAPITAL DE 1.000.000€',
+    'RCS CHAMBERY',
+    'N° Siret : 40340185400035',
+    'N°EORI: FR403401854',
+    'N.A.F. : 4669B',
+    'N° intracommunautaire : FR12403401854',
+  ],
+  customerMessageFr:
+    'Cher Client, Nous avons bien reçu votre demande de devis et nous vous en remercions. Vous trouverez ci-dessous nos meilleures conditions. Sincères salutations. Le Service Commercial.',
+  customerMessageEn:
+    'Dear Customer, We have received your quotation request and thank you for it. Please find below our best price offer. Best regards. The Sales Department.',
+  disclaimerFr:
+    "Nos conditions générales de ventes en vigueur s'appliquent à ce document et sont à votre disposition sur simple demande. Le fait de passer commande et de régler la facture vaut acceptation des conditions générales de vente en vigueur. Les paiements anticipés ne font pas l'objet d'escompte, sauf convention particulière. En cas de retard de paiement total ou partiel, pour quelque cause que ce soit, il sera fait application d'une pénalité de retard d'un montant équivalent à trois (3) fois le taux d'intérêt légal, sans mise en demeure préalable. Une indemnité forfaitaire de 40 € sera appliquée pour frais de recouvrement, majorée des frais réels engagés si ceux-ci excèdent ce montant. Option pour le paiement de la TVA d'après les débits.",
+  disclaimerEn:
+    'Our general conditions of sale in force apply to this document and are available upon request. Ordering and paying the invoice implies acceptance of the general conditions of sale in force. Advance payments are not discounted unless otherwise agreed. In the event of total or partial late payment, for any reason whatsoever, a late payment penalty equal to three (3) times the legal interest rate will be applied without prior notice. A flat-rate compensation of €40 will also be applied for collection costs, increased by the actual costs incurred where they exceed this amount. VAT is payable based on debits.',
+  contactLeft: [
+    'ALPESPACE-FRANCIN',
+    '47 VOIE ST EXUPERY',
+    '73800 PORTE DE SAVOIE',
+    'Téléphone : 00.33.4.79.84.36.06',
+    'Télécopie : 00.33.4.79.84.36.10',
+    'Email: ids@ids-france.net',
+  ],
+  contactRight: ['Téléphone : 00.33.4.79.84.14.18', 'Télécopie : 00.33.4.79.84.14.19', 'Email: idmat@id-mat.com'],
+};
+
+const TREE_FALLBACK_LABEL = 'Divers';
+const TREE_INDENT = '\u00a0\u00a0';
+const TREE_SEPARATORS = ['>', '/', '\\', '|', '»'];
+
 const UNIT_FILTER_ALL = '__all__';
 const UNIT_FILTER_NONE = '__none__';
 
@@ -25,6 +62,7 @@ const state = {
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
+  catalogueTree: null,
 };
 
 const elements = {
@@ -39,6 +77,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
@@ -76,7 +115,10 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.headerDiscount?.addEventListener('input', handleDiscountChange);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
-  elements.generatePdf?.addEventListener('click', generatePdf);
+  elements.generatePdf?.addEventListener('click', () => {
+    void generatePdf();
+  });
+  elements.catalogueTree?.addEventListener('change', handleCatalogueTreeSelection);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
@@ -127,8 +169,10 @@ async function loadCatalogue() {
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
+    state.catalogueTree = buildCatalogueTree(state.catalogue);
     populateCategoryFilter();
     populateUnitFilter();
+    populateCatalogueTreeSelector();
     applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
@@ -365,6 +409,7 @@ function renderProducts() {
   const fragment = document.createDocumentFragment();
   for (const product of state.filtered) {
     const card = elements.productTemplate.content.firstElementChild.cloneNode(true);
+    card.dataset.productId = product.id;
     const image = card.querySelector('.product-image');
     image.src = product.image || defaultImage;
     image.alt = product.name;
@@ -770,7 +815,7 @@ function updateSummary() {
   }
 }
 
-function generatePdf() {
+async function generatePdf() {
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
     return;
@@ -780,196 +825,348 @@ function generatePdf() {
   const productsSubtotal = items.reduce((sum, item) => sum + getProductSubtotal(item), 0);
   const ecotaxTotal = items.reduce((sum, item) => sum + getEcotaxTotal(item), 0);
   const discountAmount = productsSubtotal * (state.discountRate / 100);
-  const net = productsSubtotal - discountAmount + ecotaxTotal;
-  const vat = net * state.vatRate;
-  const total = net + vat;
+  const totalHt = productsSubtotal - discountAmount;
+  const baseHt = totalHt + ecotaxTotal;
+  const vat = baseHt * state.vatRate;
+  const total = baseHt + vat;
 
   const issueDate = new Date();
   const issueDateLabel = issueDate.toLocaleDateString('fr-FR');
   const validityDate = new Date(issueDate);
-  validityDate.setDate(validityDate.getDate() + 30);
+  validityDate.setMonth(validityDate.getMonth() + 2);
   const validityLabel = validityDate.toLocaleDateString('fr-FR');
   const quoteNumber = `DEV-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
+  const discountLabel = `${numberFormatter.format(state.discountRate)} %`;
 
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 48;
-  const pageWidth = doc.internal.pageSize.getWidth();
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    const headerHeight = 118;
+    const tableTopMargin = headerHeight + 24;
 
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 120, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.text('DEVIS PROFESSIONNEL', margin, 60);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.text(`Référence : ${quoteNumber}`, margin, 88);
-  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
+    const logoDataUrl = await getLogoDataUrl();
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
-    align: 'right',
-  });
+    const headerOptions = {
+      pageWidth,
+      margin,
+      headerHeight,
+      logoDataUrl,
+      issueDateLabel,
+      validityLabel,
+      quoteNumber,
+      discountLabel,
+    };
 
-  doc.setTextColor(30, 41, 59);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  let y = 150;
-  doc.text('Informations client', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('Nom du client\nAdresse\nCode postal - Ville\nclient@email.com', margin, y + 18);
+    drawPdfTopBanner(doc, headerOptions);
 
-  const infoX = pageWidth / 2 + 10;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Conditions du devis', infoX, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text(`Validité de l'offre : ${validityLabel}`, infoX, y + 18);
-  doc.text('Conditions de paiement : 30% à la commande, solde à la livraison', infoX, y + 36, {
-    maxWidth: pageWidth - infoX - margin,
-  });
-  doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, infoX, y + 54);
-
-  const body = items.map((item) => {
-    const quantityDetails =
-      item.quantityMode === 'area'
-        ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(item.quantity || 0)} ${item.unit || 'm²'}`
-        : `${quantityFormatter.format(item.quantity || 0)} ${item.unit || ''}`.trim();
-
-    const designationLines = [item.name];
-    if (item.comment) {
-      designationLines.push(`Commentaire : ${item.comment}`);
-    }
-    if (item.link) {
-      designationLines.push(`Lien : ${item.link}`);
-    }
-    const unitEcotax = getUnitEcotax(item);
-    const ecotaxUnitLabel =
-      item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
-    const weightValue = formatWeightValue(item.weight);
-    if (weightValue) {
-      designationLines.push(`Poids unitaire : ${weightValue}`);
-    }
-    const scoreValue = getScoreBadgeValue(item.score);
-    designationLines.push(
-      scoreValue === 'NR' ? "Score Positiv'ID : N.C." : `Score Positiv'ID : ${scoreValue}`,
-    );
-
-    const quantityValue = getItemQuantity(item);
-    const unitPriceValue = Number(item.price) || 0;
-    const discountedUnit = calculateDiscountedValue(unitPriceValue);
-    const discountedSubtotal = discountedUnit * quantityValue;
-    const ecotaxSubtotal = unitEcotax * quantityValue;
-    const totalWithEcotax = discountedSubtotal + ecotaxSubtotal;
-
-    return [
-      item.reference,
-      designationLines.join('\n'),
-      quantityDetails,
-      currencyFormatter.format(discountedUnit),
-      currencyFormatter.format(ecotaxSubtotal),
-      currencyFormatter.format(totalWithEcotax),
-    ];
-  });
-
-  doc.autoTable({
-    startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Ecopart', 'Total HT']],
-    body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 70 },
-      1: { cellWidth: 160 },
-      2: { cellWidth: 150 },
-      3: { halign: 'right', cellWidth: 60 },
-      4: { halign: 'right', cellWidth: 60 },
-      5: { halign: 'right', cellWidth: 70 },
-    },
-    alternateRowStyles: { fillColor: [246, 247, 250] },
-    margin: { left: margin, right: margin },
-  });
-
-  const summaryStartY = doc.lastAutoTable.finalY + 24;
-  doc.autoTable({
-    startY: summaryStartY,
-    head: [['Récapitulatif', 'Montant']],
-    body: [
-      ['Total HT produits', currencyFormatter.format(productsSubtotal)],
-      [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Ecopart totale', currencyFormatter.format(ecotaxTotal)],
-      ['Base HT après remise + Ecopart', currencyFormatter.format(net)],
-      [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
-      ['Total TTC', currencyFormatter.format(total)],
-    ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 200 },
-      1: { halign: 'right', cellWidth: 120 },
-    },
-    margin: { left: margin, right: margin },
-    didParseCell: (data) => {
-      if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [253, 234, 227];
-      }
-    },
-  });
-
-  let closingY = doc.lastAutoTable.finalY + 28;
-  if (state.generalComment && state.generalComment.trim().length > 0) {
+    doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Commentaire général', margin, closingY);
-    closingY += 18;
+    doc.setFontSize(11);
+    doc.text(pdfBranding.headerReference, margin, headerHeight + 26);
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(state.generalComment.trim(), margin, closingY, {
-      maxWidth: pageWidth - margin * 2,
+    let legalY = headerHeight + 42;
+    pdfBranding.legalLines.forEach((line) => {
+      doc.text(line, margin, legalY);
+      legalY += 12;
     });
-    closingY += 24;
+
+    const columnGap = 24;
+    const columnWidth = (pageWidth - margin * 2 - columnGap) / 2;
+    const rightColumnX = margin + columnWidth + columnGap;
+    let infoY = headerHeight + 26;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Informations devis', rightColumnX, infoY);
+    infoY += 16;
+    doc.setFont('helvetica', 'normal');
+    const infoLines = ['Réf / Ref : —', 'Représentant / Sales rep : —', `Remise appliquée : ${discountLabel}`];
+    infoLines.forEach((line) => {
+      doc.text(line, rightColumnX, infoY);
+      infoY += 12;
+    });
+
+    const infoBlockBottom = Math.max(legalY, infoY);
+    const boxY = infoBlockBottom + 12;
+    const boxHeight = 96;
+    doc.setDrawColor(228, 30, 40);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(margin, boxY, columnWidth, boxHeight, 6, 6);
+    doc.roundedRect(rightColumnX, boxY, columnWidth, boxHeight, 6, 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Client / Customer', margin + 12, boxY + 18);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const clientPlaceholder = ['Nom du client', 'Adresse', 'Code postal - Ville', 'Email / Téléphone'];
+    doc.text(clientPlaceholder.join('\n'), margin + 12, boxY + 36);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Lieu de livraison / Shipping address', rightColumnX + 12, boxY + 18);
+    doc.setFont('helvetica', 'normal');
+    const shippingPlaceholder = ['À préciser', 'Adresse de livraison', 'Code postal - Ville', 'Contact / Téléphone'];
+    doc.text(shippingPlaceholder.join('\n'), rightColumnX + 12, boxY + 36);
+
+    let currentY = boxY + boxHeight + 24;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const messageFrLines = doc.splitTextToSize(pdfBranding.customerMessageFr, pageWidth - margin * 2);
+    doc.text(messageFrLines, margin, currentY);
+    currentY += messageFrLines.length * 12 + 6;
+    const messageEnLines = doc.splitTextToSize(pdfBranding.customerMessageEn, pageWidth - margin * 2);
+    doc.text(messageEnLines, margin, currentY);
+    currentY += messageEnLines.length * 12 + 12;
+
+    const body = items.map((item) => {
+      const quantityValue = getItemQuantity(item);
+      const unitEcotax = getUnitEcotax(item);
+      const discountedUnit = calculateDiscountedValue(Number(item.price) || 0);
+      const netSubtotal = discountedUnit * quantityValue;
+      const ecotaxSubtotal = unitEcotax * quantityValue;
+      const totalLine = netSubtotal + ecotaxSubtotal;
+
+      const designationParts = [item.name];
+      if (item.comment) {
+        designationParts.push(`Commentaire : ${item.comment}`);
+      }
+      if (item.link) {
+        designationParts.push(`Lien : ${item.link}`);
+      }
+      const weightValue = formatWeightValue(item.weight);
+      if (weightValue) {
+        designationParts.push(`Poids unitaire : ${weightValue}`);
+      }
+      const scoreValue = getScoreBadgeValue(item.score);
+      designationParts.push(scoreValue === 'NR' ? "Score Positiv'ID : N.C." : `Score Positiv'ID : ${scoreValue}`);
+      designationParts.push(`Ecopart unitaire : ${currencyFormatter.format(unitEcotax)}`);
+
+      let quantityLabel = '';
+      if (item.quantityMode === 'area') {
+        const length = Number(item.length);
+        const width = Number(item.width);
+        const hasDimensions = Number.isFinite(length) && Number.isFinite(width) && length > 0 && width > 0;
+        quantityLabel = `${quantityFormatter.format(quantityValue)} ${item.unit || 'm²'}`;
+        if (hasDimensions) {
+          quantityLabel += `\n${dimensionFormatter.format(length)} m × ${dimensionFormatter.format(width)} m`;
+        }
+      } else {
+        const unitLabel = item.unit || 'Pièce';
+        quantityLabel = `${quantityFormatter.format(quantityValue)} ${unitLabel}`;
+      }
+
+      return [
+        item.reference,
+        designationParts.join('\n'),
+        quantityLabel.trim(),
+        currencyFormatter.format(discountedUnit),
+        currencyFormatter.format(ecotaxSubtotal),
+        currencyFormatter.format(totalLine),
+      ];
+    });
+
+    doc.autoTable({
+      startY: currentY,
+      head: [['Réf / Ref', 'Désignation / Description', 'Qté / Unit', 'P.U. net HT', 'Ecopart HT', 'Montant HT']],
+      body,
+      styles: {
+        font: 'helvetica',
+        fontSize: 9,
+        cellPadding: { top: 6, right: 4, bottom: 6, left: 4 },
+        textColor: [25, 63, 96],
+      },
+      headStyles: { fillColor: [25, 63, 96], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 72 },
+        1: { cellWidth: 200 },
+        2: { cellWidth: 68, halign: 'center' },
+        3: { cellWidth: 55, halign: 'right' },
+        4: { cellWidth: 55, halign: 'right' },
+        5: { cellWidth: 65, halign: 'right' },
+      },
+      alternateRowStyles: { fillColor: [245, 248, 252] },
+      margin: { top: tableTopMargin, left: margin, right: margin },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          drawPdfTopBanner(doc, headerOptions);
+        }
+      },
+    });
+
+    const itemsTableEndY = doc.lastAutoTable ? doc.lastAutoTable.finalY : currentY;
+
+    const summaryRows = [
+      ['Total HT :', currencyFormatter.format(totalHt)],
+      ['* Eco-particip. HT :', currencyFormatter.format(ecotaxTotal)],
+      ['Escompte / € :', currencyFormatter.format(0)],
+      [`TVA (${numberFormatter.format(state.vatRate * 100)} %) :`, currencyFormatter.format(vat)],
+      ['Base :', currencyFormatter.format(baseHt)],
+      ['Total TTC / € :', currencyFormatter.format(total)],
+      ['Acompte € :', currencyFormatter.format(0)],
+      ['Net à payer € :', currencyFormatter.format(total)],
+    ];
+
+    doc.autoTable({
+      startY: itemsTableEndY + 24,
+      body: summaryRows,
+      theme: 'plain',
+      styles: {
+        font: 'helvetica',
+        fontSize: 10,
+        textColor: [25, 63, 96],
+        cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 220 },
+        1: { halign: 'right', cellWidth: 120 },
+      },
+      margin: { left: margin, right: margin },
+      didParseCell: (data) => {
+        if (data.row.index === summaryRows.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.textColor = [228, 30, 40];
+        }
+        if (data.row.index === summaryRows.length - 2) {
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
+
+    let closingY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : itemsTableEndY + 20;
+
+    if (state.generalComment && state.generalComment.trim()) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('Commentaire général / General comment', margin, closingY);
+      closingY += 14;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const generalLines = doc.splitTextToSize(state.generalComment.trim(), pageWidth - margin * 2);
+      doc.text(generalLines, margin, closingY);
+      closingY += generalLines.length * 12 + 12;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const disclaimerFrLines = doc.splitTextToSize(pdfBranding.disclaimerFr, pageWidth - margin * 2);
+    const disclaimerEnLines = doc.splitTextToSize(pdfBranding.disclaimerEn, pageWidth - margin * 2);
+    const disclaimersHeight = (disclaimerFrLines.length + disclaimerEnLines.length) * 11 + 24;
+    if (closingY + disclaimersHeight > pageHeight - 96) {
+      doc.addPage();
+      drawPdfTopBanner(doc, headerOptions);
+      closingY = headerHeight + 36;
+    }
+    doc.text(disclaimerFrLines, margin, closingY);
+    closingY += disclaimerFrLines.length * 11 + 6;
+    doc.text(disclaimerEnLines, margin, closingY);
+    closingY += disclaimerEnLines.length * 11 + 18;
+
+    const contactRightX = pageWidth / 2 + 20;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(pdfBranding.contactLeft[0], margin, closingY);
+    doc.text(pdfBranding.contactRight[0], contactRightX, closingY);
+    doc.setFont('helvetica', 'normal');
+    pdfBranding.contactLeft.slice(1).forEach((line, index) => {
+      doc.text(line, margin, closingY + (index + 1) * 12);
+    });
+    pdfBranding.contactRight.slice(1).forEach((line, index) => {
+      doc.text(line, contactRightX, closingY + (index + 1) * 12);
+    });
+
+    const addFooter = () => {
+      const pageCount = doc.getNumberOfPages();
+      for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+        doc.setPage(pageNumber);
+        const footerY = pageHeight - 42;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        doc.text('ID GROUP - SASU au capital de 1 000 000 € - SIRET 403 401 854 00035', margin, footerY);
+        doc.text('47 voie St Exupéry, 73800 Porte de Savoie - www.id-group.eu', margin, footerY + 14);
+        doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, footerY, { align: 'right' });
+        doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, footerY + 14, { align: 'right' });
+      }
+      doc.setTextColor(30, 41, 59);
+    };
+
+    addFooter();
+    doc.save(`devis-${quoteNumber}.pdf`);
+  } catch (error) {
+    console.error('Erreur lors de la génération du devis PDF', error);
+    toggleFeedback('Impossible de générer le PDF. Veuillez réessayer.', 'error');
+  }
+}
+
+function drawPdfTopBanner(doc, options) {
+  const { pageWidth, margin, headerHeight, logoDataUrl, issueDateLabel, validityLabel, quoteNumber, discountLabel } = options;
+  doc.setFillColor(25, 63, 96);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
+  doc.setFillColor(228, 30, 40);
+  doc.rect(0, headerHeight - 10, pageWidth, 10, 'F');
+
+  let textStartX = margin;
+  if (logoDataUrl) {
+    const logoWidth = 96;
+    const logoHeight = 52;
+    doc.addImage(logoDataUrl, 'PNG', margin, 26, logoWidth, logoHeight);
+    textStartX = margin + logoWidth + 16;
   }
 
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(11);
-  doc.text("Merci pour votre confiance. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
-  closingY += 18;
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.text('Devis / Price offer', textStartX, 48);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(
-    'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
-    margin,
-    closingY,
-    { maxWidth: pageWidth - margin * 2 },
-  );
+  doc.setFontSize(12);
+  doc.text('ID GROUP', textStartX, 68);
 
-  const addFooter = () => {
-    const pageCount = doc.getNumberOfPages();
-    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      doc.setPage(pageNumber);
-      const pageHeight = doc.internal.pageSize.getHeight();
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
-      doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
-      doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.text(`Date : ${issueDateLabel}`, pageWidth - margin, 38, { align: 'right' });
+  doc.text(`N° de devis : ${quoteNumber}`, pageWidth - margin, 54, { align: 'right' });
+  doc.text(`Validité de l'offre : ${validityLabel}`, pageWidth - margin, 70, { align: 'right' });
+  doc.text(`Remise appliquée : ${discountLabel}`, pageWidth - margin, 86, { align: 'right' });
+  doc.setTextColor(30, 41, 59);
+}
+
+async function getLogoDataUrl() {
+  if (pdfAssets.logo) {
+    return pdfAssets.logo;
+  }
+  if (pdfAssets.logo === undefined) {
+    return null;
+  }
+  try {
+    const response = await fetch('media/ID GROUP.png');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
-    doc.setTextColor(30, 41, 59);
-  };
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    pdfAssets.logo = dataUrl;
+    return dataUrl;
+  } catch (error) {
+    console.error('Impossible de charger le logo pour le PDF', error);
+    pdfAssets.logo = undefined;
+    return null;
+  }
+}
 
-  addFooter();
-  doc.save(`devis-${quoteNumber}.pdf`);
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.onerror = () => {
+      reject(reader.error);
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function toggleFeedback(message, type = 'info') {
@@ -1097,6 +1294,107 @@ function deriveUnits(items) {
   return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
 }
 
+function buildCatalogueTree(products) {
+  const root = createTreeNode(null);
+  products.forEach((product) => {
+    const path = deriveCategoryPathForTree(product.category);
+    let node = root;
+    path.forEach((segment) => {
+      const key = segment || TREE_FALLBACK_LABEL;
+      if (!node.children.has(key)) {
+        node.children.set(key, createTreeNode(key));
+      }
+      node = node.children.get(key);
+    });
+    node.products.push(product);
+  });
+  return root;
+}
+
+function createTreeNode(label) {
+  return {
+    label,
+    children: new Map(),
+    products: [],
+  };
+}
+
+function deriveCategoryPathForTree(category) {
+  if (!category) {
+    return [TREE_FALLBACK_LABEL];
+  }
+  const normalised = String(category).replace(/\s+/g, ' ').trim();
+  if (!normalised) {
+    return [TREE_FALLBACK_LABEL];
+  }
+  for (const separator of TREE_SEPARATORS) {
+    if (normalised.includes(separator)) {
+      const segments = normalised
+        .split(separator)
+        .map((segment) => segment.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      if (segments.length) {
+        return segments;
+      }
+    }
+  }
+  return [normalised];
+}
+
+function sortTreeNodes(nodes) {
+  return nodes.slice().sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+}
+
+function populateCatalogueTreeSelector() {
+  const select = elements.catalogueTree;
+  if (!select) return;
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  placeholder.textContent = 'Arborescence du catalogue…';
+  select.appendChild(placeholder);
+  if (!state.catalogueTree) return;
+  const topLevel = Array.from(state.catalogueTree.children.values());
+  if (!topLevel.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.disabled = true;
+    empty.textContent = 'Catalogue vide';
+    select.appendChild(empty);
+    return;
+  }
+  appendTreeOptions(select, sortTreeNodes(topLevel), 0);
+}
+
+function appendTreeOptions(select, nodes, depth) {
+  nodes.forEach((node) => {
+    const indent = TREE_INDENT.repeat(depth);
+    const categoryOption = document.createElement('option');
+    categoryOption.value = '';
+    categoryOption.disabled = true;
+    categoryOption.dataset.type = 'category';
+    categoryOption.textContent = depth ? `${indent}› ${node.label}` : node.label;
+    select.appendChild(categoryOption);
+
+    const products = node.products
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    products.forEach((product) => {
+      const productOption = document.createElement('option');
+      productOption.value = product.id;
+      productOption.dataset.type = 'product';
+      productOption.textContent = `${TREE_INDENT.repeat(depth + 1)}${product.name} (${product.reference})`;
+      select.appendChild(productOption);
+    });
+
+    if (node.children.size) {
+      appendTreeOptions(select, sortTreeNodes(Array.from(node.children.values())), depth + 1);
+    }
+  });
+}
+
 function setupCategoryFilter() {
   if (!elements.categoryFilterButton || !elements.categoryFilterMenu) return;
   elements.categoryFilterButton.addEventListener('click', (event) => {
@@ -1175,6 +1473,88 @@ function handleUnitFilterChange(event) {
   const value = event.target?.value ?? UNIT_FILTER_ALL;
   state.selectedUnit = value;
   applyFilters();
+}
+
+function handleCatalogueTreeSelection(event) {
+  const select = event.target;
+  if (!(select instanceof HTMLSelectElement)) return;
+  const productId = select.value;
+  if (!productId) {
+    return;
+  }
+  const product = state.catalogueById.get(productId);
+  if (!product) {
+    select.value = '';
+    return;
+  }
+  const filtersChanged = resetFiltersForProduct(product);
+  window.setTimeout(() => {
+    focusProductCard(productId);
+  }, filtersChanged ? 110 : 0);
+  select.value = '';
+}
+
+function resetFiltersForProduct(product) {
+  let filtersChanged = false;
+  if (state.searchQuery) {
+    state.searchQuery = '';
+    if (elements.search) {
+      elements.search.value = '';
+    }
+    filtersChanged = true;
+  }
+  if (state.selectedCategories.size && (!product.category || !state.selectedCategories.has(product.category))) {
+    state.selectedCategories.clear();
+    const checkboxes = elements.categoryFilterOptions?.querySelectorAll('input[type="checkbox"]');
+    checkboxes?.forEach((checkbox) => {
+      checkbox.checked = false;
+      checkbox.parentElement?.classList.remove('is-active');
+    });
+    filtersChanged = true;
+  }
+  const productUnit = getUnitFilterValue(product.unit);
+  const matchesUnit =
+    state.selectedUnit === UNIT_FILTER_ALL ||
+    (state.selectedUnit === UNIT_FILTER_NONE && productUnit === UNIT_FILTER_NONE) ||
+    state.selectedUnit === productUnit;
+  if (!matchesUnit) {
+    state.selectedUnit = UNIT_FILTER_ALL;
+    if (elements.unitFilter) {
+      elements.unitFilter.value = UNIT_FILTER_ALL;
+    }
+    filtersChanged = true;
+  }
+  if (filtersChanged) {
+    updateCategoryFilterLabel();
+    applyFilters();
+  }
+  return filtersChanged;
+}
+
+function focusProductCard(productId) {
+  const { productGrid } = elements;
+  if (!productGrid) return;
+  const selector = `[data-product-id="${escapeSelector(productId)}"]`;
+  const card = productGrid.querySelector(selector);
+  if (!card) {
+    return;
+  }
+  card.classList.add('is-highlighted');
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  window.setTimeout(() => {
+    card.classList.remove('is-highlighted');
+  }, 1800);
+  const addButton = card.querySelector('.add-to-quote');
+  if (addButton instanceof HTMLElement) {
+    addButton.focus({ preventScroll: true });
+  }
+}
+
+function escapeSelector(value) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return String(value).replace(/([!"#$%&'()*+,./:;<=>?@\[\]^`{|}~])/g, '\\$1');
 }
 
 function handleCategoryCheckboxChange(event, label) {
