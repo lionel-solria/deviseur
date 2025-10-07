@@ -1,6 +1,41 @@
 const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 
+const companyIdentity = {
+  name: 'ID GROUP - MK Distribution',
+  brandCode: 'MKC/PR1/ER3 - Indice B',
+  address: ['ALPESPACE - FRANCIN', '47 voie Saint-Exupéry', '73800 Porte-de-Savoie', 'France'],
+  shippingPlaceholder: [
+    'Indiquez le lieu de livraison',
+    'Adresse complète',
+    'Code postal - Ville',
+    'Pays',
+  ],
+  contact: [
+    'Téléphone : 00.33.4.79.84.36.06  •  Télécopie : 00.33.4.79.84.36.10',
+    'Email : ids@ids-france.net',
+    'Téléphone : 00.33.4.79.84.14.18  •  Télécopie : 00.33.4.79.84.14.19',
+    'Email : idmat@id-mat.com',
+  ],
+  legal: {
+    siret: '403 401 854 00035',
+    vat: 'FR 12 403 401 854',
+    naf: '4669B',
+    capital: '1 000 000 €',
+    rcs: 'RCS Chambéry 403 401 854',
+    eori: 'FR403401854',
+  },
+  offerValidityDays: 60,
+  paymentTerms: 'Conditions de paiement : acompte à la commande, solde à la livraison',
+  deliveryLead: 'Délais de livraison estimés : 4 à 6 semaines après confirmation',
+};
+
+const assets = {
+  logoPromise: null,
+};
+
+const highlightTimers = new Map();
+
 const currencyFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const numberFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const quantityFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -16,6 +51,7 @@ const state = {
   quote: new Map(),
   categories: [],
   units: [],
+  catalogueTree: [],
   selectedCategories: new Set(),
   selectedUnit: '__all__',
   searchQuery: '',
@@ -39,6 +75,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
@@ -77,9 +114,11 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
+  elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
+  preloadAssets();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
@@ -127,8 +166,10 @@ async function loadCatalogue() {
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
+    state.catalogueTree = buildCatalogueHierarchy(state.catalogue);
     populateCategoryFilter();
     populateUnitFilter();
+    populateCatalogueTree();
     applyFilters();
     toggleFeedback('', 'hide');
   } catch (error) {
@@ -356,7 +397,7 @@ function renderProducts() {
   productGrid.innerHTML = '';
   if (!state.filtered.length) {
     const empty = document.createElement('div');
-    empty.className = 'col-span-full rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500';
+    empty.className = 'col-span-full rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500';
     empty.textContent = 'Aucun produit ne correspond à votre recherche.';
     productGrid.appendChild(empty);
     return;
@@ -365,6 +406,7 @@ function renderProducts() {
   const fragment = document.createDocumentFragment();
   for (const product of state.filtered) {
     const card = elements.productTemplate.content.firstElementChild.cloneNode(true);
+    card.dataset.productId = product.id;
     const image = card.querySelector('.product-image');
     image.src = product.image || defaultImage;
     image.alt = product.name;
@@ -750,6 +792,8 @@ function updateSummary() {
   const net = productsSubtotal - discountAmount + ecotaxTotal;
   const vat = net * state.vatRate;
   const total = net + vat;
+  const baseHtAfterDiscount = productsSubtotal - discountAmount;
+  const discountRowValue = discountAmount > 0 ? `-${currencyFormatter.format(discountAmount)}` : currencyFormatter.format(0);
   if (elements.summaryProducts) {
     elements.summaryProducts.textContent = currencyFormatter.format(productsSubtotal);
   }
@@ -770,7 +814,38 @@ function updateSummary() {
   }
 }
 
-function generatePdf() {
+function preloadAssets() {
+  getCompanyLogo().catch(() => null);
+}
+
+async function getCompanyLogo() {
+  if (!assets.logoPromise) {
+    const logoUrl = 'media/ID GROUP.png';
+    assets.logoPromise = fetch(logoUrl)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Impossible de charger le logo (${response.status})`);
+        }
+        return response.blob();
+      })
+      .then(
+        (blob) =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Lecture du logo impossible'));
+            reader.readAsDataURL(blob);
+          }),
+      )
+      .catch((error) => {
+        console.error(error);
+        return null;
+      });
+  }
+  return assets.logoPromise;
+}
+
+async function generatePdf() {
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
     return;
@@ -795,177 +870,292 @@ function generatePdf() {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const margin = 48;
   const pageWidth = doc.internal.pageSize.getWidth();
+  const secondaryColor = [25, 63, 96];
+  const accentColor = [228, 30, 40];
+  const baseTextColor = [41, 50, 60];
+  const mutedTextColor = [102, 112, 133];
 
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 120, 'F');
-  doc.setTextColor(255, 255, 255);
+  doc.setFillColor(...accentColor);
+  doc.rect(0, 0, pageWidth, 12, 'F');
+
+  const logoDataUrl = await getCompanyLogo();
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, 'PNG', pageWidth - margin - 110, 26, 110, 36, undefined, 'FAST');
+  }
+
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.text('DEVIS PROFESSIONNEL', margin, 60);
+  doc.setFontSize(20);
+  doc.setTextColor(...secondaryColor);
+  doc.text('DEVIS COMMERCIAL', margin, 46);
+
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
+  doc.setFontSize(10);
+  doc.setTextColor(...mutedTextColor);
+  if (companyIdentity.brandCode) {
+    doc.text(companyIdentity.brandCode, margin, 60);
+  }
+  doc.text(`Émis le ${issueDateLabel}`, margin, 74);
   doc.text(`Référence : ${quoteNumber}`, margin, 88);
-  doc.text(`Date d'édition : ${issueDateLabel}`, margin, 106);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Deviseur Express', pageWidth - margin, 52, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text('12 avenue des Solutions\n75000 Paris\ncontact@deviseurexpress.fr\n+33 1 23 45 67 89', pageWidth - margin, 72, {
-    align: 'right',
-  });
+  doc.setTextColor(...secondaryColor);
+  doc.text('Émetteur', pageWidth - margin, 44, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...baseTextColor);
+  doc.text(companyIdentity.name, pageWidth - margin, 60, { align: 'right' });
+  doc.setFontSize(10);
+  doc.text(companyIdentity.address.join('\n'), pageWidth - margin, 76, { align: 'right' });
 
-  doc.setTextColor(30, 41, 59);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  let y = 150;
-  doc.text('Informations client', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.text('Nom du client\nAdresse\nCode postal - Ville\nclient@email.com', margin, y + 18);
+  const infoStartY = 112;
+  const infoWidth = pageWidth - margin * 2;
+  doc.setFillColor(246, 247, 250);
+  doc.roundedRect(margin, infoStartY, infoWidth, 132, 10, 10, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, infoStartY, infoWidth, 132, 10, 10);
 
-  const infoX = pageWidth / 2 + 10;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Conditions du devis', infoX, y);
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text(`Validité de l'offre : ${validityLabel}`, infoX, y + 18);
-  doc.text('Conditions de paiement : 30% à la commande, solde à la livraison', infoX, y + 36, {
-    maxWidth: pageWidth - infoX - margin,
-  });
-  doc.text(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`, infoX, y + 54);
+  doc.setTextColor(...secondaryColor);
+  doc.text('Lieu de livraison / Shipping address', margin + 18, infoStartY + 26);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...baseTextColor);
+  doc.text(companyIdentity.shippingPlaceholder, margin + 18, infoStartY + 42);
+
+  const infoColumnX = pageWidth / 2 + 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...secondaryColor);
+  doc.text('Informations devis / Quote details', infoColumnX, infoStartY + 26);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...baseTextColor);
+  const infoLines = [
+    `Validité de l'offre : ${validityLabel}`,
+    `Remise commerciale : ${numberFormatter.format(state.discountRate)} %`,
+    `TVA : ${numberFormatter.format(state.vatRate * 100)} %`,
+    companyIdentity.paymentTerms,
+    companyIdentity.deliveryLead,
+  ];
+  doc.text(infoLines, infoColumnX, infoStartY + 42, { maxWidth: pageWidth - infoColumnX - margin });
+
+  const introStartY = infoStartY + 158;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...secondaryColor);
+  doc.text('Message commercial', margin, introStartY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...baseTextColor);
+  const frenchIntro =
+    'Cher Client, Nous avons bien reçu votre demande de devis et nous vous en remercions. Vous trouverez ci-dessous nos meilleures conditions.';
+  const englishIntro =
+    'Dear Customer, We well received your request and we thank you for that. Please find below our best price offer.';
+  const frenchLines = doc.splitTextToSize(frenchIntro, pageWidth - margin * 2);
+  doc.text(frenchLines, margin, introStartY + 16);
+  const frenchHeight = doc.getTextDimensions(frenchLines).h;
+  const englishLines = doc.splitTextToSize(englishIntro, pageWidth - margin * 2);
+  const englishStartY = introStartY + 16 + frenchHeight + 6;
+  doc.text(englishLines, margin, englishStartY);
+  const englishHeight = doc.getTextDimensions(englishLines).h;
+
+  let tableStartY = englishStartY + englishHeight + 20;
+
+  const columns = [
+    { header: 'Nos réf.', dataKey: 'reference' },
+    { header: 'Désignation', dataKey: 'designation' },
+    { header: 'Qté', dataKey: 'quantity' },
+    { header: 'Unité', dataKey: 'unit' },
+    { header: 'PU HT', dataKey: 'unitPrice' },
+    { header: '% Remise', dataKey: 'discount' },
+    { header: 'Montant HT', dataKey: 'lineTotal' },
+    { header: 'Éco-part', dataKey: 'ecotax' },
+  ];
 
   const body = items.map((item) => {
-    const quantityDetails =
-      item.quantityMode === 'area'
-        ? `${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m = ${quantityFormatter.format(item.quantity || 0)} ${item.unit || 'm²'}`
-        : `${quantityFormatter.format(item.quantity || 0)} ${item.unit || ''}`.trim();
+    const quantityValue = getItemQuantity(item);
+    const unitLabel = item.quantityMode === 'area' ? 'm²' : item.unit || 'Pièce';
+    const dimensionLines = [];
+    if (item.quantityMode === 'area') {
+      dimensionLines.push(
+        `Dimensions : ${dimensionFormatter.format(item.length || 0)} m x ${dimensionFormatter.format(item.width || 0)} m`,
+      );
+      dimensionLines.push(`Surface calculée : ${quantityFormatter.format(quantityValue)} m²`);
+    }
 
-    const designationLines = [item.name];
+    const unitEcotax = getUnitEcotax(item);
+    const weightValue = formatWeightValue(item.weight);
+    const scoreValue = getScoreBadgeValue(item.score);
+
+    const detailLines = [item.name, ...dimensionLines];
     if (item.comment) {
-      designationLines.push(`Commentaire : ${item.comment}`);
+      detailLines.push(`Commentaire : ${item.comment}`);
     }
     if (item.link) {
-      designationLines.push(`Lien : ${item.link}`);
+      detailLines.push(`Lien : ${item.link}`);
     }
-    const unitEcotax = getUnitEcotax(item);
-    const ecotaxUnitLabel =
-      item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Ecopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
-    const weightValue = formatWeightValue(item.weight);
+    detailLines.push(`Écopart unitaire : ${currencyFormatter.format(unitEcotax)}`);
     if (weightValue) {
-      designationLines.push(`Poids unitaire : ${weightValue}`);
+      detailLines.push(`Poids unitaire : ${weightValue}`);
     }
-    const scoreValue = getScoreBadgeValue(item.score);
-    designationLines.push(
-      scoreValue === 'NR' ? "Score Positiv'ID : N.C." : `Score Positiv'ID : ${scoreValue}`,
-    );
+    detailLines.push(scoreValue === 'NR' ? "Score Positiv'ID : N.C." : `Score Positiv'ID : ${scoreValue}`);
 
-    const quantityValue = getItemQuantity(item);
     const unitPriceValue = Number(item.price) || 0;
     const discountedUnit = calculateDiscountedValue(unitPriceValue);
     const discountedSubtotal = discountedUnit * quantityValue;
-    const ecotaxSubtotal = unitEcotax * quantityValue;
-    const totalWithEcotax = discountedSubtotal + ecotaxSubtotal;
 
-    return [
-      item.reference,
-      designationLines.join('\n'),
-      quantityDetails,
-      currencyFormatter.format(discountedUnit),
-      currencyFormatter.format(ecotaxSubtotal),
-      currencyFormatter.format(totalWithEcotax),
-    ];
+    return {
+      reference: item.reference,
+      designation: detailLines.join('\n'),
+      quantity: quantityFormatter.format(quantityValue),
+      unit: unitLabel,
+      unitPrice: currencyFormatter.format(discountedUnit),
+      discount: state.discountRate > 0 ? `${numberFormatter.format(state.discountRate)} %` : '—',
+      lineTotal: currencyFormatter.format(discountedSubtotal),
+      ecotax: currencyFormatter.format(unitEcotax),
+    };
   });
 
   doc.autoTable({
-    startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Ecopart', 'Total HT']],
+    startY: tableStartY,
+    columns,
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 70 },
-      1: { cellWidth: 160 },
-      2: { cellWidth: 150 },
-      3: { halign: 'right', cellWidth: 60 },
-      4: { halign: 'right', cellWidth: 60 },
-      5: { halign: 'right', cellWidth: 70 },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      cellPadding: 6,
+      textColor: baseTextColor,
+      lineColor: [234, 237, 242],
+      lineWidth: 0.4,
     },
-    alternateRowStyles: { fillColor: [246, 247, 250] },
+    headStyles: {
+      fillColor: accentColor,
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 10,
+    },
+    alternateRowStyles: { fillColor: [248, 249, 251] },
+    columnStyles: {
+      reference: { cellWidth: 70 },
+      designation: { cellWidth: 170 },
+      quantity: { halign: 'right', cellWidth: 48 },
+      unit: { cellWidth: 48 },
+      unitPrice: { halign: 'right', cellWidth: 70 },
+      discount: { halign: 'right', cellWidth: 68 },
+      lineTotal: { halign: 'right', cellWidth: 78 },
+      ecotax: { halign: 'right', cellWidth: 64 },
+    },
     margin: { left: margin, right: margin },
   });
 
-  const summaryStartY = doc.lastAutoTable.finalY + 24;
+  let contentY = doc.lastAutoTable.finalY + 24;
+
+  if (state.generalComment && state.generalComment.trim().length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...secondaryColor);
+    doc.text('Commentaire général', margin, contentY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...baseTextColor);
+    const commentLines = doc.splitTextToSize(state.generalComment.trim(), pageWidth - margin * 2);
+    doc.text(commentLines, margin, contentY + 16);
+    contentY += doc.getTextDimensions(commentLines).h + 26;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...secondaryColor);
+  doc.text('Synthèse financière', margin, contentY);
   doc.autoTable({
-    startY: summaryStartY,
-    head: [['Récapitulatif', 'Montant']],
+    startY: contentY + 10,
     body: [
-      ['Total HT produits', currencyFormatter.format(productsSubtotal)],
-      [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Ecopart totale', currencyFormatter.format(ecotaxTotal)],
-      ['Base HT après remise + Ecopart', currencyFormatter.format(net)],
-      [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
+      ['Total HT (hors éco-part)', currencyFormatter.format(baseHtAfterDiscount)],
+      [
+        `Remise commerciale (${numberFormatter.format(state.discountRate)} %)`,
+        discountRowValue,
+      ],
+      ['Éco-participation HT', currencyFormatter.format(ecotaxTotal)],
+      ['Total HT', currencyFormatter.format(net)],
+      [
+        `TVA (${numberFormatter.format(state.vatRate * 100)} %)`,
+        currencyFormatter.format(vat),
+      ],
+      ['Acompte', currencyFormatter.format(0)],
+      ['Escompte', currencyFormatter.format(0)],
       ['Total TTC', currencyFormatter.format(total)],
+      ['Net à payer', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [25, 63, 96] },
-    headStyles: { fillColor: [228, 30, 40], textColor: 255, fontStyle: 'bold' },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9.5,
+      cellPadding: { top: 5, bottom: 5, left: 6, right: 6 },
+      textColor: baseTextColor,
+    },
     columnStyles: {
-      0: { cellWidth: 200 },
+      0: { cellWidth: 220 },
       1: { halign: 'right', cellWidth: 120 },
     },
     margin: { left: margin, right: margin },
+    theme: 'plain',
     didParseCell: (data) => {
-      if (data.row.section === 'body' && data.row.index === data.table.body.length - 1) {
+      if (data.row.index >= data.table.body.length - 2) {
         data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = accentColor;
+      }
+      if (data.row.index === data.table.body.length - 1) {
         data.cell.styles.fillColor = [253, 234, 227];
       }
     },
   });
 
-  let closingY = doc.lastAutoTable.finalY + 28;
-  if (state.generalComment && state.generalComment.trim().length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Commentaire général', margin, closingY);
-    closingY += 18;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(state.generalComment.trim(), margin, closingY, {
-      maxWidth: pageWidth - margin * 2,
-    });
-    closingY += 24;
-  }
+  contentY = doc.lastAutoTable.finalY + 22;
 
   doc.setFont('helvetica', 'italic');
+  doc.setFontSize(9);
+  doc.setTextColor(...mutedTextColor);
+  doc.text(
+    'Tolérance dimensionnelles / Dimensional tolerance +/-5%  -  Tolérance de découpe / Cutting tolerance +/-5%',
+    margin,
+    contentY,
+  );
+  contentY += 18;
+
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text("Merci pour votre confiance. Ce devis reste modifiable jusqu'à validation écrite.", margin, closingY);
-  closingY += 18;
+  doc.setTextColor(...secondaryColor);
+  doc.text('Contacts ID GROUP', margin, contentY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text(
-    'Nos équipes restent disponibles pour toute précision technique ou logistique concernant les produits listés.',
-    margin,
-    closingY,
-    { maxWidth: pageWidth - margin * 2 },
-  );
+  doc.setTextColor(...baseTextColor);
+  doc.text(companyIdentity.contact, margin, contentY + 16);
 
   const addFooter = () => {
     const pageCount = doc.getNumberOfPages();
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
       doc.setPage(pageNumber);
       const pageHeight = doc.internal.pageSize.getHeight();
+      doc.setDrawColor(...accentColor);
+      doc.setLineWidth(0.6);
+      doc.line(margin, pageHeight - 56, pageWidth - margin, pageHeight - 56);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
-      doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
-      doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
-      doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
+      doc.setTextColor(...mutedTextColor);
+      doc.text(
+        `SIRET : ${companyIdentity.legal.siret}  •  TVA : ${companyIdentity.legal.vat}  •  NAF : ${companyIdentity.legal.naf}`,
+        margin,
+        pageHeight - 40,
+      );
+      doc.text(
+        `Capital social : ${companyIdentity.legal.capital}  •  ${companyIdentity.legal.rcs}  •  N° EORI : ${companyIdentity.legal.eori}`,
+        margin,
+        pageHeight - 26,
+      );
+      doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 40, { align: 'right' });
+      doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 26, { align: 'right' });
     }
-    doc.setTextColor(30, 41, 59);
+    doc.setTextColor(...baseTextColor);
   };
 
   addFooter();
@@ -981,9 +1171,9 @@ function toggleFeedback(message, type = 'info') {
     return;
   }
   const styles = {
-    info: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-blue-50 text-blue-700 border border-blue-100',
-    warning: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-amber-50 text-amber-700 border border-amber-100',
-    error: 'rounded-2xl px-6 py-4 text-sm shadow-sm bg-rose-50 text-rose-700 border border-rose-100',
+    info: 'rounded-xl px-6 py-4 text-sm shadow-sm bg-blue-50 text-blue-700 border border-blue-100',
+    warning: 'rounded-xl px-6 py-4 text-sm shadow-sm bg-amber-50 text-amber-700 border border-amber-100',
+    error: 'rounded-xl px-6 py-4 text-sm shadow-sm bg-rose-50 text-rose-700 border border-rose-100',
   };
   box.className = styles[type] || styles.info;
   box.textContent = message;
@@ -1097,6 +1287,41 @@ function deriveUnits(items) {
   return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
 }
 
+function buildCatalogueHierarchy(items) {
+  const groups = new Map();
+  items.forEach((product) => {
+    const key = product.category || 'Divers';
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(product);
+  });
+  return Array.from(groups.entries())
+    .map(([category, products]) => ({
+      category,
+      label: formatCategoryLabel(category),
+      products: products
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+}
+
+function formatCategoryLabel(category) {
+  if (!category) return 'Divers';
+  const trimmed = category.trim();
+  if (!trimmed) return 'Divers';
+  if (/^[A-Z0-9]+$/u.test(trimmed)) {
+    return trimmed;
+  }
+  const cleaned = trimmed.replace(/[_-]+/g, ' ');
+  return cleaned
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function setupCategoryFilter() {
   if (!elements.categoryFilterButton || !elements.categoryFilterMenu) return;
   elements.categoryFilterButton.addEventListener('click', (event) => {
@@ -1171,10 +1396,155 @@ function populateUnitFilter() {
   select.value = state.selectedUnit;
 }
 
+function populateCatalogueTree() {
+  const select = elements.catalogueTree;
+  if (!select) return;
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = "Arborescence du catalogue";
+  select.appendChild(placeholder);
+
+  if (!state.catalogueTree.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.disabled = true;
+    option.textContent = 'Catalogue indisponible';
+    select.appendChild(option);
+    return;
+  }
+
+  state.catalogueTree.forEach((group) => {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = group.label;
+    const categoryOption = document.createElement('option');
+    categoryOption.value = `category:${group.category}`;
+    categoryOption.textContent = `Filtrer par ${group.label}`;
+    optgroup.appendChild(categoryOption);
+    group.products.forEach((product) => {
+      const option = document.createElement('option');
+      option.value = product.id;
+      option.textContent = `• ${product.name} (${product.reference})`;
+      optgroup.appendChild(option);
+    });
+    select.appendChild(optgroup);
+  });
+}
+
 function handleUnitFilterChange(event) {
   const value = event.target?.value ?? UNIT_FILTER_ALL;
   state.selectedUnit = value;
   applyFilters();
+}
+
+function handleCatalogueTreeChange(event) {
+  const select = event?.target;
+  if (!(select instanceof HTMLSelectElement)) return;
+  const value = select.value;
+  if (!value) return;
+
+  if (value.startsWith('category:')) {
+    const category = value.slice('category:'.length);
+    if (category) {
+      state.selectedCategories.clear();
+      state.selectedCategories.add(category);
+      updateCategoryFilterLabel();
+      const checkboxes = elements.categoryFilterOptions?.querySelectorAll('input[type="checkbox"]');
+      checkboxes?.forEach((checkbox) => {
+        checkbox.checked = checkbox.value === category;
+        if (checkbox.parentElement) {
+          checkbox.parentElement.classList.toggle('is-active', checkbox.value === category);
+        }
+      });
+      applyFilters();
+      requestAnimationFrame(() => {
+        const firstMatch = state.filtered.find((item) => item.category === category);
+        if (firstMatch) {
+          highlightProductCard(firstMatch.id);
+        }
+      });
+    }
+  } else {
+    ensureProductVisible(value);
+  }
+
+  select.value = '';
+}
+
+function ensureProductVisible(productId) {
+  if (!productId) return;
+  const product = state.catalogueById.get(productId);
+  if (!product) return;
+
+  let filtersChanged = false;
+
+  if (state.searchQuery) {
+    state.searchQuery = '';
+    if (elements.search) {
+      elements.search.value = '';
+    }
+    filtersChanged = true;
+  }
+
+  if (state.selectedCategories.size) {
+    state.selectedCategories.clear();
+    const checkboxes = elements.categoryFilterOptions?.querySelectorAll('input[type="checkbox"]');
+    checkboxes?.forEach((checkbox) => {
+      checkbox.checked = false;
+      checkbox.parentElement?.classList.remove('is-active');
+    });
+    updateCategoryFilterLabel();
+    filtersChanged = true;
+  }
+
+  if (state.selectedUnit !== UNIT_FILTER_ALL) {
+    state.selectedUnit = UNIT_FILTER_ALL;
+    if (elements.unitFilter) {
+      elements.unitFilter.value = UNIT_FILTER_ALL;
+    }
+    filtersChanged = true;
+  }
+
+  if (filtersChanged || !state.filtered.some((item) => item.id === productId)) {
+    applyFilters();
+  }
+
+  requestAnimationFrame(() => {
+    const card = getProductCardElement(productId);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightProductCard(card);
+    }
+  });
+}
+
+function getProductCardElement(productId) {
+  if (!elements.productGrid) return null;
+  const selectorId = escapeSelector(productId);
+  const node = elements.productGrid.querySelector(`[data-product-id="${selectorId}"]`);
+  return node instanceof HTMLElement ? node : null;
+}
+
+function highlightProductCard(target) {
+  const element = target instanceof HTMLElement ? target : getProductCardElement(target);
+  if (!element) return;
+  element.classList.add('product-card--highlight');
+  const existingTimer = highlightTimers.get(element);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+  const timer = setTimeout(() => {
+    element.classList.remove('product-card--highlight');
+    highlightTimers.delete(element);
+  }, 2400);
+  highlightTimers.set(element, timer);
+}
+
+function escapeSelector(value) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return String(value).replace(/['"\\]/g, '\\$&');
 }
 
 function handleCategoryCheckboxChange(event, label) {

@@ -40,6 +40,12 @@
               class="discount-field__input"
             />
           </label>
+          <label for="catalogue-tree" class="catalogue-tree-field">
+            <span class="sr-only">Parcourir l'arborescence des articles</span>
+            <select id="catalogue-tree" class="catalogue-tree-select">
+              <option value="">Arborescence du catalogue</option>
+            </select>
+          </label>
           <button id="generate-pdf" class="btn-primary">
             Générer le devis PDF
           </button>
@@ -49,7 +55,7 @@
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
+          <header class="flex flex-col gap-4 rounded-xl bg-white p-6 shadow-sm brand-surface">
             <div>
               <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
               <p class="mt-1 text-sm text-slate-500 brand-text-muted">
@@ -109,10 +115,10 @@
               </div>
             </div>
           </header>
-          <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
+          <div id="product-feedback" class="hidden rounded-xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
           <div id="product-grid" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
         </section>
-        <aside id="quote-panel" class="split-panel rounded-2xl bg-white p-6 shadow-lg brand-surface">
+        <aside id="quote-panel" class="split-panel rounded-xl bg-white p-6 shadow-lg brand-surface">
           <footer class="quote-summary-panel border-b border-slate-200 pb-4">
             <dl class="space-y-2 text-sm text-slate-600">
               <div class="flex items-center justify-between">
@@ -172,7 +178,7 @@
     </main>
 
     <template id="product-card-template">
-      <article class="product-card group flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm transition">
+      <article class="product-card group flex h-full flex-col rounded-xl bg-white p-5 shadow-sm transition">
         <div class="product-image-frame">
           <img class="product-image" alt="" />
           <div class="product-reference-badge">
