@@ -232,10 +232,10 @@ function formatEcotaxUnitText(item) {
   const amount = Number.isFinite(item?.baseEcotax) ? item.baseEcotax : 0;
   const formatted = currencyFormatter.format(amount);
   if (item?.quantityMode === 'area') {
-    return `Écotaxe : ${formatted} / m²`;
+    return `Écopart : ${formatted} / m²`;
   }
   const unitLabel = item?.unit ? item.unit.toLowerCase() : "pièce";
-  return `Écotaxe : ${formatted} / ${unitLabel}`;
+  return `Écopart : ${formatted} / ${unitLabel}`;
 }
 
 function formatWeightLabel(weight) {
@@ -796,7 +796,7 @@ function generatePdf() {
   const margin = 48;
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFillColor(37, 99, 235);
+  doc.setFillColor(25, 63, 96);
   doc.rect(0, 0, pageWidth, 120, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
@@ -816,7 +816,7 @@ function generatePdf() {
     align: 'right',
   });
 
-  doc.setTextColor(30, 41, 59);
+  doc.setTextColor(18, 38, 63);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   let y = 150;
@@ -853,7 +853,7 @@ function generatePdf() {
     const unitEcotax = getUnitEcotax(item);
     const ecotaxUnitLabel =
       item.quantityMode === 'area' ? ' / m²' : ` / ${(item.unit || 'pièce').toLowerCase()}`;
-    designationLines.push(`Écotaxe : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
+    designationLines.push(`Écopart : ${currencyFormatter.format(unitEcotax)}${ecotaxUnitLabel}`);
     const weightValue = formatWeightValue(item.weight);
     if (weightValue) {
       designationLines.push(`Poids unitaire : ${weightValue}`);
@@ -882,10 +882,10 @@ function generatePdf() {
 
   doc.autoTable({
     startY: y + 90,
-    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écotaxe', 'Total HT']],
+    head: [['Référence', 'Désignation', 'Détails quantités', 'PU HT', 'Écopart', 'Total HT']],
     body,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [18, 38, 63] },
+    headStyles: { fillColor: [25, 63, 96], textColor: 255, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 70 },
       1: { cellWidth: 160 },
@@ -905,13 +905,13 @@ function generatePdf() {
     body: [
       ['Total HT produits', currencyFormatter.format(productsSubtotal)],
       [`Remise (${numberFormatter.format(state.discountRate)} %)`, `-${currencyFormatter.format(discountAmount)}`],
-      ['Écotaxe totale', currencyFormatter.format(ecotaxTotal)],
-      ['Base HT après remise + écotaxe', currencyFormatter.format(net)],
+      ['Écopart totale', currencyFormatter.format(ecotaxTotal)],
+      ['Base HT après remise + Écopart', currencyFormatter.format(net)],
       [`TVA (${numberFormatter.format(state.vatRate * 100)} %)`, currencyFormatter.format(vat)],
       ['Total TTC', currencyFormatter.format(total)],
     ],
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+      styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, textColor: [18, 38, 63] },
+      headStyles: { fillColor: [241, 245, 249], textColor: [18, 38, 63], fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 200 },
       1: { halign: 'right', cellWidth: 120 },
@@ -959,13 +959,13 @@ function generatePdf() {
       const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
+    doc.setTextColor(146, 151, 170);
       doc.text('Deviseur Express - SAS au capital de 50 000 € - SIRET 123 456 789 00000', margin, pageHeight - 36);
       doc.text('12 avenue des Solutions, 75000 Paris - www.deviseurexpress.fr', margin, pageHeight - 22);
       doc.text(`Document généré le ${issueDateLabel}`, pageWidth - margin, pageHeight - 36, { align: 'right' });
       doc.text(`Page ${pageNumber}/${pageCount}`, pageWidth - margin, pageHeight - 22, { align: 'right' });
     }
-    doc.setTextColor(30, 41, 59);
+    doc.setTextColor(18, 38, 63);
   };
 
   addFooter();
