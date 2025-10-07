@@ -18,13 +18,13 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <nav class="site-nav fixed inset-x-0 top-0 z-40">
+    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="false">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
           <div>
             <p class="brand-title">ID GROUP Devis</p>
-            <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
+            <p class="brand-subtitle" aria-hidden="true">Créez vos offres sur mesure en un instant</p>
           </div>
           <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
@@ -46,6 +46,14 @@
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
           <div class="site-nav__cart-actions">
+            <label for="save-name" class="site-nav__save-label">Nom de sauvegarde</label>
+            <input
+              id="save-name"
+              type="text"
+              placeholder="Ex. DUPONT Offre"
+              maxlength="60"
+              class="site-nav__save-input"
+            />
             <button id="save-cart" type="button" class="btn-secondary">Sauvegarder mon panier</button>
             <button id="restore-cart" type="button" class="btn-secondary">Restaurer un panier</button>
             <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
@@ -60,6 +68,8 @@
               step="0.5"
               value="0"
               class="discount-field__input"
+              readonly
+              aria-readonly="true"
             />
           </label>
           <button id="generate-pdf" class="btn-primary">
@@ -361,6 +371,30 @@
               <button id="product-modal-close" class="btn-secondary">Fermer</button>
             </div>
           </div>
+      </div>
+    </div>
+
+    <section id="client-form-placeholder" class="client-form-placeholder hidden" tabindex="-1" aria-hidden="true">
+      <div class="client-form-placeholder__content">
+        <h2>Formulaire client</h2>
+        <p>Ce formulaire sera bientôt disponible pour compléter les informations du client non identifié.</p>
+      </div>
+    </section>
+
+    <div
+      id="webhook-toast"
+      class="webhook-toast"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-hidden="true"
+    >
+      <div class="webhook-toast__content" role="dialog" aria-labelledby="webhook-toast-title">
+        <div class="webhook-toast__header">
+          <h2 id="webhook-toast-title">Résultat du webhook</h2>
+          <button type="button" class="webhook-toast__close" aria-label="Fermer la notification">&times;</button>
+        </div>
+        <div id="webhook-toast-body" class="webhook-toast__body"></div>
       </div>
     </div>
 
