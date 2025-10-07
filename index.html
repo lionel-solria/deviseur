@@ -26,13 +26,29 @@
             <p class="brand-title">ID GROUP Devis</p>
             <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
           </div>
+          <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
         <div class="site-nav__actions">
-          <div class="site-nav__tree">
-            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
-            <select id="catalogue-tree" class="site-nav__tree-select">
-              <option value="">Sélectionner une catégorie ou un article</option>
-            </select>
+          <form id="siret-form" class="site-nav__identity" autocomplete="off">
+            <label for="siret-input" class="site-nav__identity-label">Identification SIRET</label>
+            <div class="site-nav__identity-controls">
+              <input
+                id="siret-input"
+                name="siret"
+                type="text"
+                inputmode="numeric"
+                maxlength="14"
+                placeholder="Numéro SIRET (14 chiffres)"
+                class="site-nav__identity-input"
+              />
+              <button id="siret-submit" type="submit" class="btn-secondary">Identifier</button>
+            </div>
+            <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
+          </form>
+          <div class="site-nav__cart-actions">
+            <button id="save-cart" type="button" class="btn-secondary">Sauvegarder mon panier</button>
+            <button id="restore-cart" type="button" class="btn-secondary">Restaurer un panier</button>
+            <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
           </div>
           <label for="header-discount" class="discount-field">
             <span>Remise (%)</span>
@@ -49,13 +65,19 @@
           <button id="generate-pdf" class="btn-primary">
             Générer le devis PDF
           </button>
+          <div class="site-nav__tree">
+            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
+            <select id="catalogue-tree" class="site-nav__tree-select">
+              <option value="">Sélectionner une catégorie ou un article</option>
+            </select>
+          </div>
         </div>
       </div>
     </nav>
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
+          <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
             <div>
               <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
               <p class="mt-1 text-sm text-slate-500 brand-text-muted">

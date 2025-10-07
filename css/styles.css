@@ -14,6 +14,7 @@
   --color-muted: #9297aa;
   --color-muted-strong: #4a5364;
   --color-border: #a5b7c6;
+  --site-nav-height: 6.25rem;
 }
 
 .site-body {
@@ -143,6 +144,7 @@ textarea {
   width: 3rem;
   height: 3rem;
   object-fit: contain;
+  cursor: pointer;
 }
 
 .brand-title {
@@ -172,9 +174,10 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 16rem;
-  flex: 1 1 16rem;
-  width: min(100%, 24rem);
+  min-width: 10rem;
+  flex: 0 1 12rem;
+  width: min(100%, 14rem);
+  margin-left: auto;
 }
 
 .site-nav__tree-label {
@@ -195,6 +198,137 @@ textarea {
   font-size: 0.85rem;
   color: var(--color-muted-strong);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.webhook-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  background: rgba(25, 63, 96, 0.08);
+  color: var(--color-secondary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(25, 63, 96, 0.12);
+}
+
+.webhook-mode-badge[data-mode='test'] {
+  background: rgba(234, 97, 26, 0.12);
+  border-color: rgba(234, 97, 26, 0.35);
+  color: var(--color-accent);
+}
+
+.site-nav__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 18rem;
+  flex: 1 1 18rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(25, 63, 96, 0.1);
+  position: relative;
+}
+
+.site-nav__identity-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.site-nav__identity-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.site-nav__identity-input {
+  flex: 1;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(25, 63, 96, 0.18);
+  background: #fff;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--color-secondary);
+}
+
+.site-nav__identity-input:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.2);
+}
+
+.site-nav__identity-feedback {
+  font-size: 0.75rem;
+  min-height: 1rem;
+  color: var(--color-muted-strong);
+}
+
+.site-nav__identity[data-status='loading'] .site-nav__identity-feedback {
+  color: var(--color-secondary);
+}
+
+.site-nav__identity[data-status='success'] {
+  border-color: rgba(124, 155, 72, 0.4);
+  box-shadow: 0 0 0 3px rgba(124, 155, 72, 0.18);
+}
+
+.site-nav__identity[data-status='success'] .site-nav__identity-feedback {
+  color: var(--color-highlight);
+  font-weight: 600;
+}
+
+.site-nav__identity[data-status='error'] {
+  border-color: rgba(228, 30, 40, 0.35);
+  box-shadow: 0 0 0 3px rgba(228, 30, 40, 0.12);
+}
+
+.site-nav__identity[data-status='error'] .site-nav__identity-feedback {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.site-nav__identity button[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.site-nav__cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.site-nav__cart-actions .btn-secondary {
+  white-space: nowrap;
+}
+
+.catalogue-header {
+  position: sticky;
+  top: calc(var(--site-nav-height) + 1rem);
+  z-index: 10;
+  backdrop-filter: blur(6px);
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.catalogue-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  z-index: -1;
 }
 
 .site-nav__tree-select:focus {
@@ -1097,6 +1231,14 @@ textarea {
     justify-content: flex-start;
   }
 
+  .site-nav__identity,
+  .site-nav__cart-actions,
+  .site-nav__tree {
+    width: 100%;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
   #main-layout {
     gap: 1rem;
   }
@@ -1115,6 +1257,15 @@ textarea {
   }
 
   .site-nav__actions .btn-primary {
+    width: 100%;
+  }
+
+  .site-nav__cart-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .site-nav__cart-actions .btn-secondary {
     width: 100%;
   }
 
