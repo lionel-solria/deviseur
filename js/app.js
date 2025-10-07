@@ -56,6 +56,8 @@ const WEBHOOK_ENDPOINTS = {
   test: 'https://aiid.app.n8n.cloud/webhook-test/deviseur',
 };
 
+const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
+
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 
 const CART_SNAPSHOT_VERSION = 1;
@@ -116,6 +118,7 @@ const elements = {
   summaryEcotax: document.getElementById('summary-ecotax'),
   summaryProducts: document.getElementById('summary-products'),
   generatePdf: document.getElementById('generate-pdf'),
+  submitOrder: document.getElementById('submit-order'),
   modalBackdrop: document.getElementById('product-modal'),
   modalImage: document.getElementById('product-modal-image'),
   modalTitle: document.getElementById('product-modal-title'),
@@ -130,7 +133,6 @@ const elements = {
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
   brandLogo: document.querySelector('.brand-logo'),
-  webhookModeBadge: document.getElementById('webhook-mode-badge'),
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
@@ -155,7 +157,10 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
-  elements.generatePdf?.addEventListener('click', generatePdf);
+  elements.generatePdf?.addEventListener('click', () => {
+    generatePdf();
+  });
+  elements.submitOrder?.addEventListener('click', handleSubmitOrder);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
   elements.saveNameInput?.addEventListener('input', handleSaveNameInput);
@@ -165,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
-  elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   setupModal();
@@ -179,7 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
   syncDiscountInputs();
   syncGeneralCommentInput();
   syncSaveNameInput();
-  updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
 });
@@ -946,7 +949,7 @@ function handleSaveCart() {
   }
   const saveName = (state.saveName || '').trim();
   if (!saveName) {
-    toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
+    toggleFeedback('Indiquez un nom pour identifier votre proposition.', 'warning');
     return;
   }
   try {
@@ -972,6 +975,67 @@ function handleSaveCart() {
   } catch (error) {
     console.error(error);
     toggleFeedback('Impossible de sauvegarder le panier. Merci de réessayer.', 'error');
+  }
+}
+
+async function handleSubmitOrder() {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez des articles avant de passer commande.', 'warning');
+    return;
+  }
+  const confirmation = window.confirm(
+    "Confirmez-vous vouloir passer cette commande auprès d'ID GROUP ?",
+  );
+  if (!confirmation) {
+    return;
+  }
+  const button = elements.submitOrder;
+  if (button) {
+    button.disabled = true;
+  }
+  try {
+    const pdfResult = await generatePdf({ download: false, returnBlob: true });
+    if (!pdfResult || !pdfResult.blob || !pdfResult.quoteNumber) {
+      throw new Error('PDF manquant');
+    }
+
+    toggleFeedback('Envoi de la commande en cours...', 'info');
+
+    const snapshot = buildCartSnapshot();
+    const snapshotJson = JSON.stringify(snapshot, null, 2);
+    const now = new Date();
+    const dateSegment = formatDateForFilename(now);
+    const slug = normaliseFileSegment(state.saveName || '') || CART_FILENAME_PREFIX;
+    const clientCode = getClientCodeForFilename();
+    const cartFilename = `${slug}-${clientCode}-${dateSegment}.json`;
+    const pdfFilename = `devis-${pdfResult.quoteNumber}.pdf`;
+
+    const formData = new FormData();
+    formData.append('document', pdfResult.blob, pdfFilename);
+    formData.append('cart', new Blob([snapshotJson], { type: 'application/json' }), cartFilename);
+    formData.append('quoteNumber', pdfResult.quoteNumber);
+    if (state.saveName) {
+      formData.append('saveName', state.saveName);
+    }
+    if (state.identifiedClient) {
+      formData.append('identifiedClient', JSON.stringify(state.identifiedClient));
+    }
+
+    const response = await fetch(ORDER_WEBHOOK_URL, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error(`Statut ${response.status}`);
+    }
+    toggleFeedback('La commande a été transmise à ID GROUP.', 'info');
+  } catch (error) {
+    console.error(error);
+    toggleFeedback("Impossible d'envoyer la commande. Merci de réessayer.", 'error');
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
   }
 }
 
@@ -1612,29 +1676,6 @@ function handleClientIdentityReset() {
   }
 }
 
-function toggleWebhookMode() {
-  state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
-  state.identifiedClient = null;
-  updateDiscountRate(0);
-  updateWebhookModeIndicator();
-  setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
-  closeWebhookPanel();
-  closeClientFormPlaceholder();
-}
-
-function updateWebhookModeIndicator() {
-  if (!elements.webhookModeBadge) {
-    return;
-  }
-  const mode = state.webhookMode === 'test' ? 'test' : 'production';
-  elements.webhookModeBadge.textContent = mode === 'test' ? 'Test' : 'Production';
-  elements.webhookModeBadge.dataset.mode = mode;
-  elements.webhookModeBadge.setAttribute(
-    'aria-label',
-    mode === 'test' ? 'Mode webhook test actif' : 'Mode webhook production actif',
-  );
-}
-
 function getActiveWebhookUrl() {
   return WEBHOOK_ENDPOINTS[state.webhookMode] || WEBHOOK_ENDPOINTS.production;
 }
@@ -1693,10 +1734,13 @@ function clampPercentage(value) {
   return Math.min(100, Math.max(0, numeric));
 }
 
-async function generatePdf() {
+async function generatePdf(options = {}) {
+  const { download = true, returnBlob = false } = options;
   if (!state.quote.size) {
-    toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
-    return;
+    if (download) {
+      toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
+    }
+    return null;
   }
   toggleFeedback('', 'hide');
   const items = Array.from(state.quote.values());
@@ -2089,7 +2133,18 @@ async function generatePdf() {
   };
 
   addFooter();
-  doc.save(`devis-${quoteNumber}.pdf`);
+
+  const filename = `devis-${quoteNumber}.pdf`;
+  const blob = returnBlob ? doc.output('blob') : null;
+  if (download) {
+    doc.save(filename);
+  }
+  return {
+    quoteNumber,
+    issueDate: issueDateLabel,
+    validity: validityLabel,
+    blob,
+  };
 }
 
 async function getBrandLogoDataUrl() {
