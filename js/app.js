@@ -59,6 +59,13 @@ const WEBHOOK_ENDPOINTS = {
 const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
 
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
+const SIRET_INVALID_MESSAGE = 'Saisissez un numéro de SIRET valide (14 chiffres).';
+const NEW_CLIENT_GUIDANCE =
+  "Merci de remplir le <a href='" +
+  NEW_CLIENT_URL +
+  "' target='_blank' rel='noopener'>formulaire Nouveau client</a>.";
+const MAX_DEBUG_LOGS = 200;
+const DEBUG_TOOLTIP_OFFSET = 14;
 
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
@@ -86,6 +93,9 @@ const state = {
   isIdentifyingClient: false,
   identifiedClient: null,
   webhookPanelTimeout: null,
+  debugMode: false,
+  debugLogs: [],
+  tooltipObserver: null,
 };
 
 const elements = {
@@ -151,6 +161,14 @@ const elements = {
   clientIdentityMeta: document.getElementById('client-identity-meta'),
   clientIdentityRegister: document.getElementById('client-identity-register'),
   clientIdentityReset: document.getElementById('client-identity-reset'),
+  debugPanel: null,
+  debugPanelBody: null,
+  debugTooltip: null,
+};
+
+const debugPointerState = {
+  label: '',
+  target: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -176,6 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupResponsiveSplit();
   setupCategoryFilter();
   setupNavAutoHide();
+  setupFieldTooltips();
+  setupDebugInfrastructure();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
@@ -183,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
   syncDiscountInputs();
   syncGeneralCommentInput();
   syncSaveNameInput();
+  updateDebugModeFromSaveName(elements.saveNameInput?.value || '');
   updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
@@ -219,6 +240,372 @@ function setupNavAutoHide() {
     return;
   }
   nav.dataset.collapsed = 'false';
+}
+
+function setupFieldTooltips() {
+  applyFieldTooltips(document.body);
+  if (state.tooltipObserver) {
+    state.tooltipObserver.disconnect();
+  }
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => {
+        if (node instanceof Element) {
+          applyFieldTooltips(node);
+        }
+      });
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  state.tooltipObserver = observer;
+}
+
+function applyFieldTooltips(root) {
+  if (!(root instanceof Element)) {
+    return;
+  }
+
+  const associatedLabels = root.querySelectorAll('label[for]');
+  associatedLabels.forEach((label) => {
+    const controlId = label.getAttribute('for');
+    if (!controlId) {
+      return;
+    }
+    const control = document.getElementById(controlId);
+    if (!control) {
+      return;
+    }
+    const labelText = getLabelContent(label);
+    applyTooltipToField(control, labelText);
+  });
+
+  const wrappingLabels = root.querySelectorAll('label:not([for])');
+  wrappingLabels.forEach((label) => {
+    const control = label.querySelector('input, select, textarea');
+    if (!control) {
+      return;
+    }
+    const labelText = getLabelContent(label);
+    applyTooltipToField(control, labelText);
+  });
+
+  const fields = root.querySelectorAll('input, select, textarea');
+  fields.forEach((field) => {
+    if (field.dataset.tooltipInitialized === 'true') {
+      return;
+    }
+    const sources = [
+      field.getAttribute('title'),
+      field.getAttribute('aria-label'),
+      field.getAttribute('placeholder'),
+      field.name,
+    ];
+    const fallback = sources.find((value) => typeof value === 'string' && value.trim().length > 0);
+    if (fallback) {
+      applyTooltipToField(field, fallback);
+    }
+  });
+}
+
+function getLabelContent(label) {
+  if (!(label instanceof Element)) {
+    return '';
+  }
+  const clone = label.cloneNode(true);
+  clone.querySelectorAll('input, select, textarea').forEach((element) => element.remove());
+  return clone.textContent ? clone.textContent.trim().replace(/\s+/g, ' ') : '';
+}
+
+function applyTooltipToField(field, labelText) {
+  if (!field || !labelText) {
+    return;
+  }
+  const text = String(labelText).trim().replace(/\s+/g, ' ');
+  if (!text) {
+    return;
+  }
+  field.title = text;
+  field.dataset.debugLabel = text;
+  field.dataset.tooltipInitialized = 'true';
+}
+
+function setupDebugInfrastructure() {
+  document.addEventListener('mousemove', handleDebugPointerMove);
+  document.addEventListener('mouseleave', handleDebugPointerLeave);
+}
+
+function ensureDebugPanel() {
+  if (elements.debugPanel) {
+    return elements.debugPanel;
+  }
+  const panel = document.createElement('div');
+  panel.className = 'debug-panel';
+  panel.dataset.open = 'false';
+  panel.setAttribute('role', 'log');
+  panel.setAttribute('aria-live', 'polite');
+  const header = document.createElement('div');
+  header.className = 'debug-panel__header';
+  header.textContent = 'Mode debug';
+  const body = document.createElement('div');
+  body.className = 'debug-panel__body';
+  panel.appendChild(header);
+  panel.appendChild(body);
+  document.body.appendChild(panel);
+  elements.debugPanel = panel;
+  elements.debugPanelBody = body;
+  makeDebugPanelDraggable(panel, header);
+  return panel;
+}
+
+function makeDebugPanelDraggable(panel, handle) {
+  if (!panel || !handle) {
+    return;
+  }
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initialLeft = 0;
+  let initialTop = 0;
+
+  const handleMouseMove = (event) => {
+    if (!isDragging) {
+      return;
+    }
+    const deltaX = event.clientX - startX;
+    const deltaY = event.clientY - startY;
+    panel.style.left = `${initialLeft + deltaX}px`;
+    panel.style.top = `${initialTop + deltaY}px`;
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) {
+      return;
+    }
+    isDragging = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  handle.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    isDragging = true;
+    startX = event.clientX;
+    startY = event.clientY;
+    const rect = panel.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    panel.style.left = `${initialLeft}px`;
+    panel.style.top = `${initialTop}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  });
+}
+
+function renderDebugPanel() {
+  const panel = ensureDebugPanel();
+  const body = elements.debugPanelBody;
+  if (!body) {
+    return;
+  }
+  body.innerHTML = '';
+  state.debugLogs.forEach((entry) => {
+    appendDebugEntry(entry);
+  });
+  panel.dataset.open = state.debugMode ? 'true' : 'false';
+  if (!panel.style.left) {
+    panel.style.top = '6rem';
+    panel.style.right = '1.5rem';
+  }
+}
+
+function appendDebugEntry(entry) {
+  const body = elements.debugPanelBody;
+  if (!body) {
+    return;
+  }
+  const item = document.createElement('div');
+  item.className = 'debug-panel__entry';
+  const time = document.createElement('div');
+  time.className = 'debug-panel__timestamp';
+  time.textContent = formatDebugTimestamp(entry.timestamp);
+  const message = document.createElement('div');
+  message.className = 'debug-panel__message';
+  message.textContent = entry.message;
+  item.appendChild(time);
+  item.appendChild(message);
+  if (entry.details) {
+    const details = document.createElement('pre');
+    details.className = 'debug-panel__details';
+    details.textContent = entry.details;
+    item.appendChild(details);
+  }
+  body.appendChild(item);
+  body.scrollTop = body.scrollHeight;
+}
+
+function logDebug(message, details = null) {
+  const entry = {
+    timestamp: new Date(),
+    message: typeof message === 'string' ? message : String(message ?? ''),
+    details: normaliseDebugDetails(details),
+  };
+  state.debugLogs.push(entry);
+  if (state.debugLogs.length > MAX_DEBUG_LOGS) {
+    state.debugLogs.shift();
+  }
+  if (state.debugMode) {
+    ensureDebugPanel();
+    appendDebugEntry(entry);
+  }
+}
+
+function normaliseDebugDetails(details) {
+  if (details === null || details === undefined) {
+    return '';
+  }
+  if (typeof details === 'string') {
+    return details;
+  }
+  try {
+    return JSON.stringify(details, null, 2);
+  } catch (error) {
+    return String(details);
+  }
+}
+
+function formatDebugTimestamp(date) {
+  if (!(date instanceof Date)) {
+    return '';
+  }
+  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function ensureDebugTooltip() {
+  if (elements.debugTooltip) {
+    return elements.debugTooltip;
+  }
+  const tooltip = document.createElement('div');
+  tooltip.className = 'debug-tooltip';
+  tooltip.hidden = true;
+  document.body.appendChild(tooltip);
+  elements.debugTooltip = tooltip;
+  return tooltip;
+}
+
+function showDebugTooltip(label, x, y) {
+  const tooltip = ensureDebugTooltip();
+  if (!tooltip) {
+    return;
+  }
+  tooltip.textContent = label;
+  tooltip.style.left = `${x + DEBUG_TOOLTIP_OFFSET}px`;
+  tooltip.style.top = `${y + DEBUG_TOOLTIP_OFFSET}px`;
+  tooltip.hidden = false;
+}
+
+function hideDebugTooltip() {
+  if (elements.debugTooltip) {
+    elements.debugTooltip.hidden = true;
+  }
+  debugPointerState.label = '';
+  debugPointerState.target = null;
+}
+
+function getDebugLabel(element) {
+  if (!element) {
+    return '';
+  }
+  if (element.dataset && typeof element.dataset.debugLabel === 'string') {
+    const value = element.dataset.debugLabel.trim();
+    if (value) {
+      return value;
+    }
+  }
+  const aria = element.getAttribute?.('aria-label');
+  if (aria) {
+    return aria;
+  }
+  if (element.name) {
+    return element.name;
+  }
+  if (element.id) {
+    return `#${element.id}`;
+  }
+  if (element.tagName) {
+    return element.tagName.toLowerCase();
+  }
+  return '';
+}
+
+function handleDebugPointerMove(event) {
+  if (!state.debugMode) {
+    return;
+  }
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) {
+    hideDebugTooltip();
+    return;
+  }
+  const debugTarget = target.closest(
+    '[data-debug-label], input, select, textarea, button, form, a, [id]'
+  );
+  if (!debugTarget) {
+    hideDebugTooltip();
+    return;
+  }
+  const label = getDebugLabel(debugTarget);
+  if (!label) {
+    hideDebugTooltip();
+    return;
+  }
+  if (debugPointerState.target !== debugTarget || debugPointerState.label !== label) {
+    debugPointerState.target = debugTarget;
+    debugPointerState.label = label;
+    showDebugTooltip(label, event.clientX, event.clientY);
+  } else {
+    showDebugTooltip(label, event.clientX, event.clientY);
+  }
+}
+
+function handleDebugPointerLeave() {
+  hideDebugTooltip();
+}
+
+function updateDebugModeFromSaveName(value) {
+  const containsKeyword = typeof value === 'string' && value.toLowerCase().includes('debug');
+  if (containsKeyword && !state.debugMode) {
+    enableDebugMode();
+  } else if (!containsKeyword && state.debugMode) {
+    disableDebugMode();
+  }
+}
+
+function enableDebugMode() {
+  if (state.debugMode) {
+    return;
+  }
+  state.debugMode = true;
+  ensureDebugPanel();
+  ensureDebugTooltip();
+  renderDebugPanel();
+  logDebug('Mode debug activé via le champ Proposition.');
+}
+
+function disableDebugMode() {
+  if (!state.debugMode) {
+    return;
+  }
+  state.debugMode = false;
+  hideDebugTooltip();
+  if (elements.debugPanel) {
+    elements.debugPanel.dataset.open = 'false';
+  }
+  logDebug('Mode debug désactivé.');
 }
 
 async function loadCatalogue() {
@@ -859,6 +1246,7 @@ function syncGeneralCommentInput() {
 function handleSaveNameInput(event) {
   const value = typeof event.target.value === 'string' ? event.target.value : '';
   state.saveName = value;
+  updateDebugModeFromSaveName(value);
 }
 
 function syncSaveNameInput() {
@@ -1069,6 +1457,7 @@ function applyCartSnapshot(snapshot) {
     state.saveName = '';
   }
   syncSaveNameInput();
+  updateDebugModeFromSaveName(state.saveName);
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
@@ -1170,10 +1559,11 @@ async function handleSiretSubmit(event) {
   }
   const siret = (elements.siretInput?.value || '').replace(/\D/g, '');
   if (siret.length !== 14) {
-    setIdentificationState('error', 'Saisissez un numéro de SIRET valide (14 chiffres).');
+    setIdentificationState('error', SIRET_INVALID_MESSAGE);
     return;
   }
   const endpoint = getActiveWebhookUrl();
+  logDebug('Identification SIRET demandée.', { siret, endpoint });
   state.isIdentifyingClient = true;
   setIdentificationState('loading', 'Identification en cours...');
   try {
@@ -1182,6 +1572,7 @@ async function handleSiretSubmit(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ siret }),
     });
+    logDebug('Réponse webhook reçue.', { status: response.status, ok: response.ok });
     if (!response.ok) {
       throw new Error(`Requête webhook échouée (${response.status})`);
     }
@@ -1198,6 +1589,12 @@ async function handleSiretSubmit(event) {
       }
     }
     const result = normaliseWebhookResponse(payload, siret);
+    logDebug('Réponse webhook normalisée.', {
+      identified: result.identified,
+      companyName: result.companyName || '',
+      statusLabel: result.statusLabel || '',
+      discountRate: result.discountRate,
+    });
     state.identifiedClient = result;
     updateDiscountRate(typeof result.discountRate === 'number' ? result.discountRate : 0);
     updateIdentificationFromState();
@@ -1210,6 +1607,7 @@ async function handleSiretSubmit(event) {
   } catch (error) {
     console.error(error);
     setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    logDebug("Erreur lors de l'identification.", error instanceof Error ? error.message : error);
     updateDiscountRate(0);
     closeWebhookPanel();
     closeClientFormPlaceholder();
@@ -1485,10 +1883,11 @@ function buildIdentificationMessage(result) {
     return '';
   }
   if (!result.identified) {
-    return result.statusLabel || 'Client non identifié';
+    const status = typeof result.statusLabel === 'string' ? result.statusLabel.trim() : '';
+    return status || 'Client non identifié';
   }
   if (!result.companyName) {
-    return "Client non référencé. Merci de vous enregistrer comme nouveau client.";
+    return 'Client non référencé';
   }
   const parts = [];
   if (result.companyName) {
@@ -1557,6 +1956,27 @@ function renderClientIdentity() {
   }
 }
 
+function buildSiretErrorMessage(message) {
+  const raw = typeof message === 'string' ? message.trim() : '';
+  const safeBase = raw ? escapeHtml(raw) : '';
+  if (!safeBase) {
+    return NEW_CLIENT_GUIDANCE;
+  }
+  if (raw === SIRET_INVALID_MESSAGE) {
+    return safeBase;
+  }
+  return `${safeBase} ${NEW_CLIENT_GUIDANCE}`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function setIdentificationState(status, message = null) {
   if (elements.siretForm) {
     elements.siretForm.dataset.status = status;
@@ -1570,7 +1990,11 @@ function setIdentificationState(status, message = null) {
   }
   if (elements.siretFeedback) {
     if (message !== null) {
-      elements.siretFeedback.textContent = message;
+      if (status === 'error') {
+        elements.siretFeedback.innerHTML = buildSiretErrorMessage(message);
+      } else {
+        elements.siretFeedback.textContent = message;
+      }
     } else if (status === 'idle') {
       elements.siretFeedback.textContent = '';
     }
@@ -2335,6 +2759,7 @@ function openClientFormPlaceholder(siret, options = {}) {
       : `Le client n'a pas été reconnu. Vous pouvez ${link} pour accéder à nos services.`;
   }
   container.dataset.open = 'true';
+  logDebug('Ouverture du formulaire nouveau client.', { siret: formatSiret(siret) });
   if (options.scroll !== false) {
     container.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
