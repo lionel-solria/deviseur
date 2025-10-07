@@ -21,13 +21,45 @@
     <nav class="site-nav fixed inset-x-0 top-0 z-40">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
-          <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+          <button
+            id="webhook-toggle"
+            type="button"
+            class="brand-logo-button"
+            aria-live="polite"
+            aria-label="Basculer l'environnement webhook"
+          >
+            <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+          </button>
           <div>
             <p class="brand-title">ID GROUP Devis</p>
             <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
+            <p id="webhook-mode-indicator" class="webhook-mode-indicator">Webhook : Production</p>
           </div>
         </div>
         <div class="site-nav__actions">
+          <div class="site-nav__tools">
+            <form id="siret-form" class="site-nav__siret" novalidate>
+              <label for="siret-input" class="site-nav__siret-label">Identification client (SIRET)</label>
+              <div class="siret-input-group">
+                <input
+                  id="siret-input"
+                  name="siret"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="Saisir un numéro SIRET"
+                  class="siret-input"
+                  maxlength="19"
+                />
+                <button id="siret-submit" type="submit" class="btn-secondary">Valider</button>
+              </div>
+              <p id="siret-feedback" class="siret-feedback" aria-live="polite"></p>
+            </form>
+            <div class="site-nav__cart-controls">
+              <button id="save-cart" type="button" class="btn-secondary">Sauvegarder mon panier</button>
+              <button id="restore-cart" type="button" class="btn-secondary">Restaurer mon panier</button>
+              <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+            </div>
+          </div>
           <div class="site-nav__tree">
             <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
             <select id="catalogue-tree" class="site-nav__tree-select">
@@ -55,7 +87,7 @@
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
+          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface catalogue-toolbar">
             <div>
               <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
               <p class="mt-1 text-sm text-slate-500 brand-text-muted">

@@ -1,6 +1,10 @@
 const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 const brandLogoAssetPath = 'media/ID%20GROUP.png';
+const WEBHOOK_ENDPOINTS = {
+  production: 'https://aiid.app.n8n.cloud/webhook/deviseur',
+  test: 'https://aiid.app.n8n.cloud/webhook-test/deviseur',
+};
 
 const COMPANY_IDENTITY = {
   name: 'ID GROUP',
@@ -68,6 +72,9 @@ const state = {
   lastFocusElement: null,
   categoryMenuOpen: false,
   brandLogoDataUrl: undefined,
+  webhookMode: 'production',
+  clientIdentity: null,
+  isIdentifyingClient: false,
 };
 
 const elements = {
@@ -92,6 +99,15 @@ const elements = {
   headerDiscount: document.getElementById('header-discount'),
   discount: document.getElementById('discount'),
   generalComment: document.getElementById('general-comment'),
+  saveCart: document.getElementById('save-cart'),
+  restoreCart: document.getElementById('restore-cart'),
+  restoreCartInput: document.getElementById('restore-cart-input'),
+  siretForm: document.getElementById('siret-form'),
+  siretInput: document.getElementById('siret-input'),
+  siretSubmit: document.getElementById('siret-submit'),
+  siretFeedback: document.getElementById('siret-feedback'),
+  webhookToggle: document.getElementById('webhook-toggle'),
+  webhookModeIndicator: document.getElementById('webhook-mode-indicator'),
   summaryDiscount: document.getElementById('summary-discount'),
   summaryNet: document.getElementById('summary-net'),
   summaryVat: document.getElementById('summary-vat'),
@@ -122,6 +138,12 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
+  elements.saveCart?.addEventListener('click', handleSaveCart);
+  elements.restoreCart?.addEventListener('click', triggerRestoreCartSelection);
+  elements.restoreCartInput?.addEventListener('change', handleRestoreCartFile);
+  elements.siretForm?.addEventListener('submit', handleSiretSubmit);
+  elements.siretInput?.addEventListener('input', normaliseSiretInputValue);
+  elements.webhookToggle?.addEventListener('click', toggleWebhookMode);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
@@ -130,6 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   window.addEventListener('resize', setupResponsiveSplit);
   syncDiscountInputs();
+  updateWebhookModeIndicator();
+  setSiretFeedback('', 'info');
 });
 
 function setupResponsiveSplit() {
@@ -728,12 +752,11 @@ function removeItem(productId) {
 
 function handleDiscountChange(event) {
   const inputValue = parseFloat(String(event.target.value).replace(',', '.'));
-  const normalised = Number.isNaN(inputValue) || inputValue < 0 ? 0 : Math.min(inputValue, 100);
-  updateDiscountRate(normalised);
+  updateDiscountRate(clampPercentage(inputValue));
 }
 
 function updateDiscountRate(rate) {
-  state.discountRate = rate;
+  state.discountRate = clampPercentage(rate);
   syncDiscountInputs();
   renderProducts();
   renderQuote();
@@ -840,7 +863,7 @@ async function generatePdf() {
   const quoteNumber = `DEV-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true, putOnlyUsedFonts: true, floatPrecision: 16 });
   const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -864,7 +887,7 @@ async function generatePdf() {
   doc.roundedRect(margin, headerTop, headerWidth, headerHeight, 10, 10, 'FD');
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', margin + 18, headerTop + 22, 84, 48);
+    doc.addImage(logoDataUrl, 'PNG', margin + 18, headerTop + 22, 84, 48, undefined, 'FAST');
   }
 
   const titleX = margin + 122;
@@ -1005,11 +1028,11 @@ async function generatePdf() {
     body,
     styles: {
       font: 'helvetica',
-      fontSize: 9,
-      cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+      fontSize: 8.5,
+      cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
       textColor: colors.text,
       lineColor: colors.border,
-      lineWidth: 0.4,
+      lineWidth: 0.3,
     },
     headStyles: { fillColor: colors.primary, textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [250, 250, 252] },
@@ -1189,7 +1212,8 @@ async function getBrandLogoDataUrl() {
       throw new Error(`Statut ${response.status}`);
     }
     const blob = await response.blob();
-    const dataUrl = await blobToDataUrl(blob);
+    const optimisedBlob = await downscaleImageBlob(blob, 360);
+    const dataUrl = await blobToDataUrl(optimisedBlob);
     state.brandLogoDataUrl = dataUrl;
     return dataUrl;
   } catch (error) {
@@ -1210,6 +1234,402 @@ function blobToDataUrl(blob) {
     };
     reader.readAsDataURL(blob);
   });
+}
+
+async function downscaleImageBlob(blob, maxWidth = 320) {
+  if (!(blob instanceof Blob) || typeof maxWidth !== 'number' || maxWidth <= 0) {
+    return blob;
+  }
+  if (typeof createImageBitmap !== 'function') {
+    return blob;
+  }
+  try {
+    const imageBitmap = await createImageBitmap(blob);
+    if (!Number.isFinite(imageBitmap.width) || imageBitmap.width <= maxWidth) {
+      if (typeof imageBitmap.close === 'function') {
+        imageBitmap.close();
+      }
+      return blob;
+    }
+    const scale = Math.min(1, maxWidth / imageBitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(imageBitmap.width * scale);
+    canvas.height = Math.round(imageBitmap.height * scale);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      if (typeof imageBitmap.close === 'function') {
+        imageBitmap.close();
+      }
+      return blob;
+    }
+    context.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
+    if (typeof imageBitmap.close === 'function') {
+      imageBitmap.close();
+    }
+    const dataUrl = canvas.toDataURL('image/png', 0.85);
+    const response = await fetch(dataUrl);
+    return await response.blob();
+  } catch (error) {
+    console.warn("Impossible de réduire le poids du logo pour le PDF.", error);
+    return blob;
+  }
+}
+
+function handleSaveCart() {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez des articles avant de sauvegarder le panier.', 'warning');
+    return;
+  }
+  const serialised = serialiseQuote();
+  const blob = new Blob([JSON.stringify(serialised, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  anchor.href = url;
+  anchor.download = `panier-devis-${timestamp}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+  toggleFeedback('Panier sauvegardé au format JSON.', 'info');
+}
+
+function serialiseQuote() {
+  const items = Array.from(state.quote.values()).map((item) => ({
+    id: item.id,
+    quantityMode: item.quantityMode,
+    quantity: getItemQuantity(item),
+    length: item.quantityMode === 'area' ? Number(item.length) || 0 : null,
+    width: item.quantityMode === 'area' ? Number(item.width) || 0 : null,
+    comment: item.comment || '',
+  }));
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    discountRate: state.discountRate,
+    generalComment: state.generalComment,
+    items,
+  };
+}
+
+function triggerRestoreCartSelection() {
+  if (!elements.restoreCartInput) return;
+  elements.restoreCartInput.value = '';
+  elements.restoreCartInput.click();
+}
+
+async function handleRestoreCartFile(event) {
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if (!file) {
+    return;
+  }
+  if (!state.catalogueById.size) {
+    toggleFeedback('Le catalogue est en cours de chargement. Réessayez dans un instant.', 'warning');
+    input.value = '';
+    return;
+  }
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    restoreQuoteFromData(data);
+  } catch (error) {
+    console.error('Erreur lors de la restauration du panier', error);
+    toggleFeedback('Impossible de restaurer le panier. Vérifiez le fichier JSON.', 'error');
+  } finally {
+    input.value = '';
+  }
+}
+
+function restoreQuoteFromData(data) {
+  if (!data || !Array.isArray(data.items)) {
+    throw new Error('Structure de panier invalide.');
+  }
+  const restored = new Map();
+  const missing = [];
+  data.items.forEach((entry) => {
+    if (!entry || !entry.id) {
+      return;
+    }
+    const product = state.catalogueById.get(entry.id);
+    if (!product) {
+      missing.push(entry.id);
+      return;
+    }
+    const restoredItem = {
+      ...product,
+      comment: typeof entry.comment === 'string' ? entry.comment : '',
+      expanded: false,
+    };
+    if (product.quantityMode === 'area') {
+      const length = Math.max(0, Number(entry.length) || 0);
+      const width = Math.max(0, Number(entry.width) || 0);
+      restoredItem.length = length > 0 ? length : 1;
+      restoredItem.width = width > 0 ? width : 1;
+      const areaQuantity = Number(entry.quantity);
+      if (Number.isFinite(areaQuantity) && areaQuantity > 0) {
+        restoredItem.quantity = areaQuantity;
+      } else {
+        restoredItem.quantity = restoredItem.length * restoredItem.width;
+      }
+    } else {
+      const quantity = Number(entry.quantity);
+      restoredItem.quantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+    }
+    restored.set(product.id, restoredItem);
+  });
+  state.quote = restored;
+  if (typeof data.generalComment === 'string' && elements.generalComment) {
+    state.generalComment = data.generalComment;
+    elements.generalComment.value = data.generalComment;
+  }
+  const hasDiscount = typeof data.discountRate === 'number';
+  if (hasDiscount) {
+    updateDiscountRate(clampPercentage(data.discountRate));
+  } else {
+    renderQuote();
+  }
+  if (missing.length) {
+    const sampleList = missing.filter(Boolean);
+    const sample = sampleList.slice(0, 3).join(', ');
+    const suffix = sampleList.length > 3 ? ` et ${sampleList.length - 3} autre(s)` : '';
+    const details = sample ? ` (${sample}${suffix})` : '';
+    toggleFeedback(`Panier restauré avec ${missing.length} article(s) introuvable(s)${details}.`, 'warning');
+  } else {
+    toggleFeedback('Panier restauré avec succès.', 'info');
+  }
+}
+
+function normaliseSiretInputValue(event) {
+  if (!event?.target) return;
+  const input = event.target;
+  const digits = normaliseSiretValue(input.value);
+  input.value = formatSiretDisplay(digits);
+}
+
+function normaliseSiretValue(value) {
+  if (!value) return '';
+  return String(value).replace(/\D/g, '').slice(0, 14);
+}
+
+function formatSiretDisplay(value) {
+  if (!value) return '';
+  const parts = [];
+  parts.push(value.slice(0, 3));
+  if (value.length > 3) parts.push(value.slice(3, 6));
+  if (value.length > 6) parts.push(value.slice(6, 9));
+  if (value.length > 9) parts.push(value.slice(9));
+  return parts.filter(Boolean).join(' ');
+}
+
+async function handleSiretSubmit(event) {
+  event.preventDefault();
+  if (!elements.siretInput) return;
+  if (state.isIdentifyingClient) {
+    return;
+  }
+  const digits = normaliseSiretValue(elements.siretInput.value);
+  elements.siretInput.value = formatSiretDisplay(digits);
+  if (digits.length !== 14) {
+    setSiretFeedback('Merci de saisir un numéro SIRET valide (14 chiffres).', 'error');
+    return;
+  }
+  state.isIdentifyingClient = true;
+  setSiretFeedback('Vérification en cours...', 'loading');
+  if (elements.siretSubmit) {
+    elements.siretSubmit.disabled = true;
+  }
+  const endpoint = WEBHOOK_ENDPOINTS[state.webhookMode] || WEBHOOK_ENDPOINTS.production;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siret: digits }),
+    });
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(`Statut ${response.status}`);
+    }
+    let payload = null;
+    if (rawText) {
+      try {
+        payload = JSON.parse(rawText);
+      } catch (error) {
+        payload = { status: rawText };
+      }
+    }
+    processSiretResponse(payload, digits);
+  } catch (error) {
+    console.error("Erreur lors de l'identification client", error);
+    setSiretFeedback("Impossible de contacter le service d'identification.", 'error');
+  } finally {
+    state.isIdentifyingClient = false;
+    if (elements.siretSubmit) {
+      elements.siretSubmit.disabled = false;
+    }
+  }
+}
+
+function processSiretResponse(payload, siret) {
+  if (!payload) {
+    state.clientIdentity = null;
+    setSiretFeedback('Client non identifié.', 'warning');
+    toggleFeedback('Le client n’a pas été identifié.', 'warning');
+    return;
+  }
+  if (payload.identified === false) {
+    state.clientIdentity = null;
+    setSiretFeedback('Client non identifié.', 'warning');
+    toggleFeedback('Le client n’a pas été identifié.', 'warning');
+    return;
+  }
+  const statusLabel = [payload.status, payload.result, payload.message]
+    .map((value) => (typeof value === 'string' ? value.toLowerCase() : ''))
+    .find((value) => value);
+  if (statusLabel && statusLabel.includes('non')) {
+    state.clientIdentity = null;
+    setSiretFeedback('Client non identifié.', 'warning');
+    toggleFeedback('Le client n’a pas été identifié.', 'warning');
+    return;
+  }
+  const company = pickFirstString(payload, ['companyName', 'nomSociete', 'societe', 'company', 'raisonSociale']);
+  const email = pickFirstString(payload, ['email', 'mail', 'contactEmail']);
+  let address = pickFirstString(payload, ['address', 'adresse', 'adresseComplete']);
+  if (!address) {
+    const composed = [pickFirstString(payload, ['street', 'rue']), pickFirstString(payload, ['postalCode', 'codePostal']), pickFirstString(payload, ['city', 'ville'])]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    address = composed || '';
+  }
+  const conditions = payload.conditionsTarifaires ?? payload.conditions ?? payload.tarifs ?? null;
+  const discountUpdated = applyDiscountFromConditions(conditions);
+  const lines = [];
+  if (company) {
+    lines.push(`Société : ${company}`);
+  }
+  if (email) {
+    lines.push(`Contact : ${email}`);
+  }
+  if (address) {
+    lines.push(`Adresse : ${address}`);
+  }
+  if (discountUpdated) {
+    lines.push(`Remise appliquée : ${numberFormatter.format(state.discountRate)} %`);
+  }
+  if (!lines.length) {
+    lines.push('Client identifié.');
+  }
+  setSiretFeedback(lines.join('\n'), 'success');
+  state.clientIdentity = {
+    siret,
+    company,
+    email,
+    address,
+    conditions,
+  };
+  if (discountUpdated) {
+    toggleFeedback('Remise mise à jour selon les conditions tarifaires.', 'info');
+  }
+}
+
+function pickFirstString(source, keys) {
+  if (!source || !Array.isArray(keys)) {
+    return '';
+  }
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim().length) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function setSiretFeedback(message, status = 'info') {
+  if (!elements.siretFeedback) return;
+  if (message) {
+    elements.siretFeedback.textContent = message;
+  } else {
+    elements.siretFeedback.textContent = '';
+  }
+  elements.siretFeedback.dataset.status = status;
+}
+
+function toggleWebhookMode() {
+  state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
+  updateWebhookModeIndicator();
+  const modeLabel = state.webhookMode === 'production' ? 'production' : 'test';
+  toggleFeedback(`Mode webhook ${modeLabel} activé.`, 'info');
+}
+
+function updateWebhookModeIndicator() {
+  if (elements.webhookModeIndicator) {
+    const label = state.webhookMode === 'test' ? 'Test' : 'Production';
+    elements.webhookModeIndicator.textContent = `Webhook : ${label}`;
+    elements.webhookModeIndicator.dataset.mode = state.webhookMode;
+  }
+  if (elements.webhookToggle) {
+    elements.webhookToggle.title =
+      state.webhookMode === 'test'
+        ? 'Mode webhook actuel : Test. Cliquer pour passer en Production.'
+        : 'Mode webhook actuel : Production. Cliquer pour passer en Test.';
+  }
+}
+
+function extractDiscountFromConditions(conditions) {
+  if (conditions == null) {
+    return null;
+  }
+  if (typeof conditions === 'number') {
+    return conditions;
+  }
+  if (typeof conditions === 'string') {
+    const match = conditions.match(/-?\d+(?:[.,]\d+)?/u);
+    if (match) {
+      return parseFrenchNumber(match[0]);
+    }
+    return null;
+  }
+  if (typeof conditions === 'object') {
+    const candidateKeys = ['remise', 'discount', 'discountRate', 'remisePourcentage', 'pourcentage'];
+    for (const key of candidateKeys) {
+      if (key in conditions) {
+        const value = conditions[key];
+        if (typeof value === 'number') {
+          return value;
+        }
+        if (typeof value === 'string') {
+          return parseFrenchNumber(value);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function applyDiscountFromConditions(conditions) {
+  const extracted = extractDiscountFromConditions(conditions);
+  if (extracted == null) {
+    return false;
+  }
+  const rate = clampPercentage(extracted);
+  updateDiscountRate(rate);
+  return true;
+}
+
+function clampPercentage(value) {
+  const numeric = typeof value === 'number' ? value : parseFloat(String(value));
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  if (numeric < 0) {
+    return 0;
+  }
+  if (numeric > 100) {
+    return 100;
+  }
+  return numeric;
 }
 
 function toggleFeedback(message, type = 'info') {
