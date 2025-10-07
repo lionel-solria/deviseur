@@ -140,6 +140,10 @@ const elements = {
   modalWeightRow: document.querySelector('[data-role="modal-meta-weight"]'),
   modalScore: document.getElementById('product-modal-score'),
   modalClose: document.getElementById('product-modal-close'),
+  siretErrorModal: document.getElementById('siret-error-modal'),
+  siretErrorMessage: document.getElementById('siret-error-message'),
+  siretErrorClose: document.getElementById('siret-error-close'),
+  siretErrorLink: document.getElementById('siret-error-link'),
   currentYear: document.getElementById('current-year'),
   brandLogo: document.querySelector('.brand-logo'),
   webhookModeBadge: document.getElementById('webhook-mode-badge'),
@@ -1636,7 +1640,9 @@ async function handleSiretSubmit(event) {
   }
   const siret = (elements.siretInput?.value || '').replace(/\D/g, '');
   if (siret.length !== 14) {
-    setIdentificationState('error', 'Saisissez un numéro de SIRET valide (14 chiffres).');
+    setIdentificationState('error', 'Saisissez un numéro de SIRET valide (14 chiffres).', {
+      showModalOnError: false,
+    });
     return;
   }
   const endpoint = getActiveWebhookUrl();
@@ -1681,7 +1687,9 @@ async function handleSiretSubmit(event) {
     }
   } catch (error) {
     console.error(error);
-    setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.", {
+      showModalOnError: false,
+    });
     updateDiscountRate(0);
     closeWebhookPanel();
     closeClientFormPlaceholder();
@@ -2032,23 +2040,44 @@ function renderClientIdentity() {
   }
 }
 
-function formatSiretErrorFeedback(message) {
-  const base = escapeHtml(message ?? '');
-  const trimmed = base.trim();
-  const link = `<a href="${NEW_CLIENT_URL}" target="_blank" rel="noopener">formulaire Nouveau client</a>`;
-  if (!trimmed) {
-    return `Merci de remplir ce ${link}.`;
+function buildSiretErrorMessages(message) {
+  const raw = typeof message === 'string' ? message.trim() : '';
+  const defaultText = 'Merci de remplir le formulaire nouveau client.';
+  const htmlLink = `<a href="${NEW_CLIENT_URL}" target="_blank" rel="noopener">formulaire Nouveau client</a>`;
+
+  if (!raw) {
+    return {
+      text: defaultText,
+      html: `Merci de remplir ce ${htmlLink}.`,
+    };
   }
-  const lower = trimmed.toLowerCase();
-  if (lower.includes('nouveau client') || trimmed.includes('idgroup-france.com')) {
-    return trimmed;
-  }
-  const needsPunctuation = !/[.!?]$/.test(trimmed);
+
+  const needsPunctuation = !/[.!?]$/.test(raw);
   const suffix = needsPunctuation ? '.' : '';
-  return `${trimmed}${suffix} Merci de remplir ce ${link}.`;
+  const lower = raw.toLowerCase();
+  if (lower.includes('nouveau client') || raw.includes('idgroup-france.com')) {
+    return {
+      text: raw,
+      html: escapeHtml(raw),
+    };
+  }
+
+  return {
+    text: `${raw}${suffix} ${defaultText}`.trim(),
+    html: `${escapeHtml(raw)}${suffix} Merci de remplir ce ${htmlLink}.`,
+  };
 }
 
-function setIdentificationState(status, message = null) {
+function formatSiretErrorFeedback(message) {
+  return buildSiretErrorMessages(message).html;
+}
+
+function getSiretErrorText(message) {
+  return buildSiretErrorMessages(message).text;
+}
+
+function setIdentificationState(status, message = null, options = {}) {
+  const { showModalOnError = false } = options;
   if (elements.siretForm) {
     elements.siretForm.dataset.status = status;
   }
@@ -2059,16 +2088,72 @@ function setIdentificationState(status, message = null) {
   if (elements.siretSubmit) {
     elements.siretSubmit.disabled = isLoading;
   }
-  if (elements.siretFeedback) {
-    if (message !== null) {
-      if (status === 'error') {
-        elements.siretFeedback.innerHTML = formatSiretErrorFeedback(message);
-      } else {
-        elements.siretFeedback.textContent = message;
-      }
-    } else if (status === 'idle') {
-      elements.siretFeedback.textContent = '';
+  let handledModal = false;
+  if (status === 'error' && showModalOnError) {
+    const textMessage = getSiretErrorText(message);
+    if (elements.siretFeedback) {
+      elements.siretFeedback.textContent = textMessage;
     }
+    openSiretErrorModal(textMessage);
+    handledModal = true;
+  } else {
+    closeSiretErrorModal();
+    if (elements.siretFeedback) {
+      if (message !== null) {
+        if (status === 'error') {
+          elements.siretFeedback.innerHTML = formatSiretErrorFeedback(message);
+        } else {
+          elements.siretFeedback.textContent = message;
+        }
+      } else if (status === 'idle') {
+        elements.siretFeedback.textContent = '';
+      }
+    }
+  }
+
+  if (status !== 'error' && !handledModal) {
+    closeSiretErrorModal();
+  }
+}
+
+function openSiretErrorModal(message) {
+  if (!elements.siretErrorModal) {
+    return;
+  }
+  const text = message && message.trim().length > 0 ? message : 'Merci de remplir le formulaire nouveau client.';
+  if (elements.siretErrorMessage) {
+    elements.siretErrorMessage.textContent = text;
+  }
+  if (elements.siretErrorLink) {
+    elements.siretErrorLink.href = NEW_CLIENT_URL;
+  }
+  if (elements.siretErrorModal.dataset.open === 'true') {
+    return;
+  }
+  state.lastFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  elements.siretErrorModal.dataset.open = 'true';
+  document.body.style.overflow = 'hidden';
+  window.requestAnimationFrame(() => {
+    elements.siretErrorClose?.focus();
+  });
+}
+
+function closeSiretErrorModal() {
+  if (!elements.siretErrorModal) {
+    return;
+  }
+  if (elements.siretErrorModal.dataset.open !== 'true') {
+    return;
+  }
+  elements.siretErrorModal.dataset.open = 'false';
+  if (elements.modalBackdrop?.dataset.open === 'true') {
+    // Keep scroll locked if another modal remains visible.
+  } else {
+    document.body.style.removeProperty('overflow');
+  }
+  if (state.lastFocusElement && typeof state.lastFocusElement.focus === 'function') {
+    state.lastFocusElement.focus();
+    state.lastFocusElement = null;
   }
 }
 
@@ -2086,7 +2171,10 @@ function updateIdentificationFromState() {
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
-  setIdentificationState(state.identifiedClient.identified ? 'success' : 'error', message);
+  const showModal = !state.identifiedClient.identified && Boolean(state.identifiedClient.siret);
+  setIdentificationState(state.identifiedClient.identified ? 'success' : 'error', message, {
+    showModalOnError: showModal,
+  });
   if (state.identifiedClient.identified) {
     closeClientFormPlaceholder();
   } else if (state.identifiedClient.siret) {
@@ -2853,18 +2941,37 @@ function closeClientFormPlaceholder() {
 }
 
 function setupModal() {
-  if (!elements.modalBackdrop) return;
+  if (elements.modalBackdrop && elements.modalClose) {
+    elements.modalClose.addEventListener('click', closeProductModal);
+    elements.modalBackdrop.addEventListener('click', (event) => {
+      if (event.target === elements.modalBackdrop) {
+        closeProductModal();
+      }
+    });
+  }
 
-  elements.modalClose.addEventListener('click', closeProductModal);
-  elements.modalBackdrop.addEventListener('click', (event) => {
-    if (event.target === elements.modalBackdrop) {
-      closeProductModal();
-    }
-  });
+  if (elements.siretErrorModal) {
+    elements.siretErrorModal.addEventListener('click', (event) => {
+      if (event.target === elements.siretErrorModal) {
+        closeSiretErrorModal();
+      }
+    });
+  }
+
+  if (elements.siretErrorClose) {
+    elements.siretErrorClose.addEventListener('click', closeSiretErrorModal);
+  }
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && elements.modalBackdrop.dataset.open === 'true') {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    if (elements.modalBackdrop?.dataset.open === 'true') {
       closeProductModal();
+      return;
+    }
+    if (elements.siretErrorModal?.dataset.open === 'true') {
+      closeSiretErrorModal();
     }
   });
 }
@@ -2928,7 +3035,11 @@ function openProductModal(product) {
 function closeProductModal() {
   if (!elements.modalBackdrop) return;
   elements.modalBackdrop.dataset.open = 'false';
-  document.body.style.removeProperty('overflow');
+  if (elements.siretErrorModal?.dataset.open === 'true') {
+    // Another modal keeps the scroll locked.
+  } else {
+    document.body.style.removeProperty('overflow');
+  }
   if (state.lastFocusElement && typeof state.lastFocusElement.focus === 'function') {
     state.lastFocusElement.focus();
   }

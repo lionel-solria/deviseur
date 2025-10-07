@@ -22,7 +22,7 @@
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
-          <p class="brand-title">ID GROUP Devis</p>
+          <p class="brand-title">ID GROUP</p>
         </div>
         <div class="site-nav__actions">
           <form id="siret-form" class="site-nav__identity" autocomplete="off">
@@ -375,6 +375,39 @@
       </div>
     </div>
 
+    <div
+      id="siret-error-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="siret-error-title"
+      data-open="false"
+    >
+      <div class="modal-card">
+        <div class="modal-body">
+          <div class="flex flex-col gap-2">
+            <h3 id="siret-error-title" class="text-xl font-semibold text-slate-900">Client non identifié</h3>
+            <p id="siret-error-message" class="text-sm leading-relaxed text-slate-600">
+              Le client n'a pas été reconnu. Merci de remplir le formulaire nouveau client pour finaliser votre
+              demande.
+            </p>
+          </div>
+          <div class="modal-actions">
+            <button id="siret-error-close" type="button" class="btn-secondary">Fermer</button>
+            <a
+              id="siret-error-link"
+              class="btn-primary"
+              href="https://www.idgroup-france.com/bao/NouveauClient.html"
+              target="_blank"
+              rel="noopener"
+            >
+              Ouvrir le formulaire
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <section id="client-form-placeholder" class="client-form-placeholder" aria-live="polite" data-open="false">
       <div class="client-form-placeholder__content">
         <h2>Formulaire client</h2>
@@ -399,8 +432,9 @@
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <p class="text-lg font-semibold text-white">ID GROUP Devis</p>
-          <p class="mt-1 text-sm text-slate-300">Un outil rapide et fiable pour composer vos offres professionnelles.</p>
+          <p class="text-lg font-semibold text-white">ID GROUP</p>
+          <p class="mt-1 text-sm text-slate-300">SASU au capital de 1 000 000 € — RCS Chambéry 403 401 854</p>
+          <p class="text-sm text-slate-300">SIRET 403 401 854 00035 — TVA intracommunautaire FR 12 403 401 854</p>
         </div>
         <div class="footer-meta">
           <span>
@@ -408,20 +442,20 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9Z" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9 12 12.75 9.75 10.5" />
             </svg>
-            Lundi - Vendredi : 9h - 18h
+            ALPESPACE – FRANCIN, 47 voie Saint-Exupéry, 73800 Porte de Savoie
           </span>
           <span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 7.5 12 12.75 2.25 7.5m19.5 0v9a2.25 2.25 0 0 1-2.25 2.25h-15A2.25 2.25 0 0 1 2.25 16.5v-9a2.25 2.25 0 0 1 2.25-2.25h15A2.25 2.25 0 0 1 21.75 7.5Z" />
             </svg>
-            contact@idgroup.fr
+            Tél. +33 (0)4 79 84 36 06 • Fax +33 (0)4 79 84 36 10 • ids@ids-france.net
           </span>
           <span>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 4.5h19.5M4.5 4.5h15a2.25 2.25 0 0 1 2.25 2.25v11.25A2.25 2.25 0 0 1 19.5 20.25h-15A2.25 2.25 0 0 1 2.25 18V6.75A2.25 2.25 0 0 1 4.5 4.5Z" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
             </svg>
-            12 avenue des Solutions, 59000 Lille
+            Tél. +33 (0)4 79 84 14 18 • Fax +33 (0)4 79 84 14 19 • idmat@id-mat.com
           </span>
         </div>
         <p class="text-xs text-slate-500">© <span id="current-year"></span> ID GROUP — Tous droits réservés.</p>
