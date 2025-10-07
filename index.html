@@ -23,7 +23,6 @@
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
           <p class="brand-title">ID GROUP Devis</p>
-          <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
         <div class="site-nav__actions">
           <form id="siret-form" class="site-nav__identity" autocomplete="off">
@@ -58,7 +57,7 @@
           </div>
           <div class="site-nav__save-group">
             <label for="save-name" class="save-name-field">
-              <span>Nom de la sauvegarde</span>
+              <span>Proposition</span>
               <input id="save-name" type="text" maxlength="80" placeholder="Ex. Projet magasin" />
             </label>
             <div class="site-nav__cart-actions">
@@ -71,8 +70,11 @@
             <span>Remise client</span>
             <span id="header-discount" class="discount-field__value">0&nbsp;%</span>
           </div>
-          <button id="generate-pdf" class="btn-primary">
-            Générer le devis PDF
+          <button id="generate-pdf" type="button" class="btn-primary">
+            Imprimer
+          </button>
+          <button id="submit-order" type="button" class="btn-primary">
+            Passer commande
           </button>
           <div class="site-nav__tree">
             <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>

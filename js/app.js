@@ -58,6 +58,8 @@ const WEBHOOK_ENDPOINTS = {
 
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 
+const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
+
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
@@ -84,6 +86,7 @@ const state = {
   isIdentifyingClient: false,
   identifiedClient: null,
   webhookPanelTimeout: null,
+  isSubmittingOrder: false,
 };
 
 const elements = {
@@ -116,6 +119,7 @@ const elements = {
   summaryEcotax: document.getElementById('summary-ecotax'),
   summaryProducts: document.getElementById('summary-products'),
   generatePdf: document.getElementById('generate-pdf'),
+  submitOrder: document.getElementById('submit-order'),
   modalBackdrop: document.getElementById('product-modal'),
   modalImage: document.getElementById('product-modal-image'),
   modalTitle: document.getElementById('product-modal-title'),
@@ -156,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
+  elements.submitOrder?.addEventListener('click', handleSubmitOrder);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
   elements.saveNameInput?.addEventListener('input', handleSaveNameInput);
@@ -975,6 +980,58 @@ function handleSaveCart() {
   }
 }
 
+async function handleSubmitOrder() {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
+    return;
+  }
+  if (state.isSubmittingOrder) {
+    return;
+  }
+  const confirmed = window.confirm(
+    'Confirmez-vous vouloir passer la commande à ID GROUP ?',
+  );
+  if (!confirmed) {
+    return;
+  }
+  state.isSubmittingOrder = true;
+  if (elements.submitOrder) {
+    elements.submitOrder.disabled = true;
+  }
+  try {
+    toggleFeedback('', 'hide');
+    const snapshot = buildCartSnapshot();
+    const { doc, quoteNumber } = await createQuotePdfDocument();
+    const pdfBlob = doc.output('blob');
+    const now = new Date();
+    const dateSegment = formatDateForFilename(now);
+    const slug = normaliseFileSegment(state.saveName) || CART_FILENAME_PREFIX;
+    const clientCode = getClientCodeForFilename();
+    const filenameBase = `${slug}-${clientCode}-${dateSegment}`;
+    const jsonBlob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const formData = new FormData();
+    formData.append('pdf', pdfBlob, `devis-${quoteNumber}.pdf`);
+    formData.append('panier', jsonBlob, `${filenameBase}.json`);
+    formData.append('quoteNumber', quoteNumber);
+    const response = await fetch(ORDER_WEBHOOK_URL, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error(`Échec de l'envoi (${response.status})`);
+    }
+    toggleFeedback('La commande a été transmise à ID GROUP.', 'info');
+  } catch (error) {
+    console.error(error);
+    toggleFeedback("Impossible d'envoyer la commande. Merci de réessayer.", 'error');
+  } finally {
+    state.isSubmittingOrder = false;
+    if (elements.submitOrder) {
+      elements.submitOrder.disabled = false;
+    }
+  }
+}
+
 async function handleRestoreCartInput(event) {
   const file = event.target?.files?.[0];
   if (!file) {
@@ -1693,12 +1750,19 @@ function clampPercentage(value) {
   return Math.min(100, Math.max(0, numeric));
 }
 
-async function generatePdf() {
+async function generatePdf(event) {
+  event?.preventDefault?.();
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
-    return;
+    return null;
   }
   toggleFeedback('', 'hide');
+  const { doc, quoteNumber } = await createQuotePdfDocument();
+  doc.save(`devis-${quoteNumber}.pdf`);
+  return { doc, quoteNumber };
+}
+
+async function createQuotePdfDocument() {
   const items = Array.from(state.quote.values());
   const productsSubtotal = items.reduce((sum, item) => sum + getProductSubtotal(item), 0);
   const ecotaxTotal = items.reduce((sum, item) => sum + getEcotaxTotal(item), 0);
@@ -2089,7 +2153,7 @@ async function generatePdf() {
   };
 
   addFooter();
-  doc.save(`devis-${quoteNumber}.pdf`);
+  return { doc, quoteNumber };
 }
 
 async function getBrandLogoDataUrl() {
