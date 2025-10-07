@@ -25,7 +25,7 @@
 }
 
 main {
-  margin-top: calc(var(--site-nav-height) + 1.5rem);
+  margin-top: calc(var(--site-nav-height) + 1.5rem - 20px);
 }
 
 ::selection {
@@ -411,6 +411,114 @@ textarea {
 
 .site-nav__cart-actions .btn-secondary {
   white-space: nowrap;
+}
+
+.debug-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  background: rgba(25, 63, 96, 0.9);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transform: translate(-50%, -120%);
+  transition: opacity 120ms ease;
+}
+
+.debug-tooltip[data-visible='true'] {
+  opacity: 1;
+}
+
+.debug-highlight {
+  outline: 2px dashed rgba(228, 30, 40, 0.65);
+  outline-offset: 3px;
+}
+
+.debug-panel {
+  position: fixed;
+  top: 7rem;
+  right: 2rem;
+  width: min(26rem, 95vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 1rem;
+  background: #fff;
+  border: 1px solid rgba(25, 63, 96, 0.2);
+  box-shadow: 0 26px 60px -32px rgba(25, 63, 96, 0.55);
+  overflow: hidden;
+  z-index: 1100;
+}
+
+.debug-panel[hidden] {
+  display: none;
+}
+
+.debug-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(25, 63, 96, 0.08);
+  cursor: move;
+  user-select: none;
+}
+
+.debug-panel__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+
+.debug-panel__close {
+  border: none;
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.debug-panel__close:hover,
+.debug-panel__close:focus-visible {
+  color: var(--color-primary);
+  outline: none;
+}
+
+.debug-panel__content {
+  padding: 0.75rem 1rem 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-muted-strong);
+}
+
+.debug-panel__entry {
+  border-left: 3px solid rgba(25, 63, 96, 0.2);
+  padding-left: 0.75rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.debug-panel__time {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.debug-panel__message {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .webhook-panel {
