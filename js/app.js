@@ -58,6 +58,7 @@ const WEBHOOK_ENDPOINTS = {
 
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
+const WEBHOOK_PANEL_TIMEOUT = 10000;
 
 const state = {
   catalogue: [],
@@ -72,6 +73,7 @@ const state = {
   discountRate: 0,
   vatRate: 0.2,
   generalComment: '',
+  saveName: '',
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
@@ -79,9 +81,11 @@ const state = {
   webhookMode: 'production',
   isIdentifyingClient: false,
   identifiedClient: null,
+  webhookPanelTimeout: null,
 };
 
 const elements = {
+  siteNav: document.querySelector('.site-nav'),
   layout: document.getElementById('main-layout'),
   cataloguePanel: document.getElementById('catalogue-panel'),
   quotePanel: document.getElementById('quote-panel'),
@@ -128,21 +132,26 @@ const elements = {
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
+  saveNameInput: document.getElementById('save-name'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
   siretFeedback: document.getElementById('siret-feedback'),
+  webhookPanel: document.getElementById('webhook-panel'),
+  webhookPanelContent: document.getElementById('webhook-panel-content'),
+  webhookPanelClose: document.getElementById('webhook-panel-close'),
+  clientFormPlaceholder: document.getElementById('client-form-placeholder'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
-  elements.headerDiscount?.addEventListener('input', handleDiscountChange);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
+  elements.saveNameInput?.addEventListener('input', handleSaveNameInput);
   elements.restoreCart?.addEventListener('click', () => {
     elements.restoreCartInput?.click();
   });
@@ -150,15 +159,18 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
+  setupNavAutoHide();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
   window.addEventListener('resize', setupResponsiveSplit);
   syncDiscountInputs();
   syncGeneralCommentInput();
+  syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
 });
@@ -186,6 +198,44 @@ function setupResponsiveSplit() {
     elements.quotePanel.style.removeProperty('left');
     elements.quotePanel.style.removeProperty('right');
   }
+}
+
+function setupNavAutoHide() {
+  const nav = elements.siteNav;
+  if (!nav) {
+    return;
+  }
+
+  if (window.matchMedia('(pointer: coarse)').matches) {
+    nav.dataset.collapsed = 'false';
+    return;
+  }
+
+  const collapse = () => {
+    nav.dataset.collapsed = 'true';
+  };
+  const expand = () => {
+    nav.dataset.collapsed = 'false';
+  };
+
+  collapse();
+  nav.addEventListener('mouseenter', expand);
+  nav.addEventListener('mouseleave', () => {
+    if (!nav.contains(document.activeElement)) {
+      collapse();
+    }
+  });
+  nav.addEventListener('focusin', expand);
+  nav.addEventListener('focusout', () => {
+    if (!nav.contains(document.activeElement)) {
+      collapse();
+    }
+  });
+  window.addEventListener('scroll', () => {
+    if (!nav.matches(':hover') && !nav.contains(document.activeElement)) {
+      collapse();
+    }
+  });
 }
 
 async function loadCatalogue() {
@@ -757,14 +807,9 @@ function removeItem(productId) {
   renderQuote();
 }
 
-function handleDiscountChange(event) {
-  const inputValue = parseFloat(String(event.target.value).replace(',', '.'));
-  const normalised = Number.isNaN(inputValue) || inputValue < 0 ? 0 : Math.min(inputValue, 100);
-  updateDiscountRate(normalised);
-}
-
 function updateDiscountRate(rate) {
-  state.discountRate = rate;
+  const safeRate = clampPercentage(rate);
+  state.discountRate = safeRate;
   syncDiscountInputs();
   renderProducts();
   renderQuote();
@@ -772,7 +817,8 @@ function updateDiscountRate(rate) {
 
 function syncDiscountInputs() {
   if (elements.headerDiscount) {
-    elements.headerDiscount.value = String(state.discountRate);
+    const formatted = `${quantityFormatter.format(state.discountRate)} %`;
+    elements.headerDiscount.textContent = formatted;
   }
   if (elements.discount) {
     elements.discount.value = quantityFormatter.format(state.discountRate);
@@ -826,6 +872,44 @@ function syncGeneralCommentInput() {
   }
 }
 
+function handleSaveNameInput(event) {
+  const value = typeof event.target.value === 'string' ? event.target.value : '';
+  state.saveName = value;
+}
+
+function syncSaveNameInput() {
+  if (elements.saveNameInput) {
+    elements.saveNameInput.value = state.saveName || '';
+  }
+}
+
+function extractInitialsForFilename(value) {
+  if (!value) {
+    return '';
+  }
+  const letters = String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z]/g, '');
+  return letters.slice(0, 3).toUpperCase();
+}
+
+function normaliseFileSegment(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
+function formatDateForFilename(date) {
+  const year = String(date.getFullYear()).slice(-2);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
 function updateSummary() {
   const items = Array.from(state.quote.values());
   const productsSubtotal = items.reduce((total, item) => total + getProductSubtotal(item), 0);
@@ -859,12 +943,25 @@ function handleSaveCart() {
     toggleFeedback('Ajoutez des articles avant de sauvegarder votre panier.', 'warning');
     return;
   }
+  const saveName = (state.saveName || '').trim();
+  const initials = extractInitialsForFilename(saveName);
+  if (!saveName) {
+    toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
+    return;
+  }
+  if (initials.length < 3) {
+    toggleFeedback('Le nom doit contenir au moins trois lettres pour générer le fichier.', 'warning');
+    return;
+  }
   try {
     const snapshot = buildCartSnapshot();
     const json = JSON.stringify(snapshot, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${CART_FILENAME_PREFIX}-${timestamp}.json`;
+    const now = new Date();
+    const dateSegment = formatDateForFilename(now);
+    const slug = normaliseFileSegment(saveName);
+    const filenameBase = `${CART_FILENAME_PREFIX}-${initials}${dateSegment}`;
+    const filename = `${slug ? `${filenameBase}-${slug}` : filenameBase}.json`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -919,6 +1016,7 @@ function buildCartSnapshot() {
     generatedAt: new Date().toISOString(),
     discountRate: state.discountRate,
     generalComment: state.generalComment || '',
+    saveName: state.saveName || '',
     items,
   };
   if (state.identifiedClient && state.identifiedClient.identified) {
@@ -964,6 +1062,12 @@ function applyCartSnapshot(snapshot) {
     state.generalComment = snapshot.generalComment;
     syncGeneralCommentInput();
   }
+  if (typeof snapshot.saveName === 'string') {
+    state.saveName = snapshot.saveName;
+  } else {
+    state.saveName = '';
+  }
+  syncSaveNameInput();
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
@@ -1015,12 +1119,9 @@ function applyCartSnapshot(snapshot) {
     state.quote.set(product.id, entry);
   }
 
-  const discountRate = typeof snapshot.discountRate === 'number' ? clampPercentage(snapshot.discountRate) : null;
-  if (discountRate !== null) {
-    updateDiscountRate(discountRate);
-  } else {
-    renderQuote();
-  }
+  const discountRate =
+    typeof snapshot.discountRate === 'number' ? clampPercentage(snapshot.discountRate) : null;
+  updateDiscountRate(discountRate !== null ? discountRate : 0);
   updateIdentificationFromState();
 }
 
@@ -1046,9 +1147,15 @@ function handleSiretInputChange(event) {
     if (!digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
+      updateDiscountRate(0);
+      closeWebhookPanel();
+      closeClientFormPlaceholder();
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
+      updateDiscountRate(0);
+      closeWebhookPanel();
+      closeClientFormPlaceholder();
     }
   }
 }
@@ -1089,13 +1196,20 @@ async function handleSiretSubmit(event) {
     }
     const result = normaliseWebhookResponse(payload, siret);
     state.identifiedClient = result;
-    if (typeof result.discountRate === 'number') {
-      updateDiscountRate(result.discountRate);
-    }
+    updateDiscountRate(typeof result.discountRate === 'number' ? result.discountRate : 0);
     updateIdentificationFromState();
+    showWebhookPanel(result);
+    if (result.identified) {
+      closeClientFormPlaceholder();
+    } else {
+      openClientFormPlaceholder(siret);
+    }
   } catch (error) {
     console.error(error);
     setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    updateDiscountRate(0);
+    closeWebhookPanel();
+    closeClientFormPlaceholder();
   } finally {
     state.isIdentifyingClient = false;
   }
@@ -1302,29 +1416,46 @@ function normaliseWebhookResponse(payload, siret) {
   }
   result.conditionsLines = conditionsLines;
 
-  const discountCandidates = [
-    getValue('discountRate'),
-    getValue('remise'),
-    getValue('Remise'),
-    getValue('remisePourcentage'),
-    getValue('remisePercent'),
-    getValue('remiseClient'),
-    rawConditions?.discountRate,
-    rawConditions?.remise,
-    rawConditions?.discountPercent,
-    rawConditions?.remisePourcentage,
-    conditionsCandidate?.discountRate,
-    conditionsCandidate?.remise,
-    payload.conditions?.discountRate,
-    payload.conditions?.remise,
-    payload.conditionsTarifaires?.discountRate,
-    payload.conditionsTarifaires?.remise,
+  const tariffSources = [
+    getValue('Tarif'),
+    payload.conditions?.Tarif,
+    payload.conditionsTarifaires?.Tarif,
+    rawConditions?.Tarif,
+    conditionsCandidate?.Tarif,
   ];
-  for (const candidate of discountCandidates) {
-    const parsed = parsePercentageValue(candidate);
-    if (parsed !== null) {
-      result.discountRate = clampPercentage(parsed);
+  for (const tariffCandidate of tariffSources) {
+    const tariffValue = parsePercentageValue(tariffCandidate);
+    if (tariffValue !== null) {
+      result.discountRate = clampPercentage(tariffValue);
       break;
+    }
+  }
+
+  if (result.discountRate === undefined) {
+    const discountCandidates = [
+      getValue('discountRate'),
+      getValue('remise'),
+      getValue('Remise'),
+      getValue('remisePourcentage'),
+      getValue('remisePercent'),
+      getValue('remiseClient'),
+      rawConditions?.discountRate,
+      rawConditions?.remise,
+      rawConditions?.discountPercent,
+      rawConditions?.remisePourcentage,
+      conditionsCandidate?.discountRate,
+      conditionsCandidate?.remise,
+      payload.conditions?.discountRate,
+      payload.conditions?.remise,
+      payload.conditionsTarifaires?.discountRate,
+      payload.conditionsTarifaires?.remise,
+    ];
+    for (const candidate of discountCandidates) {
+      const parsed = parsePercentageValue(candidate);
+      if (parsed !== null) {
+        result.discountRate = clampPercentage(parsed);
+        break;
+      }
     }
   }
 
@@ -1337,6 +1468,10 @@ function normaliseWebhookResponse(payload, siret) {
 
   if (result.identified && (!result.statusLabel || result.statusLabel.toLowerCase().includes('non'))) {
     result.statusLabel = 'Client identifié';
+  }
+
+  if (result.discountRate === undefined || Number.isNaN(result.discountRate)) {
+    result.discountRate = 0;
   }
 
   return result;
@@ -1391,17 +1526,26 @@ function updateIdentificationFromState() {
   }
   if (!state.identifiedClient) {
     setIdentificationState('idle');
+    closeClientFormPlaceholder();
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
   setIdentificationState(state.identifiedClient.identified ? 'success' : 'error', message);
+  if (state.identifiedClient.identified) {
+    closeClientFormPlaceholder();
+  } else if (state.identifiedClient.siret) {
+    openClientFormPlaceholder(state.identifiedClient.siret, { scroll: false });
+  }
 }
 
 function toggleWebhookMode() {
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
+  updateDiscountRate(0);
   updateWebhookModeIndicator();
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
+  closeWebhookPanel();
+  closeClientFormPlaceholder();
 }
 
 function updateWebhookModeIndicator() {
@@ -1602,11 +1746,11 @@ async function generatePdf() {
 
   const infoColumns = [
     {
-      title: 'Client / Customer',
+      title: 'Client',
       lines: clientLines,
     },
     {
-      title: 'Livraison / Shipping',
+      title: 'Livraison',
       lines: shippingLines,
     },
     {
@@ -1635,10 +1779,7 @@ async function generatePdf() {
   doc.setFontSize(10);
   doc.setTextColor(...colors.muted);
   doc.text(
-    [
-      'Cher Client, nous vous remercions pour votre demande. Vous trouverez ci-dessous notre meilleure proposition commerciale.',
-      'Dear Customer, thank you for your request. Please find below our best price offer.',
-    ],
+    'Cher client, nous vous remercions pour votre demande. Vous trouverez ci-dessous notre meilleure proposition commerciale.',
     margin,
     introY,
     { maxWidth: pageWidth - margin * 2, lineHeightFactor: 1.45 },
@@ -1927,6 +2068,135 @@ function parseFrenchNumber(value) {
   const normalised = String(value).replace(/\s/g, '').replace(',', '.');
   const parsed = parseFloat(normalised);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatSiret(value) {
+  const digits = String(value || '')
+    .replace(/\D/g, '')
+    .slice(0, 14);
+  if (digits.length !== 14) {
+    return digits;
+  }
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
+}
+
+function showWebhookPanel(result) {
+  if (!elements.webhookPanel || !elements.webhookPanelContent) {
+    return;
+  }
+  if (state.webhookPanelTimeout) {
+    clearTimeout(state.webhookPanelTimeout);
+    state.webhookPanelTimeout = null;
+  }
+  elements.webhookPanelContent.innerHTML = '';
+
+  const addRow = (label, value) => {
+    if (!value) {
+      return;
+    }
+    const row = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = `${label} : `;
+    row.appendChild(strong);
+    row.appendChild(document.createTextNode(value));
+    elements.webhookPanelContent.appendChild(row);
+  };
+
+  const statusLabel = result?.statusLabel || (result?.identified ? 'Client identifié' : 'Client non identifié');
+  addRow('Statut', statusLabel);
+  addRow('Entreprise', result?.companyName || 'Non communiqué');
+  addRow('SIRET', formatSiret(result?.siret));
+  addRow('Contact', result?.contactName);
+  addRow('Email', result?.contactEmail);
+  addRow('Remise appliquée', `${quantityFormatter.format(state.discountRate)} %`);
+
+  if (Array.isArray(result?.addressLines) && result.addressLines.length) {
+    const addressTitle = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = 'Adresse :';
+    addressTitle.appendChild(strong);
+    elements.webhookPanelContent.appendChild(addressTitle);
+    const list = document.createElement('ul');
+    list.className = 'webhook-panel__list';
+    result.addressLines.slice(0, 5).forEach((line) => {
+      const text = typeof line === 'string' ? line : String(line ?? '');
+      if (!text) {
+        return;
+      }
+      const item = document.createElement('li');
+      item.textContent = text;
+      list.appendChild(item);
+    });
+    elements.webhookPanelContent.appendChild(list);
+  }
+
+  if (Array.isArray(result?.conditionsLines) && result.conditionsLines.length) {
+    const conditionsTitle = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = 'Conditions :';
+    conditionsTitle.appendChild(strong);
+    elements.webhookPanelContent.appendChild(conditionsTitle);
+    const list = document.createElement('ul');
+    list.className = 'webhook-panel__list';
+    result.conditionsLines.slice(0, 5).forEach((line) => {
+      const text = typeof line === 'string' ? line : String(line ?? '');
+      if (!text) {
+        return;
+      }
+      const item = document.createElement('li');
+      item.textContent = text;
+      list.appendChild(item);
+    });
+    elements.webhookPanelContent.appendChild(list);
+  }
+
+  if (!result?.identified) {
+    const warning = document.createElement('p');
+    warning.textContent =
+      "Client non reconnu. Merci de préparer les informations complémentaires via le formulaire dès sa disponibilité.";
+    elements.webhookPanelContent.appendChild(warning);
+  }
+
+  elements.webhookPanel.dataset.open = 'true';
+  state.webhookPanelTimeout = window.setTimeout(() => {
+    closeWebhookPanel();
+  }, WEBHOOK_PANEL_TIMEOUT);
+}
+
+function closeWebhookPanel() {
+  if (!elements.webhookPanel) {
+    return;
+  }
+  elements.webhookPanel.dataset.open = 'false';
+  if (state.webhookPanelTimeout) {
+    clearTimeout(state.webhookPanelTimeout);
+    state.webhookPanelTimeout = null;
+  }
+}
+
+function openClientFormPlaceholder(siret, options = {}) {
+  const container = elements.clientFormPlaceholder;
+  if (!container) {
+    return;
+  }
+  const paragraph = container.querySelector('p');
+  if (paragraph) {
+    const formatted = formatSiret(siret);
+    paragraph.textContent = formatted
+      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.`
+      : "Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.";
+  }
+  container.dataset.open = 'true';
+  if (options.scroll !== false) {
+    container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function closeClientFormPlaceholder() {
+  if (!elements.clientFormPlaceholder) {
+    return;
+  }
+  elements.clientFormPlaceholder.dataset.open = 'false';
 }
 
 function setupModal() {

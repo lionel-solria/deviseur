@@ -18,19 +18,16 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <nav class="site-nav fixed inset-x-0 top-0 z-40">
+    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="true">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
-          <div>
-            <p class="brand-title">ID GROUP Devis</p>
-            <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
-          </div>
+          <p class="brand-title">ID GROUP Devis</p>
           <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
         <div class="site-nav__actions">
           <form id="siret-form" class="site-nav__identity" autocomplete="off">
-            <label for="siret-input" class="site-nav__identity-label">Identification SIRET</label>
+            <label for="siret-input" class="site-nav__identity-label">SIRET</label>
             <div class="site-nav__identity-controls">
               <input
                 id="siret-input"
@@ -45,23 +42,21 @@
             </div>
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
-          <div class="site-nav__cart-actions">
-            <button id="save-cart" type="button" class="btn-secondary">Sauvegarder mon panier</button>
-            <button id="restore-cart" type="button" class="btn-secondary">Restaurer un panier</button>
-            <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+          <div class="site-nav__save-group">
+            <label for="save-name" class="save-name-field">
+              <span>Nom de la sauvegarde</span>
+              <input id="save-name" type="text" maxlength="80" placeholder="Ex. Projet magasin" />
+            </label>
+            <div class="site-nav__cart-actions">
+              <button id="save-cart" type="button" class="btn-secondary">Sauvegarder</button>
+              <button id="restore-cart" type="button" class="btn-secondary">Restaurer</button>
+              <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+            </div>
           </div>
-          <label for="header-discount" class="discount-field">
-            <span>Remise (%)</span>
-            <input
-              id="header-discount"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value="0"
-              class="discount-field__input"
-            />
-          </label>
+          <div class="discount-field" aria-live="polite">
+            <span>Remise client</span>
+            <span id="header-discount" class="discount-field__value">0&nbsp;%</span>
+          </div>
           <button id="generate-pdf" class="btn-primary">
             Générer le devis PDF
           </button>
@@ -362,6 +357,24 @@
             </div>
           </div>
       </div>
+    </div>
+
+    <section id="client-form-placeholder" class="client-form-placeholder" aria-live="polite" data-open="false">
+      <div class="client-form-placeholder__content">
+        <h2>Formulaire client</h2>
+        <p>
+          Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos
+          informations.
+        </p>
+      </div>
+    </section>
+
+    <div id="webhook-panel" class="webhook-panel" role="status" aria-live="assertive" data-open="false">
+      <div class="webhook-panel__header">
+        <p class="webhook-panel__title">Informations webhook</p>
+        <button id="webhook-panel-close" type="button" class="webhook-panel__close" aria-label="Fermer">×</button>
+      </div>
+      <div id="webhook-panel-content" class="webhook-panel__content"></div>
     </div>
 
     <footer class="site-footer">
