@@ -22,10 +22,7 @@
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
-          <div>
-            <p class="brand-title">ID GROUP Devis</p>
-            <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
-          </div>
+          <p class="brand-title" aria-label="ID Group devis">ID GROUP</p>
           <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
         <div class="site-nav__actions">
@@ -45,36 +42,46 @@
             </div>
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
-          <div class="site-nav__cart-actions">
-            <button id="save-cart" type="button" class="btn-secondary">Sauvegarder mon panier</button>
-            <button id="restore-cart" type="button" class="btn-secondary">Restaurer un panier</button>
-            <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
-          </div>
-          <label for="header-discount" class="discount-field">
-            <span>Remise (%)</span>
-            <input
-              id="header-discount"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value="0"
-              class="discount-field__input"
-            />
-          </label>
-          <button id="generate-pdf" class="btn-primary">
-            Générer le devis PDF
-          </button>
-          <div class="site-nav__tree">
-            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
-            <select id="catalogue-tree" class="site-nav__tree-select">
-              <option value="">Sélectionner une catégorie ou un article</option>
-            </select>
+          <div class="site-nav__quick-actions">
+            <label for="save-name" class="save-name-field">
+              <span class="save-name-field__label">Nom de sauvegarde</span>
+              <input
+                id="save-name"
+                type="text"
+                maxlength="50"
+                placeholder="Nom du fichier"
+                class="save-name-field__input"
+                autocomplete="off"
+              />
+            </label>
+            <div class="site-nav__cart-actions">
+              <button id="save-cart" type="button" class="btn-secondary">Sauvegarder</button>
+              <button id="restore-cart" type="button" class="btn-secondary">Restaurer</button>
+              <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+            </div>
+            <label for="header-discount" class="discount-field">
+              <span>Remise client (%)</span>
+              <input
+                id="header-discount"
+                type="text"
+                value="0"
+                class="discount-field__input"
+                readonly
+                aria-readonly="true"
+              />
+            </label>
+            <button id="generate-pdf" class="btn-primary">Générer le devis</button>
+            <div class="site-nav__tree">
+              <label for="catalogue-tree" class="site-nav__tree-label">Catalogue</label>
+              <select id="catalogue-tree" class="site-nav__tree-select">
+                <option value="">Sélectionner une catégorie ou un article</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
     </nav>
-    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
+    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-24">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
           <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
@@ -198,6 +205,32 @@
         </aside>
       </div>
     </main>
+
+    <section id="formulaire-inactif" class="inactive-form" hidden>
+      <div class="inactive-form__card">
+        <h2>Formulaire d'accueil client</h2>
+        <p>Ce formulaire sera bientôt disponible pour les clients non reconnus.</p>
+        <p class="inactive-form__hint">Notre équipe vous contactera dès son activation.</p>
+      </div>
+    </section>
+
+    <aside
+      id="webhook-response-panel"
+      class="webhook-panel"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-hidden="true"
+      tabindex="-1"
+    >
+      <div class="webhook-panel__header">
+        <h2 class="webhook-panel__title">Réponse du webhook</h2>
+        <button type="button" class="webhook-panel__close" aria-label="Fermer les informations" data-role="webhook-close">
+          ×
+        </button>
+      </div>
+      <dl id="webhook-response-content" class="webhook-panel__content"></dl>
+    </aside>
 
     <template id="product-card-template">
       <article class="product-card group flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm transition">

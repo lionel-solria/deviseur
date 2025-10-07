@@ -72,6 +72,7 @@ const state = {
   discountRate: 0,
   vatRate: 0.2,
   generalComment: '',
+  saveName: '',
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
@@ -79,6 +80,7 @@ const state = {
   webhookMode: 'production',
   isIdentifyingClient: false,
   identifiedClient: null,
+  webhookPanelTimeout: null,
 };
 
 const elements = {
@@ -132,12 +134,16 @@ const elements = {
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
   siretFeedback: document.getElementById('siret-feedback'),
+  saveName: document.getElementById('save-name'),
+  webhookPanel: document.getElementById('webhook-response-panel'),
+  webhookPanelContent: document.getElementById('webhook-response-content'),
+  webhookPanelClose: document.querySelector('[data-role="webhook-close"]'),
+  inactiveForm: document.getElementById('formulaire-inactif'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
-  elements.headerDiscount?.addEventListener('input', handleDiscountChange);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
@@ -150,15 +156,20 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.saveName?.addEventListener('input', handleSaveNameChange);
+  elements.webhookPanelClose?.addEventListener('click', hideWebhookPanel);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
+  setupNavigationHover();
+  setupWebhookPanel();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
   window.addEventListener('resize', setupResponsiveSplit);
   syncDiscountInputs();
   syncGeneralCommentInput();
+  syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
 });
@@ -186,6 +197,47 @@ function setupResponsiveSplit() {
     elements.quotePanel.style.removeProperty('left');
     elements.quotePanel.style.removeProperty('right');
   }
+}
+
+function setupNavigationHover() {
+  const nav = document.querySelector('.site-nav');
+  if (!nav) {
+    return;
+  }
+  const hoverMediaQuery = window.matchMedia('(hover: hover)');
+  if (!hoverMediaQuery.matches) {
+    nav.classList.remove('is-collapsed');
+    return;
+  }
+  const collapse = () => nav.classList.add('is-collapsed');
+  const expand = () => nav.classList.remove('is-collapsed');
+  collapse();
+  nav.addEventListener('mouseenter', expand);
+  nav.addEventListener('mouseleave', collapse);
+  nav.addEventListener('focusin', expand);
+  nav.addEventListener('focusout', (event) => {
+    if (!nav.contains(event.relatedTarget)) {
+      collapse();
+    }
+  });
+  hoverMediaQuery.addEventListener?.('change', (event) => {
+    if (event.matches) {
+      collapse();
+    } else {
+      nav.classList.remove('is-collapsed');
+    }
+  });
+}
+
+function setupWebhookPanel() {
+  if (elements.webhookPanel) {
+    elements.webhookPanel.setAttribute('aria-hidden', 'true');
+  }
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideWebhookPanel();
+    }
+  });
 }
 
 async function loadCatalogue() {
@@ -764,18 +816,19 @@ function handleDiscountChange(event) {
 }
 
 function updateDiscountRate(rate) {
-  state.discountRate = rate;
+  state.discountRate = clampPercentage(rate);
   syncDiscountInputs();
   renderProducts();
   renderQuote();
 }
 
 function syncDiscountInputs() {
+  const formatted = quantityFormatter.format(state.discountRate);
   if (elements.headerDiscount) {
-    elements.headerDiscount.value = String(state.discountRate);
+    elements.headerDiscount.value = formatted;
   }
   if (elements.discount) {
-    elements.discount.value = quantityFormatter.format(state.discountRate);
+    elements.discount.value = formatted;
   }
 }
 
@@ -826,6 +879,16 @@ function syncGeneralCommentInput() {
   }
 }
 
+function handleSaveNameChange(event) {
+  state.saveName = event.target?.value ?? '';
+}
+
+function syncSaveNameInput() {
+  if (elements.saveName) {
+    elements.saveName.value = state.saveName || '';
+  }
+}
+
 function updateSummary() {
   const items = Array.from(state.quote.values());
   const productsSubtotal = items.reduce((total, item) => total + getProductSubtotal(item), 0);
@@ -860,11 +923,26 @@ function handleSaveCart() {
     return;
   }
   try {
+    const rawName = (elements.saveName?.value ?? state.saveName ?? '').trim();
+    if (!rawName) {
+      toggleFeedback('Indiquez un nom pour la sauvegarde avant d\'exporter.', 'warning');
+      elements.saveName?.focus();
+      return;
+    }
+    state.saveName = rawName;
+    syncSaveNameInput();
     const snapshot = buildCartSnapshot();
     const json = JSON.stringify(snapshot, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${CART_FILENAME_PREFIX}-${timestamp}.json`;
+    const now = new Date();
+    const prefix = deriveSaveNamePrefix(rawName);
+    const dateStamp = formatSaveDate(now);
+    const slug = deriveSaveNameSlug(rawName);
+    const filenameParts = [CART_FILENAME_PREFIX, prefix, dateStamp];
+    if (slug) {
+      filenameParts.push(slug);
+    }
+    const filename = `${filenameParts.join('-')}.json`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -874,11 +952,41 @@ function handleSaveCart() {
     anchor.click();
     document.body.removeChild(anchor);
     setTimeout(() => URL.revokeObjectURL(url), 0);
-    toggleFeedback('Le panier a été exporté au format JSON.', 'info');
+    toggleFeedback(`Le panier a été exporté au format JSON sous le nom « ${filename} ».`, 'info');
   } catch (error) {
     console.error(error);
     toggleFeedback('Impossible de sauvegarder le panier. Merci de réessayer.', 'error');
   }
+}
+
+function deriveSaveNamePrefix(value) {
+  const cleaned = String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase();
+  if (!cleaned) {
+    return 'PAN';
+  }
+  return cleaned.slice(0, 3).padEnd(3, 'X');
+}
+
+function formatSaveDate(date) {
+  const year = String(date.getFullYear()).slice(-2);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
+function deriveSaveNameSlug(value) {
+  const slug = String(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return slug || 'sauvegarde';
 }
 
 async function handleRestoreCartInput(event) {
@@ -919,6 +1027,7 @@ function buildCartSnapshot() {
     generatedAt: new Date().toISOString(),
     discountRate: state.discountRate,
     generalComment: state.generalComment || '',
+    saveName: state.saveName || '',
     items,
   };
   if (state.identifiedClient && state.identifiedClient.identified) {
@@ -964,6 +1073,12 @@ function applyCartSnapshot(snapshot) {
     state.generalComment = snapshot.generalComment;
     syncGeneralCommentInput();
   }
+  if (typeof snapshot.saveName === 'string') {
+    state.saveName = snapshot.saveName;
+  } else {
+    state.saveName = '';
+  }
+  syncSaveNameInput();
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
@@ -1042,10 +1157,13 @@ function handleSiretInputChange(event) {
     .replace(/\D/g, '')
     .slice(0, 14);
   input.value = digits;
+  hideWebhookPanel();
   if (!state.isIdentifyingClient) {
     if (!digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
+      hideInactiveForm();
+      updateDiscountRate(0);
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
@@ -1066,6 +1184,8 @@ async function handleSiretSubmit(event) {
   const endpoint = getActiveWebhookUrl();
   state.isIdentifyingClient = true;
   setIdentificationState('loading', 'Identification en cours...');
+  hideWebhookPanel();
+  hideInactiveForm();
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -1089,10 +1209,15 @@ async function handleSiretSubmit(event) {
     }
     const result = normaliseWebhookResponse(payload, siret);
     state.identifiedClient = result;
-    if (typeof result.discountRate === 'number') {
-      updateDiscountRate(result.discountRate);
-    }
+    const resolvedDiscount = typeof result.discountRate === 'number' ? result.discountRate : 0;
+    updateDiscountRate(resolvedDiscount);
     updateIdentificationFromState();
+    showWebhookPanel(result);
+    if (result.identified) {
+      hideInactiveForm();
+    } else {
+      showInactiveForm();
+    }
   } catch (error) {
     console.error(error);
     setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
@@ -1303,6 +1428,7 @@ function normaliseWebhookResponse(payload, siret) {
   result.conditionsLines = conditionsLines;
 
   const discountCandidates = [
+    getValue('Tarif'),
     getValue('discountRate'),
     getValue('remise'),
     getValue('Remise'),
@@ -1362,6 +1488,94 @@ function buildIdentificationMessage(result) {
   return parts.join(' • ') || 'Client identifié';
 }
 
+function hideWebhookPanel() {
+  if (state.webhookPanelTimeout) {
+    window.clearTimeout(state.webhookPanelTimeout);
+    state.webhookPanelTimeout = null;
+  }
+  if (!elements.webhookPanel) {
+    return;
+  }
+  delete elements.webhookPanel.dataset.open;
+  elements.webhookPanel.setAttribute('aria-hidden', 'true');
+}
+
+function showWebhookPanel(result) {
+  if (!elements.webhookPanel || !elements.webhookPanelContent) {
+    return;
+  }
+  if (state.webhookPanelTimeout) {
+    window.clearTimeout(state.webhookPanelTimeout);
+    state.webhookPanelTimeout = null;
+  }
+  elements.webhookPanelContent.innerHTML = '';
+  const addEntry = (label, value) => {
+    if (!value) {
+      return;
+    }
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    elements.webhookPanelContent.append(dt, dd);
+  };
+
+  const statusLabel = result?.statusLabel || (result?.identified ? 'Client identifié' : 'Client non identifié');
+  addEntry('Statut', statusLabel);
+  if (result?.companyName) {
+    addEntry('Société', result.companyName);
+  }
+  if (result?.siret) {
+    addEntry('SIRET', result.siret);
+  }
+  if (result?.contactName) {
+    addEntry('Contact', result.contactName);
+  }
+  if (result?.contactEmail) {
+    addEntry('Email', result.contactEmail);
+  }
+  if (typeof result?.discountRate === 'number') {
+    addEntry('Remise appliquée', `${numberFormatter.format(result.discountRate)} %`);
+  }
+  if (Array.isArray(result?.conditionsLines) && result.conditionsLines.length > 0) {
+    const preview = result.conditionsLines.slice(0, 3).join('\n');
+    addEntry('Conditions', preview);
+  }
+  if (!result?.identified) {
+    addEntry('Action', 'Formulaire complémentaire requis (bientôt disponible).');
+  }
+
+  if (elements.webhookPanelContent.childElementCount === 0) {
+    addEntry('Information', 'Aucune donnée fournie par le webhook.');
+  }
+
+  elements.webhookPanel.dataset.open = 'true';
+  elements.webhookPanel.setAttribute('aria-hidden', 'false');
+  state.webhookPanelTimeout = window.setTimeout(() => {
+    hideWebhookPanel();
+  }, 12000);
+  elements.webhookPanel.focus?.();
+}
+
+function showInactiveForm(options = {}) {
+  if (!elements.inactiveForm) {
+    return;
+  }
+  const { scroll = true } = options;
+  elements.inactiveForm.hidden = false;
+  if (scroll) {
+    window.location.hash = 'formulaire-inactif';
+    elements.inactiveForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function hideInactiveForm() {
+  if (!elements.inactiveForm) {
+    return;
+  }
+  elements.inactiveForm.hidden = true;
+}
+
 function setIdentificationState(status, message = null) {
   if (elements.siretForm) {
     elements.siretForm.dataset.status = status;
@@ -1391,15 +1605,25 @@ function updateIdentificationFromState() {
   }
   if (!state.identifiedClient) {
     setIdentificationState('idle');
+    hideInactiveForm();
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
-  setIdentificationState(state.identifiedClient.identified ? 'success' : 'error', message);
+  const status = state.identifiedClient.identified ? 'success' : 'error';
+  setIdentificationState(status, message);
+  if (state.identifiedClient.identified) {
+    hideInactiveForm();
+  } else {
+    showInactiveForm({ scroll: false });
+  }
 }
 
 function toggleWebhookMode() {
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
+  hideWebhookPanel();
+  hideInactiveForm();
+  updateDiscountRate(0);
   updateWebhookModeIndicator();
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
 }
