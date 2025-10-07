@@ -86,6 +86,16 @@ const state = {
   isIdentifyingClient: false,
   identifiedClient: null,
   webhookPanelTimeout: null,
+  debug: {
+    active: false,
+    tooltip: null,
+    panel: null,
+    panelContent: null,
+    dragPointerId: null,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    initialised: false,
+  },
 };
 
 const elements = {
@@ -155,6 +165,8 @@ const elements = {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
+  setupDebugTools();
+  applyFieldTooltips(document);
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
@@ -573,6 +585,8 @@ function addToQuote(productId) {
     });
   }
   renderQuote();
+  const reference = product.reference || product.name || productId;
+  logDebugEvent('Action', `Article ajouté au devis : ${reference}`);
 }
 
 function renderQuote() {
@@ -738,6 +752,14 @@ function renderQuote() {
           updateSummaryDisplays();
           if (shouldUpdateSummary) {
             updateSummary();
+            logDebugEvent(
+              'Action',
+              `Surface recalculée pour ${item.reference || item.name || item.id} : ${dimensionFormatter.format(
+                length,
+              )} m x ${dimensionFormatter.format(width)} m => ${quantityFormatter.format(area)} ${
+                item.unit || 'm²'
+              }`,
+            );
           }
         };
 
@@ -763,6 +785,7 @@ function renderQuote() {
       });
 
       node.querySelector('.remove-item').addEventListener('click', () => removeItem(item.id));
+      applyFieldTooltips(node);
       fragment.appendChild(node);
     }
     elements.quoteList.innerHTML = '';
@@ -776,6 +799,12 @@ function changeQuantity(productId, delta) {
   if (!item || item.quantityMode !== 'unit') return;
   item.quantity = Math.max(1, item.quantity + delta);
   renderQuote();
+  logDebugEvent(
+    'Action',
+    `Quantité mise à jour pour ${item.reference || item.name || productId} : ${quantityFormatter.format(
+      item.quantity,
+    )}`,
+  );
 }
 
 function toggleQuoteItem(productId) {
@@ -786,8 +815,12 @@ function toggleQuoteItem(productId) {
 }
 
 function removeItem(productId) {
+  const item = state.quote.get(productId);
   state.quote.delete(productId);
   renderQuote();
+  if (item) {
+    logDebugEvent('Action', `Article retiré du devis : ${item.reference || item.name || productId}`);
+  }
 }
 
 function updateDiscountRate(rate) {
@@ -859,11 +892,13 @@ function syncGeneralCommentInput() {
 function handleSaveNameInput(event) {
   const value = typeof event.target.value === 'string' ? event.target.value : '';
   state.saveName = value;
+  updateDebugMode(value);
 }
 
 function syncSaveNameInput() {
   if (elements.saveNameInput) {
     elements.saveNameInput.value = state.saveName || '';
+    updateDebugMode(elements.saveNameInput.value || '');
   }
 }
 
@@ -1177,6 +1212,7 @@ async function handleSiretSubmit(event) {
   state.isIdentifyingClient = true;
   setIdentificationState('loading', 'Identification en cours...');
   try {
+    logDebugEvent('Webhook', `Appel webhook : ${endpoint} (SIRET ${formatSiret(siret) || siret})`);
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1198,6 +1234,9 @@ async function handleSiretSubmit(event) {
       }
     }
     const result = normaliseWebhookResponse(payload, siret);
+    const serialised = JSON.stringify(result);
+    const snippet = serialised.length > 400 ? `${serialised.slice(0, 397)}…` : serialised;
+    logDebugEvent('Webhook', `Réponse webhook reçue : ${snippet}`);
     state.identifiedClient = result;
     updateDiscountRate(typeof result.discountRate === 'number' ? result.discountRate : 0);
     updateIdentificationFromState();
@@ -1209,10 +1248,14 @@ async function handleSiretSubmit(event) {
     }
   } catch (error) {
     console.error(error);
-    setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    logDebugEvent('Erreur', `Identification échouée : ${(error && error.message) || error}`);
+    setIdentificationState(
+      'error',
+      "Erreur lors de l'identification. Merci de remplir le formulaire nouveau client.",
+    );
     updateDiscountRate(0);
     closeWebhookPanel();
-    closeClientFormPlaceholder();
+    openClientFormPlaceholder(siret);
   } finally {
     state.isIdentifyingClient = false;
   }
@@ -1485,7 +1528,10 @@ function buildIdentificationMessage(result) {
     return '';
   }
   if (!result.identified) {
-    return result.statusLabel || 'Client non identifié';
+    const baseLabel = result.statusLabel && result.statusLabel.trim().length
+      ? result.statusLabel
+      : 'Client non identifié';
+    return `${baseLabel}. Merci de remplir le formulaire nouveau client.`;
   }
   if (!result.companyName) {
     return "Client non référencé. Merci de vous enregistrer comme nouveau client.";
@@ -2227,6 +2273,332 @@ function formatSiret(value) {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
 }
 
+function applyFieldTooltips(scope = document) {
+  if (!scope) {
+    return;
+  }
+  const processControl = (control, labelText) => {
+    if (!control || control.title) {
+      return;
+    }
+    const text = typeof labelText === 'string' ? labelText.replace(/\s+/g, ' ').trim() : '';
+    if (text) {
+      control.title = text;
+    }
+  };
+
+  const collectLabelText = (label) => {
+    if (!label) {
+      return '';
+    }
+    const parts = [];
+    label.childNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        parts.push(node.textContent || '');
+      }
+    });
+    const text = parts.join(' ').replace(/\s+/g, ' ').trim();
+    if (text) {
+      return text;
+    }
+    return label.textContent ? label.textContent.replace(/\s+/g, ' ').trim() : '';
+  };
+
+  const labels = scope.querySelectorAll ? scope.querySelectorAll('label') : [];
+  labels.forEach((label) => {
+    const htmlFor = label.getAttribute('for');
+    if (htmlFor) {
+      const target = document.getElementById(htmlFor);
+      if (target) {
+        processControl(target, collectLabelText(label));
+      }
+      return;
+    }
+    const nestedControl = label.querySelector('input, textarea, select');
+    if (nestedControl) {
+      processControl(nestedControl, collectLabelText(label));
+    }
+  });
+
+  const controls = scope.querySelectorAll
+    ? scope.querySelectorAll('input, textarea, select')
+    : [];
+  controls.forEach((control) => {
+    if (control.title) {
+      return;
+    }
+    const labelText = getAssociatedLabelText(control);
+    processControl(control, labelText);
+  });
+}
+
+function getAssociatedLabelText(control) {
+  if (!control) {
+    return '';
+  }
+  if (typeof control.getAttribute === 'function') {
+    const aria = control.getAttribute('aria-label');
+    if (aria && aria.trim().length) {
+      return aria.trim();
+    }
+  }
+  if (control.id) {
+    const selectorId = escapeCssSelector(control.id);
+    const label = document.querySelector(`label[for="${selectorId}"]`);
+    if (label) {
+      return label.textContent ? label.textContent.replace(/\s+/g, ' ').trim() : '';
+    }
+  }
+  const parentLabel = control.closest ? control.closest('label') : null;
+  if (parentLabel) {
+    return parentLabel.textContent ? parentLabel.textContent.replace(/\s+/g, ' ').trim() : '';
+  }
+  if (control.placeholder) {
+    return control.placeholder;
+  }
+  if (control.name) {
+    return control.name;
+  }
+  if (control.id) {
+    return control.id;
+  }
+  return control.tagName ? control.tagName.toLowerCase() : '';
+}
+
+function escapeCssSelector(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return value.replace(/([\0-\x1f\x7f-\x9f!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+}
+
+function setupDebugTools() {
+  if (state.debug.initialised) {
+    return;
+  }
+  state.debug.initialised = true;
+
+  const tooltip = document.createElement('div');
+  tooltip.className = 'debug-tooltip';
+  tooltip.dataset.visible = 'false';
+  document.body.appendChild(tooltip);
+  state.debug.tooltip = tooltip;
+
+  const panel = document.createElement('section');
+  panel.className = 'debug-panel';
+  panel.dataset.visible = 'false';
+  panel.setAttribute('role', 'log');
+  panel.setAttribute('aria-live', 'polite');
+
+  const header = document.createElement('div');
+  header.className = 'debug-panel__header';
+  const title = document.createElement('p');
+  title.className = 'debug-panel__title';
+  title.textContent = 'Mode debug';
+  header.appendChild(title);
+  panel.appendChild(header);
+
+  const content = document.createElement('div');
+  content.className = 'debug-panel__content';
+  panel.appendChild(content);
+
+  document.body.appendChild(panel);
+  state.debug.panel = panel;
+  state.debug.panelContent = content;
+
+  header.addEventListener('pointerdown', handleDebugPanelPointerDown);
+  header.addEventListener('pointermove', handleDebugPanelPointerMove);
+  header.addEventListener('pointerup', handleDebugPanelPointerUp);
+  header.addEventListener('pointercancel', handleDebugPanelPointerUp);
+
+  document.addEventListener('mousemove', handleDebugMouseMove, true);
+  document.addEventListener('mouseover', handleDebugMouseOver, true);
+  document.addEventListener('mouseout', handleDebugMouseOut, true);
+}
+
+function updateDebugMode(rawValue) {
+  const value = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
+  const shouldEnable = value.toLowerCase().includes('debug');
+  if (shouldEnable) {
+    enableDebugMode();
+  } else {
+    disableDebugMode();
+  }
+}
+
+function enableDebugMode() {
+  if (state.debug.active) {
+    return;
+  }
+  state.debug.active = true;
+  if (state.debug.panel) {
+    state.debug.panel.dataset.visible = 'true';
+    if (!state.debug.panel.style.left) {
+      const defaultLeft = Math.max(16, window.innerWidth - state.debug.panel.offsetWidth - 40);
+      const defaultTop = Math.max(16, window.innerHeight - state.debug.panel.offsetHeight - 40);
+      state.debug.panel.style.left = `${defaultLeft}px`;
+      state.debug.panel.style.top = `${defaultTop}px`;
+    }
+  }
+  logDebugEvent('Debug', 'Mode debug activé');
+}
+
+function disableDebugMode() {
+  if (!state.debug.active) {
+    return;
+  }
+  state.debug.active = false;
+  if (state.debug.panel) {
+    state.debug.panel.dataset.visible = 'false';
+  }
+  hideDebugTooltip();
+  logDebugEvent('Debug', 'Mode debug désactivé');
+}
+
+function logDebugEvent(type, message) {
+  if (!state.debug.panelContent) {
+    return;
+  }
+  const entry = document.createElement('div');
+  entry.className = 'debug-panel__entry';
+
+  const headerLine = document.createElement('div');
+  const strong = document.createElement('strong');
+  strong.textContent = type;
+  headerLine.appendChild(strong);
+
+  const timestamp = document.createElement('time');
+  const now = new Date();
+  timestamp.dateTime = now.toISOString();
+  timestamp.textContent = now.toLocaleTimeString('fr-FR', { hour12: false });
+  headerLine.appendChild(timestamp);
+  entry.appendChild(headerLine);
+
+  const paragraph = document.createElement('p');
+  paragraph.textContent = typeof message === 'string' ? message : String(message ?? '');
+  entry.appendChild(paragraph);
+
+  state.debug.panelContent.appendChild(entry);
+  while (state.debug.panelContent.childElementCount > 60) {
+    state.debug.panelContent.removeChild(state.debug.panelContent.firstElementChild);
+  }
+  state.debug.panelContent.scrollTop = state.debug.panelContent.scrollHeight;
+}
+
+function handleDebugMouseOver(event) {
+  if (!state.debug.active || !state.debug.tooltip) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+  const labelText = getAssociatedLabelText(target);
+  const descriptor = buildDebugDescriptor(target);
+  const tooltipText = labelText ? `${labelText} — ${descriptor}` : descriptor;
+  showDebugTooltip(tooltipText, event.clientX, event.clientY);
+}
+
+function handleDebugMouseMove(event) {
+  if (!state.debug.active || !state.debug.tooltip) {
+    return;
+  }
+  if (state.debug.tooltip.dataset.visible === 'true') {
+    updateDebugTooltipPosition(event.clientX, event.clientY);
+  }
+}
+
+function handleDebugMouseOut(event) {
+  if (!state.debug.active) {
+    return;
+  }
+  const related = event?.relatedTarget;
+  if (related && related instanceof Element) {
+    return;
+  }
+  hideDebugTooltip();
+}
+
+function buildDebugDescriptor(element) {
+  if (!element) {
+    return 'élément';
+  }
+  const parts = [element.tagName ? element.tagName.toLowerCase() : 'élément'];
+  if (element.id) {
+    parts.push(`#${element.id}`);
+  }
+  if (element.getAttribute) {
+    const name = element.getAttribute('name');
+    if (name) {
+      parts.push(`[name="${name}"]`);
+    }
+  }
+  return parts.join(' ');
+}
+
+function showDebugTooltip(text, clientX, clientY) {
+  if (!state.debug.tooltip) {
+    return;
+  }
+  state.debug.tooltip.textContent = text;
+  updateDebugTooltipPosition(clientX, clientY);
+  state.debug.tooltip.dataset.visible = 'true';
+}
+
+function updateDebugTooltipPosition(clientX, clientY) {
+  if (!state.debug.tooltip) {
+    return;
+  }
+  const offsetX = 14;
+  const offsetY = 18;
+  const x = Math.min(window.innerWidth - 10, Math.max(0, clientX + offsetX));
+  const y = Math.min(window.innerHeight - 10, Math.max(0, clientY + offsetY));
+  state.debug.tooltip.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+function hideDebugTooltip() {
+  if (!state.debug.tooltip) {
+    return;
+  }
+  state.debug.tooltip.dataset.visible = 'false';
+}
+
+function handleDebugPanelPointerDown(event) {
+  if (!state.debug.active || !state.debug.panel) {
+    return;
+  }
+  state.debug.dragPointerId = event.pointerId;
+  const rect = state.debug.panel.getBoundingClientRect();
+  state.debug.dragOffsetX = event.clientX - rect.left;
+  state.debug.dragOffsetY = event.clientY - rect.top;
+  state.debug.panel.setPointerCapture(event.pointerId);
+}
+
+function handleDebugPanelPointerMove(event) {
+  if (!state.debug.panel || state.debug.dragPointerId !== event.pointerId) {
+    return;
+  }
+  const x = event.clientX - state.debug.dragOffsetX;
+  const y = event.clientY - state.debug.dragOffsetY;
+  const clampedX = Math.min(window.innerWidth - state.debug.panel.offsetWidth - 8, Math.max(8, x));
+  const clampedY = Math.min(window.innerHeight - state.debug.panel.offsetHeight - 8, Math.max(8, y));
+  state.debug.panel.style.left = `${clampedX}px`;
+  state.debug.panel.style.top = `${clampedY}px`;
+  state.debug.panel.style.right = 'auto';
+  state.debug.panel.style.bottom = 'auto';
+}
+
+function handleDebugPanelPointerUp(event) {
+  if (!state.debug.panel || state.debug.dragPointerId !== event.pointerId) {
+    return;
+  }
+  state.debug.panel.releasePointerCapture(event.pointerId);
+  state.debug.dragPointerId = null;
+}
+
 function showWebhookPanel(result) {
   if (!elements.webhookPanel || !elements.webhookPanelContent) {
     return;
@@ -2300,7 +2672,7 @@ function showWebhookPanel(result) {
   if (!result?.identified) {
     const warning = document.createElement('p');
     warning.textContent =
-      "Client non reconnu. Merci de préparer les informations complémentaires via le formulaire dès sa disponibilité.";
+      "Client non reconnu. Merci de remplir le formulaire nouveau client pour finaliser votre inscription.";
     elements.webhookPanelContent.appendChild(warning);
   }
 
@@ -2329,10 +2701,10 @@ function openClientFormPlaceholder(siret, options = {}) {
   const paragraph = container.querySelector('p');
   if (paragraph) {
     const formatted = formatSiret(siret);
-    const link = `<a href="${NEW_CLIENT_URL}" target="_blank" rel="noopener">vous enregistrer comme nouveau client</a>`;
+    const link = `<a href="${NEW_CLIENT_URL}" target="_blank" rel="noopener">remplir le formulaire nouveau client</a>`;
     paragraph.innerHTML = formatted
-      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Vous pouvez ${link} pour accéder à nos services.`
-      : `Le client n'a pas été reconnu. Vous pouvez ${link} pour accéder à nos services.`;
+      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Merci de ${link} afin de poursuivre la prise en charge.`
+      : `Le client n'a pas été reconnu. Merci de ${link} afin de poursuivre la prise en charge.`;
   }
   container.dataset.open = 'true';
   if (options.scroll !== false) {
