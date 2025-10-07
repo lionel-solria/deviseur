@@ -22,7 +22,7 @@
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
-          <p class="brand-title">ID GROUP Devis</p>
+          <p class="brand-title">ID GROUP</p>
         </div>
         <div class="site-nav__actions">
           <form id="siret-form" class="site-nav__identity" autocomplete="off">
@@ -338,40 +338,72 @@
       </div>
     </template>
 
-      <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
-        <div class="modal-card">
-          <img id="product-modal-image" alt="" />
-          <div class="modal-body">
-            <div class="flex flex-col gap-1">
-              <p id="product-modal-reference" class="text-xs uppercase tracking-wide text-slate-400"></p>
-              <h3 id="product-modal-title" class="text-xl font-semibold text-slate-900"></h3>
-            </div>
-            <p id="product-modal-description" class="text-sm leading-relaxed text-slate-600"></p>
-            <dl class="modal-meta">
-              <div class="modal-meta-item">
-                <dt>Unité de vente</dt>
-                <dd id="product-modal-unit"></dd>
-              </div>
-              <div class="modal-meta-item">
-                <dt>Ecopart applicable</dt>
-                <dd id="product-modal-ecotax"></dd>
-              </div>
-              <div class="modal-meta-item" data-role="modal-meta-weight">
-                <dt>Poids unitaire</dt>
-                <dd id="product-modal-weight"></dd>
-              </div>
-              <div class="modal-meta-item">
-                <dt>Score Positiv'ID</dt>
-                <dd>
-                  <span id="product-modal-score" class="score-badge" data-score="NR"></span>
-                </dd>
-              </div>
-            </dl>
-            <div class="modal-actions">
-              <a id="product-modal-link" class="hidden btn-primary" target="_blank" rel="noopener">Consulter la fiche</a>
-              <button id="product-modal-close" class="btn-secondary">Fermer</button>
-            </div>
+    <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
+      <div class="modal-card">
+        <img id="product-modal-image" alt="" />
+        <div class="modal-body">
+          <div class="flex flex-col gap-1">
+            <p id="product-modal-reference" class="text-xs uppercase tracking-wide text-slate-400"></p>
+            <h3 id="product-modal-title" class="text-xl font-semibold text-slate-900"></h3>
           </div>
+          <p id="product-modal-description" class="text-sm leading-relaxed text-slate-600"></p>
+          <dl class="modal-meta">
+            <div class="modal-meta-item">
+              <dt>Unité de vente</dt>
+              <dd id="product-modal-unit"></dd>
+            </div>
+            <div class="modal-meta-item">
+              <dt>Ecopart applicable</dt>
+              <dd id="product-modal-ecotax"></dd>
+            </div>
+            <div class="modal-meta-item" data-role="modal-meta-weight">
+              <dt>Poids unitaire</dt>
+              <dd id="product-modal-weight"></dd>
+            </div>
+            <div class="modal-meta-item">
+              <dt>Score Positiv'ID</dt>
+              <dd>
+                <span id="product-modal-score" class="score-badge" data-score="NR"></span>
+              </dd>
+            </div>
+          </dl>
+          <div class="modal-actions">
+            <a id="product-modal-link" class="hidden btn-primary" target="_blank" rel="noopener">Consulter la fiche</a>
+            <button id="product-modal-close" class="btn-secondary">Fermer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="siret-error-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="siret-error-modal-title"
+      aria-describedby="siret-error-modal-message"
+      data-open="false"
+    >
+      <div class="modal-card" role="document">
+        <div class="modal-body">
+          <h3 id="siret-error-modal-title" class="text-xl font-semibold text-slate-900">Client non identifié</h3>
+          <p id="siret-error-modal-message" class="text-sm leading-relaxed text-slate-600">
+            Nous n'avons pas pu identifier ce numéro de SIRET. Merci de remplir le formulaire « Nouveau client » pour demander
+            la création de votre compte.
+          </p>
+          <div class="modal-actions">
+            <a
+              id="siret-error-modal-link"
+              class="btn-primary"
+              target="_blank"
+              rel="noopener"
+              href="https://www.idgroup-france.com/bao/NouveauClient.html"
+            >
+              Accéder au formulaire
+            </a>
+            <button id="siret-error-modal-close" type="button" class="btn-secondary">Fermer</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -399,30 +431,38 @@
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <p class="text-lg font-semibold text-white">ID GROUP Devis</p>
-          <p class="mt-1 text-sm text-slate-300">Un outil rapide et fiable pour composer vos offres professionnelles.</p>
+          <p class="text-lg font-semibold text-white">ID GROUP</p>
+          <p class="mt-1 text-sm text-slate-300">SASU au capital de 1&nbsp;000&nbsp;000&nbsp;€ • RCS Chambéry 403&nbsp;401&nbsp;854</p>
+          <p class="mt-1 text-sm text-slate-300">
+            N° SIRET : 403&nbsp;401&nbsp;854&nbsp;00035 • N° TVA intracommunautaire : FR12403401854 • N° EORI : FR403401854
+          </p>
+          <p class="mt-1 text-sm text-slate-300">N.A.F. : 4669B</p>
         </div>
         <div class="footer-meta">
-          <span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9 12 12.75 9.75 10.5" />
-            </svg>
-            Lundi - Vendredi : 9h - 18h
-          </span>
-          <span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 7.5 12 12.75 2.25 7.5m19.5 0v9a2.25 2.25 0 0 1-2.25 2.25h-15A2.25 2.25 0 0 1 2.25 16.5v-9a2.25 2.25 0 0 1 2.25-2.25h15A2.25 2.25 0 0 1 21.75 7.5Z" />
-            </svg>
-            contact@idgroup.fr
-          </span>
-          <span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 4.5h19.5M4.5 4.5h15a2.25 2.25 0 0 1 2.25 2.25v11.25A2.25 2.25 0 0 1 19.5 20.25h-15A2.25 2.25 0 0 1 2.25 18V6.75A2.25 2.25 0 0 1 4.5 4.5Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
-            </svg>
-            12 avenue des Solutions, 59000 Lille
-          </span>
+          <div class="footer-meta__block">
+            <p class="footer-meta__title">Adresse</p>
+            <p>
+              ALPESPACE-FRANCIN<br />
+              47 Voie St Exupéry<br />
+              73800 Porte de Savoie - France
+            </p>
+          </div>
+          <div class="footer-meta__block">
+            <p class="footer-meta__title">Service commercial</p>
+            <p>
+              Téléphone : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;36&nbsp;06<br />
+              Télécopie : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;36&nbsp;10<br />
+              Email : <a href="mailto:ids@ids-france.net" class="footer-link">ids@ids-france.net</a>
+            </p>
+          </div>
+          <div class="footer-meta__block">
+            <p class="footer-meta__title">Support ID MAT</p>
+            <p>
+              Téléphone : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;14&nbsp;18<br />
+              Télécopie : 00&nbsp;33&nbsp;4&nbsp;79&nbsp;84&nbsp;14&nbsp;19<br />
+              Email : <a href="mailto:idmat@id-mat.com" class="footer-link">idmat@id-mat.com</a>
+            </p>
+          </div>
         </div>
         <p class="text-xs text-slate-500">© <span id="current-year"></span> ID GROUP — Tous droits réservés.</p>
       </div>

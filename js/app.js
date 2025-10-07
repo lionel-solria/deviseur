@@ -95,6 +95,7 @@ const state = {
   debugPanelContent: null,
   debugTooltip: null,
   debugHighlightTarget: null,
+  siretModalLastFocus: null,
 };
 
 const elements = {
@@ -160,6 +161,11 @@ const elements = {
   clientIdentityMeta: document.getElementById('client-identity-meta'),
   clientIdentityRegister: document.getElementById('client-identity-register'),
   clientIdentityReset: document.getElementById('client-identity-reset'),
+  siretErrorModal: document.getElementById('siret-error-modal'),
+  siretErrorModalTitle: document.getElementById('siret-error-modal-title'),
+  siretErrorModalMessage: document.getElementById('siret-error-modal-message'),
+  siretErrorModalClose: document.getElementById('siret-error-modal-close'),
+  siretErrorModalLink: document.getElementById('siret-error-modal-link'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -182,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   setupModal();
+  setupSiretErrorModal();
   setupResponsiveSplit();
   setupCategoryFilter();
   setupNavAutoHide();
@@ -1681,7 +1688,7 @@ async function handleSiretSubmit(event) {
     }
   } catch (error) {
     console.error(error);
-    setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.", { showModal: true });
     updateDiscountRate(0);
     closeWebhookPanel();
     closeClientFormPlaceholder();
@@ -2048,7 +2055,11 @@ function formatSiretErrorFeedback(message) {
   return `${trimmed}${suffix} Merci de remplir ce ${link}.`;
 }
 
-function setIdentificationState(status, message = null) {
+function setIdentificationState(status, message = null, options = {}) {
+  const { showModal = false } = options;
+  if (status !== 'error' || !showModal) {
+    closeSiretErrorModal();
+  }
   if (elements.siretForm) {
     elements.siretForm.dataset.status = status;
   }
@@ -2059,16 +2070,23 @@ function setIdentificationState(status, message = null) {
   if (elements.siretSubmit) {
     elements.siretSubmit.disabled = isLoading;
   }
-  if (elements.siretFeedback) {
-    if (message !== null) {
-      if (status === 'error') {
-        elements.siretFeedback.innerHTML = formatSiretErrorFeedback(message);
-      } else {
-        elements.siretFeedback.textContent = message;
-      }
-    } else if (status === 'idle') {
-      elements.siretFeedback.textContent = '';
+  if (!elements.siretFeedback) {
+    if (status === 'error' && showModal) {
+      openSiretErrorModal(message);
     }
+    return;
+  }
+  if (status === 'error') {
+    if (showModal) {
+      elements.siretFeedback.textContent = '';
+      openSiretErrorModal(message);
+    } else if (message !== null) {
+      elements.siretFeedback.innerHTML = formatSiretErrorFeedback(message);
+    }
+  } else if (message !== null) {
+    elements.siretFeedback.textContent = message;
+  } else if (status === 'idle') {
+    elements.siretFeedback.textContent = '';
   }
 }
 
@@ -2086,8 +2104,9 @@ function updateIdentificationFromState() {
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
-  setIdentificationState(state.identifiedClient.identified ? 'success' : 'error', message);
-  if (state.identifiedClient.identified) {
+  const isIdentified = Boolean(state.identifiedClient.identified);
+  setIdentificationState(isIdentified ? 'success' : 'error', message, { showModal: !isIdentified });
+  if (isIdentified) {
     closeClientFormPlaceholder();
   } else if (state.identifiedClient.siret) {
     openClientFormPlaceholder(state.identifiedClient.siret, { scroll: false });
@@ -2850,6 +2869,66 @@ function closeClientFormPlaceholder() {
   }
   elements.clientFormPlaceholder.dataset.open = 'false';
   logDebug('Masquage du rappel formulaire nouveau client.');
+}
+
+function setupSiretErrorModal() {
+  if (!elements.siretErrorModal) {
+    return;
+  }
+  if (elements.siretErrorModalLink) {
+    elements.siretErrorModalLink.href = NEW_CLIENT_URL;
+  }
+  elements.siretErrorModalClose?.addEventListener('click', () => {
+    closeSiretErrorModal();
+  });
+  elements.siretErrorModal.addEventListener('click', (event) => {
+    if (event.target === elements.siretErrorModal) {
+      closeSiretErrorModal();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && elements.siretErrorModal?.dataset.open === 'true') {
+      closeSiretErrorModal();
+    }
+  });
+}
+
+function openSiretErrorModal(message) {
+  if (!elements.siretErrorModal) {
+    return;
+  }
+  const titleText = message && String(message).trim().length > 0 ? String(message).trim() : 'Client non identifié';
+  if (elements.siretErrorModalTitle) {
+    elements.siretErrorModalTitle.textContent = titleText;
+  }
+  if (elements.siretErrorModalMessage) {
+    elements.siretErrorModalMessage.innerHTML = formatSiretErrorFeedback(message);
+  }
+  if (elements.siretErrorModalLink) {
+    elements.siretErrorModalLink.href = NEW_CLIENT_URL;
+  }
+  state.siretModalLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  elements.siretErrorModal.dataset.open = 'true';
+  document.body.style.overflow = 'hidden';
+  elements.siretErrorModalClose?.focus();
+}
+
+function closeSiretErrorModal() {
+  if (!elements.siretErrorModal) {
+    return;
+  }
+  const wasOpen = elements.siretErrorModal.dataset.open === 'true';
+  elements.siretErrorModal.dataset.open = 'false';
+  if (!wasOpen) {
+    return;
+  }
+  if (!elements.modalBackdrop || elements.modalBackdrop.dataset.open !== 'true') {
+    document.body.style.removeProperty('overflow');
+  }
+  if (state.siretModalLastFocus && typeof state.siretModalLastFocus.focus === 'function') {
+    state.siretModalLastFocus.focus();
+  }
+  state.siretModalLastFocus = null;
 }
 
 function setupModal() {

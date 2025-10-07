@@ -1385,6 +1385,37 @@ textarea {
   gap: 1.5rem;
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.85);
+  align-items: flex-start;
+}
+
+.footer-meta__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 16rem;
+  max-width: 20rem;
+}
+
+.footer-meta__block p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.footer-meta__title {
+  font-weight: 600;
+  color: #fff;
+}
+
+.footer-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+
+.footer-link:hover,
+.footer-link:focus {
+  color: #fff;
+  text-decoration-color: #fff;
 }
 
 .site-footer .text-slate-300 {
