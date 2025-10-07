@@ -11,18 +11,18 @@
     <script src="https://unpkg.com/split.js/dist/split.min.js" defer></script>
     <script src="js/app.js" type="module" defer></script>
   </head>
-  <body class="bg-slate-100 text-slate-800 min-h-screen">
-    <nav class="fixed inset-x-0 top-0 z-40 bg-white shadow-sm">
+  <body class="theme-idgroup min-h-screen bg-[#ededed] text-[#1b2230]">
+    <nav class="fixed inset-x-0 top-0 z-40 border-b border-[#193f60]/40 bg-[#1b2230] text-white shadow-lg">
       <div class="mx-auto flex w-full max-w-[120rem] flex-wrap items-center justify-between gap-4 px-4 py-4 md:flex-nowrap">
-        <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-semibold">DV</div>
+        <div class="flex items-center gap-4">
+          <img src="media/ID GROUP.png" alt="ID Group" class="h-12 w-auto rounded-md bg-white/90 p-2 shadow-sm" />
           <div>
-            <p class="text-lg font-semibold text-slate-900">Deviseur Express</p>
-            <p class="text-sm text-slate-500">Créez vos devis en quelques clics</p>
+            <p class="text-lg font-semibold uppercase tracking-wide text-white">Deviseur Express</p>
+            <p class="text-sm font-medium text-[#a5b7c6]">Créez vos devis en quelques clics</p>
           </div>
         </div>
         <div class="flex flex-1 flex-wrap items-center justify-end gap-3 md:flex-none">
-          <label for="header-discount" class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-inner">
+          <label for="header-discount" class="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#fdecb1] shadow-inner backdrop-blur">
             <span>Remise (%)</span>
             <input
               id="header-discount"
@@ -31,10 +31,10 @@
               max="100"
               step="0.5"
               value="0"
-              class="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              class="w-20 rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-right text-sm text-white placeholder-white/60 focus:border-[#fdecb1] focus:outline-none focus:ring-2 focus:ring-[#fdecb1]/40"
             />
           </label>
-          <button id="generate-pdf" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+          <button id="generate-pdf" class="rounded-md bg-[#e41e28] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-[#de0c1a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fdecb1]">
             Générer le devis PDF
           </button>
         </div>
@@ -43,10 +43,10 @@
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm">
+          <header class="flex flex-col gap-4 rounded-2xl border border-[#a5b7c6]/40 bg-white/90 p-6 shadow-sm backdrop-blur">
             <div>
-              <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900">Catalogue produits</h1>
-              <p class="mt-1 text-sm text-slate-500">
+              <h1 id="catalogue-title" class="text-2xl font-semibold text-[#193f60]">Catalogue produits</h1>
+              <p class="mt-1 text-sm text-[#616b86]">
                 Parcourez le catalogue et ajoutez les articles souhaités directement à votre devis.
               </p>
             </div>
@@ -57,9 +57,9 @@
                   id="search"
                   type="search"
                   placeholder="Rechercher par nom ou référence..."
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  class="w-full rounded-xl border border-[#a5b7c6] bg-[#f6f7fa] py-3 pl-11 pr-4 text-sm text-[#1b2230] shadow-inner focus:border-[#193f60] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#193f60]/20"
                 />
-                <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#9297aa]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
                 </svg>
               </div>
@@ -68,12 +68,12 @@
                   <button
                     id="category-filter-button"
                     type="button"
-                    class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                    class="flex w-full items-center justify-between gap-3 rounded-xl border border-[#a5b7c6] bg-[#f6f7fa] px-4 py-3 text-sm font-medium text-[#1b2230] shadow-inner transition hover:border-[#193f60] hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#193f60]"
                     aria-haspopup="true"
                     aria-expanded="false"
                   >
                     <span id="category-filter-label">Toutes les catégories</span>
-                    <svg class="h-4 w-4 text-slate-400 transition-transform" data-role="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="h-4 w-4 text-[#9297aa] transition-transform" data-role="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 8.25 12 15.75 4.5 8.25" />
                     </svg>
                   </button>
@@ -84,19 +84,19 @@
                     aria-labelledby="category-filter-button"
                   >
                     <div class="category-filter-header">
-                      <p class="text-sm font-semibold text-slate-900">Catégories</p>
-                      <button id="category-filter-clear" type="button" class="text-xs font-semibold text-blue-600 transition hover:text-blue-700">Réinitialiser</button>
+                      <p class="text-sm font-semibold text-[#193f60]">Catégories</p>
+                      <button id="category-filter-clear" type="button" class="text-xs font-semibold text-[#e41e28] transition hover:text-[#de0c1a]">Réinitialiser</button>
                     </div>
                     <div id="category-filter-options" class="category-filter-options" role="group" aria-label="Filtrer par catégories"></div>
                     <div class="category-filter-footer">
-                      <p class="text-xs text-slate-500">Sélectionnez une ou plusieurs catégories pour affiner la liste.</p>
-                      <button id="category-filter-close" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
+                      <p class="text-xs text-[#616b86]">Sélectionnez une ou plusieurs catégories pour affiner la liste.</p>
+                      <button id="category-filter-close" type="button" class="rounded-lg border border-[#a5b7c6] px-3 py-2 text-xs font-semibold text-[#1b2230] transition hover:bg-[#ededed]">Fermer</button>
                     </div>
                   </div>
                 </div>
-                <label for="unit-filter" class="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20">
-                  <span class="text-xs uppercase tracking-wide text-slate-500">Unité</span>
-                  <select id="unit-filter" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                <label for="unit-filter" class="flex flex-1 items-center gap-2 rounded-xl border border-[#a5b7c6] bg-[#f6f7fa] px-4 py-3 text-sm font-medium text-[#1b2230] shadow-inner transition focus-within:border-[#193f60] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#193f60]/20">
+                  <span class="text-xs uppercase tracking-wide text-[#616b86]">Unité</span>
+                  <select id="unit-filter" class="w-full rounded-lg border border-[#a5b7c6] bg-white px-2 py-1 text-sm text-[#1b2230] focus:border-[#193f60] focus:outline-none focus:ring-2 focus:ring-[#193f60]/20">
                     <option value="">Toutes les unités</option>
                   </select>
                 </label>
@@ -106,36 +106,36 @@
           <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
           <div id="product-grid" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
         </section>
-        <aside id="quote-panel" class="split-panel rounded-2xl bg-white p-6 shadow-lg">
-          <footer class="quote-summary-panel border-b border-slate-200 pb-4">
-            <dl class="space-y-2 text-sm text-slate-600">
+        <aside id="quote-panel" class="split-panel rounded-2xl border border-[#a5b7c6]/40 bg-white/95 p-6 shadow-lg backdrop-blur">
+          <footer class="quote-summary-panel border-b border-[#a5b7c6]/40 pb-4">
+            <dl class="space-y-2 text-sm text-[#1b2230]">
               <div class="flex items-center justify-between">
                 <dt>Total HT produits</dt>
-                <dd id="summary-products" class="font-semibold text-slate-900">0,00 €</dd>
+                <dd id="summary-products" class="font-semibold text-[#193f60]">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between gap-3">
                 <dt class="flex-1">Remise (%)</dt>
                 <dd class="flex items-center gap-2">
-                  <input id="discount" type="text" value="0" readonly class="h-9 w-20 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2 text-right text-sm text-slate-500" />
+                  <input id="discount" type="text" value="0" readonly class="h-9 w-20 cursor-not-allowed rounded-lg border border-[#a5b7c6] bg-[#ededed] px-2 text-right text-sm text-[#616b86]" />
                 </dd>
               </div>
               <div class="flex items-center justify-between">
                 <dt>Montant remise</dt>
-                <dd id="summary-discount" class="text-slate-900">-0,00 €</dd>
+                <dd id="summary-discount" class="text-[#1b2230]">-0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
-                <dt>Écotaxe totale</dt>
-                <dd id="summary-ecotax" class="text-amber-600">0,00 €</dd>
+                <dt>Ecopart totale</dt>
+                <dd id="summary-ecotax" class="font-semibold text-[#e41e28]">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
-                <dt>Base HT après remise + écotaxe</dt>
-                <dd id="summary-net" class="text-slate-900">0,00 €</dd>
+                <dt>Base HT après remise + Ecopart</dt>
+                <dd id="summary-net" class="text-[#1b2230]">0,00 €</dd>
               </div>
               <div class="flex items-center justify-between">
                 <dt>TVA (20%)</dt>
-                <dd id="summary-vat" class="text-slate-900">0,00 €</dd>
+                <dd id="summary-vat" class="text-[#1b2230]">0,00 €</dd>
               </div>
-              <div class="flex items-center justify-between text-base font-semibold text-slate-900">
+              <div class="flex items-center justify-between text-base font-semibold text-[#193f60]">
                 <dt>Total TTC</dt>
                 <dd id="summary-total">0,00 €</dd>
               </div>
@@ -143,12 +143,12 @@
           </footer>
           <header class="mt-4 flex items-start justify-between gap-2">
             <div>
-              <h2 class="text-xl font-semibold text-slate-900">Devis en cours</h2>
-              <p class="text-sm text-slate-500">Ajustez les quantités et vérifiez les totaux en temps réel.</p>
+              <h2 class="text-xl font-semibold text-[#193f60]">Devis en cours</h2>
+              <p class="text-sm text-[#616b86]">Ajustez les quantités et vérifiez les totaux en temps réel.</p>
             </div>
           </header>
-          <div id="quote-empty" class="mt-4 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-10 w-10 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5">
+          <div id="quote-empty" class="mt-4 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[#a5b7c6] bg-[#f6f7fa] p-6 text-center text-sm text-[#616b86]">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-10 w-10 text-[#a5b7c6]" fill="none" stroke="currentColor" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5h15a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 19.5 4.5h-15A1.5 1.5 0 0 0 3 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
             </svg>
@@ -156,9 +156,9 @@
           </div>
           <div id="quote-list" class="mt-4 hidden flex-1 space-y-4 overflow-y-auto pr-1"></div>
           <div class="mt-6 space-y-4">
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <label for="general-comment" class="text-sm font-medium text-slate-700">Commentaire général</label>
-              <textarea id="general-comment" class="general-comment mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
+            <div class="rounded-xl border border-[#a5b7c6] bg-[#f6f7fa] p-4">
+              <label for="general-comment" class="text-sm font-medium text-[#1b2230]">Commentaire général</label>
+              <textarea id="general-comment" class="general-comment mt-2 w-full rounded-lg border border-[#a5b7c6] bg-white px-3 py-2 text-sm text-[#1b2230] focus:border-[#193f60] focus:outline-none focus:ring-2 focus:ring-[#193f60]/20" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
             </div>
           </div>
         </aside>
@@ -166,7 +166,7 @@
     </main>
 
     <template id="product-card-template">
-      <article class="product-card group flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm transition">
+      <article class="product-card group flex h-full flex-col rounded-2xl border border-[#a5b7c6]/40 bg-white/95 p-5 shadow-md transition">
         <div class="product-image-frame">
           <img class="product-image" alt="" />
           <div class="product-reference-badge">
@@ -179,22 +179,22 @@
               <span class="product-category-badge"></span>
               <span class="score-badge" data-score="NR"></span>
             </div>
-            <h3 class="product-name mt-2 text-base font-semibold text-slate-900"></h3>
-            <p class="product-description mt-2 line-clamp-3 text-sm text-slate-500"></p>
+            <h3 class="product-name mt-2 text-base font-semibold text-[#1b2230]"></h3>
+            <p class="product-description mt-2 line-clamp-3 text-sm text-[#616b86]"></p>
           </div>
           <div class="product-actions">
             <div class="product-price-block">
               <p class="product-price-original"></p>
               <p class="product-price-discounted"></p>
-              <p class="product-unit text-xs text-slate-400"></p>
-              <p class="product-ecotax text-xs font-semibold text-amber-600"></p>
-              <p class="product-weight text-xs text-slate-400"></p>
+              <p class="product-unit text-xs text-[#616b86]"></p>
+              <p class="product-ecotax text-xs font-semibold"></p>
+              <p class="product-weight text-xs text-[#616b86]"></p>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <button class="view-details rounded-lg border border-transparent bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              <button class="view-details rounded-lg border border-[#a5b7c6] bg-transparent px-3 py-2 text-xs font-semibold text-[#193f60] transition hover:bg-[#a5b7c6]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#193f60]">
                 Voir les détails
               </button>
-              <button class="add-to-quote rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              <button class="add-to-quote rounded-lg bg-[#e41e28] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#de0c1a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fdecb1]">
                 Ajouter au devis
               </button>
             </div>
@@ -222,11 +222,11 @@
         </div>
         <div class="quote-details">
           <div class="quote-meta">
-            <p class="quote-unit text-xs text-slate-500">
+            <p class="quote-unit text-xs text-[#616b86]">
               Unité de vente : <span data-role="quantity-unit"></span>
             </p>
-            <p class="quote-ecotax text-xs text-amber-600"></p>
-            <p class="quote-weight text-xs text-slate-500"></p>
+            <p class="quote-ecotax text-xs font-semibold text-[#e41e28]"></p>
+            <p class="quote-weight text-xs text-[#616b86]"></p>
             <div class="quote-score">
               <span class="score-badge" data-score="NR"></span>
             </div>
@@ -266,18 +266,18 @@
                 </span>
               </div>
               <div>
-                <span class="price-label">Écotaxe</span>
+                <span class="price-label">Ecopart</span>
                 <span class="line-ecotax"></span>
               </div>
               <div>
-                <span class="price-label">Total ligne (hors écotaxe)</span>
+                <span class="price-label">Total ligne (hors Ecopart)</span>
                 <span class="line-total">
                   <span class="line-total-original"></span>
                   <span class="line-total-discounted"></span>
                 </span>
               </div>
               <div>
-                <span class="price-label">Total ligne + écotaxe</span>
+                <span class="price-label">Total ligne + Ecopart</span>
                 <span class="line-total-with-ecotax">
                   <span class="line-total-with-ecotax-original"></span>
                   <span class="line-total-with-ecotax-discounted"></span>
@@ -298,17 +298,17 @@
           <img id="product-modal-image" alt="" />
           <div class="modal-body">
             <div class="flex flex-col gap-1">
-              <p id="product-modal-reference" class="text-xs uppercase tracking-wide text-slate-400"></p>
-              <h3 id="product-modal-title" class="text-xl font-semibold text-slate-900"></h3>
+              <p id="product-modal-reference" class="text-xs uppercase tracking-wide text-[#9297aa]"></p>
+              <h3 id="product-modal-title" class="text-xl font-semibold text-[#193f60]"></h3>
             </div>
-            <p id="product-modal-description" class="text-sm leading-relaxed text-slate-600"></p>
+            <p id="product-modal-description" class="text-sm leading-relaxed text-[#616b86]"></p>
             <dl class="modal-meta">
               <div class="modal-meta-item">
                 <dt>Unité de vente</dt>
                 <dd id="product-modal-unit"></dd>
               </div>
               <div class="modal-meta-item">
-                <dt>Écotaxe applicable</dt>
+                <dt>Ecopart applicable</dt>
                 <dd id="product-modal-ecotax"></dd>
               </div>
               <div class="modal-meta-item" data-role="modal-meta-weight">
@@ -323,8 +323,8 @@
               </div>
             </dl>
             <div class="modal-actions">
-              <a id="product-modal-link" class="hidden rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" target="_blank" rel="noopener">Consulter la fiche</a>
-              <button id="product-modal-close" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
+              <a id="product-modal-link" class="hidden rounded-lg bg-[#193f60] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#162f4d]" target="_blank" rel="noopener">Consulter la fiche</a>
+              <button id="product-modal-close" class="rounded-lg border border-[#a5b7c6] px-4 py-2 text-sm font-semibold text-[#1b2230] transition hover:bg-[#ededed]">Fermer</button>
             </div>
           </div>
       </div>
@@ -334,7 +334,7 @@
       <div class="footer-inner">
         <div>
           <p class="text-lg font-semibold text-white">Deviseur Express</p>
-          <p class="mt-1 text-sm text-slate-300">Accélérez la création de vos devis et partagez-les en un instant.</p>
+          <p class="mt-1 text-sm text-[#a5b7c6]">Accélérez la création de vos devis et partagez-les en un instant.</p>
         </div>
         <div class="footer-meta">
           <span>
@@ -358,7 +358,7 @@
             12 avenue des Solutions, 75000 Paris
           </span>
         </div>
-        <p class="text-xs text-slate-500">© <span id="current-year"></span> Deviseur Express — Tous droits réservés.</p>
+        <p class="text-xs text-[#a5b7c6]">© <span id="current-year"></span> Deviseur Express — Tous droits réservés.</p>
       </div>
     </footer>
   </body>
