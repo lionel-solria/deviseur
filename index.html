@@ -21,41 +21,104 @@
     <nav class="site-nav fixed inset-x-0 top-0 z-40">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
-          <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+          <button
+            type="button"
+            class="brand-logo-button"
+            id="brand-logo-button"
+            aria-label="Changer l'environnement du webhook"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="webhook-mode-popover"
+          >
+            <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+          </button>
           <div>
             <p class="brand-title">ID GROUP Devis</p>
             <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
           </div>
+          <div
+            id="webhook-mode-popover"
+            class="webhook-mode-popover"
+            role="menu"
+            aria-labelledby="brand-logo-button"
+            hidden
+          >
+            <p class="webhook-mode-popover__title">Sélection du webhook</p>
+            <div class="webhook-mode-popover__actions">
+              <button type="button" data-webhook-mode="production" role="menuitem" class="webhook-mode-popover__option">
+                Production
+              </button>
+              <button type="button" data-webhook-mode="test" role="menuitem" class="webhook-mode-popover__option">
+                Test
+              </button>
+            </div>
+          </div>
         </div>
         <div class="site-nav__actions">
-          <div class="site-nav__tree">
-            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
-            <select id="catalogue-tree" class="site-nav__tree-select">
-              <option value="">Sélectionner une catégorie ou un article</option>
-            </select>
+          <div class="site-nav__actions-left">
+            <section class="site-nav__identity">
+              <div class="site-nav__identity-top">
+                <span class="site-nav__identity-title">Identification client</span>
+                <span class="site-nav__webhook-indicator" id="webhook-mode-indicator">
+                  Webhook : <strong id="webhook-mode-label">Production</strong>
+                </span>
+              </div>
+              <form id="siret-form" class="site-nav__identity-form" novalidate>
+                <label for="siret-input" class="sr-only">Numéro SIRET</label>
+                <input
+                  id="siret-input"
+                  name="siret"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  maxlength="14"
+                  placeholder="Entrez le n° SIRET"
+                  class="site-nav__identity-input"
+                  required
+                />
+                <button type="submit" class="btn-secondary">Valider</button>
+              </form>
+              <div id="siret-status" class="site-nav__identity-status" aria-live="polite"></div>
+            </section>
+            <section class="site-nav__cart">
+              <p class="site-nav__cart-title">Mon panier</p>
+              <div class="site-nav__cart-actions">
+                <button id="save-quote" type="button" class="btn-secondary">Sauvegarder</button>
+                <button id="restore-quote" type="button" class="btn-secondary">Restaurer</button>
+                <input id="restore-quote-input" type="file" accept="application/json" class="sr-only" />
+              </div>
+            </section>
           </div>
-          <label for="header-discount" class="discount-field">
-            <span>Remise (%)</span>
-            <input
-              id="header-discount"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value="0"
-              class="discount-field__input"
-            />
-          </label>
-          <button id="generate-pdf" class="btn-primary">
-            Générer le devis PDF
-          </button>
+          <div class="site-nav__actions-right">
+            <label for="header-discount" class="discount-field">
+              <span>Remise (%)</span>
+              <input
+                id="header-discount"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value="0"
+                class="discount-field__input"
+              />
+            </label>
+            <button id="generate-pdf" class="btn-primary">
+              Générer le devis PDF
+            </button>
+            <div class="site-nav__tree">
+              <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
+              <select id="catalogue-tree" class="site-nav__tree-select">
+                <option value="">Sélectionner une catégorie ou un article</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
+          <header class="catalogue-panel__header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
             <div>
               <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
               <p class="mt-1 text-sm text-slate-500 brand-text-muted">

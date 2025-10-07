@@ -2,6 +2,11 @@ const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 const brandLogoAssetPath = 'media/ID%20GROUP.png';
 
+const WEBHOOK_ENDPOINTS = {
+  production: 'https://aiid.app.n8n.cloud/webhook/deviseur',
+  test: 'https://aiid.app.n8n.cloud/webhook-test/deviseur',
+};
+
 const COMPANY_IDENTITY = {
   name: 'ID GROUP',
   legal: [
@@ -68,6 +73,11 @@ const state = {
   lastFocusElement: null,
   categoryMenuOpen: false,
   brandLogoDataUrl: undefined,
+  webhookMode: 'production',
+  webhookMenuOpen: false,
+  pendingQuoteImport: null,
+  identificationLoading: false,
+  lastIdentification: null,
 };
 
 const elements = {
@@ -112,6 +122,16 @@ const elements = {
   modalScore: document.getElementById('product-modal-score'),
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
+  brandLogoButton: document.getElementById('brand-logo-button'),
+  webhookModePopover: document.getElementById('webhook-mode-popover'),
+  webhookModeLabel: document.getElementById('webhook-mode-label'),
+  webhookModeIndicator: document.getElementById('webhook-mode-indicator'),
+  saveQuoteButton: document.getElementById('save-quote'),
+  restoreQuoteButton: document.getElementById('restore-quote'),
+  restoreQuoteInput: document.getElementById('restore-quote-input'),
+  siretForm: document.getElementById('siret-form'),
+  siretInput: document.getElementById('siret-input'),
+  siretStatus: document.getElementById('siret-status'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -122,14 +142,21 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
+  elements.saveQuoteButton?.addEventListener('click', handleSaveQuoteClick);
+  elements.restoreQuoteButton?.addEventListener('click', handleRestoreQuoteClick);
+  elements.restoreQuoteInput?.addEventListener('change', handleRestoreQuoteImport);
+  elements.siretForm?.addEventListener('submit', handleIdentificationSubmit);
+  elements.siretInput?.addEventListener('input', handleSiretInputChange);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
+  setupWebhookControls();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
   window.addEventListener('resize', setupResponsiveSplit);
   syncDiscountInputs();
+  updateWebhookModeIndicator();
 });
 
 function setupResponsiveSplit() {
@@ -157,6 +184,110 @@ function setupResponsiveSplit() {
   }
 }
 
+function setupWebhookControls() {
+  if (elements.brandLogoButton) {
+    elements.brandLogoButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleWebhookPopover();
+    });
+  }
+
+  const modeButtons = elements.webhookModePopover?.querySelectorAll('[data-webhook-mode]');
+  if (modeButtons) {
+    modeButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const mode = event.currentTarget?.dataset?.webhookMode;
+        setWebhookMode(mode);
+        closeWebhookPopover();
+      });
+    });
+  }
+
+  document.addEventListener('click', handleDocumentClickForWebhook);
+  document.addEventListener('keydown', handleKeydownForWebhook);
+}
+
+function toggleWebhookPopover() {
+  if (!elements.webhookModePopover) return;
+  const isHidden = elements.webhookModePopover.hasAttribute('hidden');
+  if (isHidden) {
+    openWebhookPopover();
+  } else {
+    closeWebhookPopover();
+  }
+}
+
+function openWebhookPopover() {
+  if (!elements.webhookModePopover || !elements.brandLogoButton) return;
+  elements.webhookModePopover.removeAttribute('hidden');
+  elements.brandLogoButton.setAttribute('aria-expanded', 'true');
+  state.webhookMenuOpen = true;
+  updateWebhookOptionStates();
+}
+
+function closeWebhookPopover() {
+  if (!elements.webhookModePopover || !elements.brandLogoButton) return;
+  elements.webhookModePopover.setAttribute('hidden', '');
+  elements.brandLogoButton.setAttribute('aria-expanded', 'false');
+  state.webhookMenuOpen = false;
+}
+
+function handleDocumentClickForWebhook(event) {
+  if (!state.webhookMenuOpen) return;
+  if (
+    elements.webhookModePopover?.contains(event.target) ||
+    elements.brandLogoButton?.contains(event.target)
+  ) {
+    return;
+  }
+  closeWebhookPopover();
+}
+
+function handleKeydownForWebhook(event) {
+  if (event.key === 'Escape' && state.webhookMenuOpen) {
+    closeWebhookPopover();
+  }
+}
+
+function setWebhookMode(mode) {
+  if (!mode || !Object.prototype.hasOwnProperty.call(WEBHOOK_ENDPOINTS, mode)) {
+    return;
+  }
+  if (state.webhookMode === mode) {
+    return;
+  }
+  state.webhookMode = mode;
+  updateWebhookModeIndicator();
+}
+
+function updateWebhookModeIndicator() {
+  if (elements.webhookModeLabel) {
+    elements.webhookModeLabel.textContent =
+      state.webhookMode === 'test' ? 'Test' : 'Production';
+  }
+  if (elements.webhookModeIndicator) {
+    elements.webhookModeIndicator.dataset.mode = state.webhookMode;
+  }
+  updateWebhookOptionStates();
+}
+
+function updateWebhookOptionStates() {
+  const modeButtons = elements.webhookModePopover?.querySelectorAll('[data-webhook-mode]');
+  if (!modeButtons) return;
+  modeButtons.forEach((button) => {
+    const isActive = button.dataset.webhookMode === state.webhookMode;
+    button.setAttribute('data-active', isActive ? 'true' : 'false');
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
+function getCurrentWebhookUrl() {
+  return WEBHOOK_ENDPOINTS[state.webhookMode] || WEBHOOK_ENDPOINTS.production;
+}
+
 async function loadCatalogue() {
   toggleFeedback('Chargement du catalogue en cours...', 'info');
   try {
@@ -173,9 +304,10 @@ async function loadCatalogue() {
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
     populateCategoryFilter();
-    populateUnitFilter();
+   populateUnitFilter();
     populateCatalogueTree();
     applyFilters();
+    applyPendingQuoteImport();
     toggleFeedback('', 'hide');
   } catch (error) {
     console.error(error);
@@ -817,6 +949,458 @@ function updateSummary() {
   }
 }
 
+function handleSaveQuoteClick() {
+  const payload = serializeQuoteState();
+  const timestampLabel = formatTimestampForFilename(new Date());
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `panier-devis-${timestampLabel}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+  toggleFeedback('Panier sauvegardé au format JSON.', 'info');
+}
+
+function handleRestoreQuoteClick() {
+  elements.restoreQuoteInput?.click();
+}
+
+function handleRestoreQuoteImport(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const textContent = typeof reader.result === 'string' ? reader.result : '';
+      const rawData = JSON.parse(textContent);
+      const prepared = normaliseQuoteImport(rawData);
+      applyQuoteImport(prepared, { showMessage: true });
+    } catch (error) {
+      console.error(error);
+      toggleFeedback('Impossible de restaurer le panier : fichier JSON invalide.', 'error');
+    }
+  };
+  reader.onerror = () => {
+    toggleFeedback('Une erreur est survenue lors de la lecture du fichier JSON.', 'error');
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function serializeQuoteState() {
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    ...buildQuoteSnapshot(),
+  };
+}
+
+function buildQuoteSnapshot() {
+  const items = Array.from(state.quote.values()).map((item) => ({
+    id: item.id,
+    quantityMode: item.quantityMode,
+    quantity: Number(getItemQuantity(item)),
+    length:
+      item.quantityMode === 'area' && typeof item.length === 'number'
+        ? item.length
+        : null,
+    width:
+      item.quantityMode === 'area' && typeof item.width === 'number'
+        ? item.width
+        : null,
+    comment: typeof item.comment === 'string' ? item.comment : '',
+  }));
+  return {
+    discountRate: state.discountRate,
+    generalComment: state.generalComment || '',
+    items,
+  };
+}
+
+function applyQuoteImport(imported, options = {}) {
+  if (!imported) return;
+  if (!state.catalogueById.size) {
+    state.pendingQuoteImport = { data: imported, options };
+    return;
+  }
+  try {
+    hydrateQuoteFromImport(imported);
+    if (options.showMessage) {
+      toggleFeedback('Panier restauré depuis votre fichier.', 'info');
+    }
+  } catch (error) {
+    console.error(error);
+    toggleFeedback("Impossible de restaurer le panier importé.", 'error');
+  }
+}
+
+function applyPendingQuoteImport() {
+  if (!state.pendingQuoteImport) return;
+  const pending = state.pendingQuoteImport;
+  state.pendingQuoteImport = null;
+  try {
+    hydrateQuoteFromImport(pending.data);
+    if (pending.options?.showMessage) {
+      toggleFeedback('Panier restauré depuis votre fichier.', 'info');
+    }
+  } catch (error) {
+    console.error(error);
+    toggleFeedback("Impossible de restaurer le panier importé.", 'error');
+  }
+}
+
+function hydrateQuoteFromImport(imported) {
+  const nextQuote = new Map();
+  const items = Array.isArray(imported.items) ? imported.items : [];
+  items.forEach((entry) => {
+    const identifier = entry?.id || entry?.reference;
+    if (!identifier) return;
+    const baseProduct = state.catalogueById.get(identifier);
+    if (!baseProduct) return;
+    const restored = {
+      ...baseProduct,
+      comment: typeof entry.comment === 'string' ? entry.comment : '',
+      expanded: false,
+    };
+    if (baseProduct.quantityMode === 'area') {
+      const lengthValue = toFiniteNumber(entry.length);
+      const widthValue = toFiniteNumber(entry.width);
+      if (lengthValue !== null) {
+        restored.length = Math.max(0, lengthValue);
+      }
+      if (widthValue !== null) {
+        restored.width = Math.max(0, widthValue);
+      }
+      const areaValue = toFiniteNumber(entry.quantity);
+      if (
+        typeof restored.length === 'number' &&
+        typeof restored.width === 'number'
+      ) {
+        restored.quantity = Math.max(0, restored.length * restored.width);
+      } else if (areaValue !== null) {
+        restored.quantity = Math.max(0, areaValue);
+      } else {
+        restored.quantity = 0;
+      }
+    } else {
+      const quantityValue = toFiniteNumber(entry.quantity);
+      restored.quantity = Math.max(1, quantityValue !== null ? quantityValue : 1);
+    }
+    nextQuote.set(baseProduct.id, restored);
+  });
+  state.quote = nextQuote;
+  state.generalComment =
+    typeof imported.generalComment === 'string' ? imported.generalComment : '';
+  if (elements.generalComment) {
+    elements.generalComment.value = state.generalComment;
+  }
+  const discountRate = toFiniteNumber(imported.discountRate);
+  if (discountRate !== null) {
+    updateDiscountRate(clampRate(discountRate));
+  } else {
+    renderProducts();
+    renderQuote();
+  }
+}
+
+function normaliseQuoteImport(raw) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Format de panier inattendu.');
+  }
+  const source = Array.isArray(raw.items)
+    ? raw
+    : raw.quote && typeof raw.quote === 'object'
+    ? raw.quote
+    : raw;
+  return {
+    items: Array.isArray(source.items) ? source.items : [],
+    discountRate: toFiniteNumber(source.discountRate),
+    generalComment:
+      typeof source.generalComment === 'string' ? source.generalComment : '',
+  };
+}
+
+function formatTimestampForFilename(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}${month}${day}-${hours}${minutes}`;
+}
+
+function handleSiretInputChange(event) {
+  const digits = normaliseSiret(event.target.value).slice(0, 14);
+  event.target.value = formatSiret(digits);
+  if (!digits) {
+    setIdentificationStatus('', '');
+    state.lastIdentification = null;
+  }
+}
+
+async function handleIdentificationSubmit(event) {
+  event.preventDefault();
+  if (!elements.siretInput) return;
+  const siret = normaliseSiret(elements.siretInput.value);
+  elements.siretInput.value = formatSiret(siret);
+  if (!isValidSiret(siret)) {
+    setIdentificationStatus(
+      'error',
+      'Le numéro SIRET doit contenir 14 chiffres.',
+    );
+    elements.siretInput.focus();
+    return;
+  }
+  if (state.identificationLoading) {
+    return;
+  }
+  state.identificationLoading = true;
+  setIdentificationStatus('pending', 'Vérification en cours…');
+  try {
+    const response = await fetch(getCurrentWebhookUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siret, quote: buildQuoteSnapshot() }),
+    });
+    if (!response.ok) {
+      throw new Error(`Statut ${response.status}`);
+    }
+    const contentType = response.headers.get('content-type') || '';
+    let payload = null;
+    if (contentType.includes('application/json')) {
+      payload = await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        payload = text ? JSON.parse(text) : text;
+      } catch (parseError) {
+        payload = text;
+      }
+    }
+    applyIdentificationResult(payload, siret);
+  } catch (error) {
+    console.error(error);
+    setIdentificationStatus(
+      'error',
+      "Impossible de contacter le webhook. Veuillez réessayer.",
+    );
+  } finally {
+    state.identificationLoading = false;
+  }
+}
+
+function applyIdentificationResult(payload, siret) {
+  const result = parseIdentificationResponse(payload);
+  const formattedSiret = formatSiret(siret);
+  if (!result) {
+    setIdentificationStatus(
+      'error',
+      'Réponse de webhook invalide. Veuillez réessayer ultérieurement.',
+    );
+    return;
+  }
+  const statusText = String(result.status || result.message || '')
+    .toLowerCase()
+    .trim();
+  if (statusText.includes('non') && statusText.includes('identifi')) {
+    setIdentificationStatus(
+      'warning',
+      `Client non identifié pour le SIRET ${formattedSiret}.`,
+    );
+    state.lastIdentification = null;
+    return;
+  }
+  const companyName = getFirstNonEmptyValue([
+    result.companyName,
+    result.nom_societe,
+    result.nomSociete,
+    result.societe,
+    result.raisonSociale,
+    result.raison_sociale,
+  ]);
+  const email = getFirstNonEmptyValue([
+    result.email,
+    result.mail,
+    result.contactEmail,
+    result.contact_email,
+  ]);
+  const address = getFirstNonEmptyValue([
+    result.adresse,
+    result.address,
+    [
+      result.adresse1,
+      result.adresse2,
+      result.code_postal,
+      result.cp,
+      result.ville,
+      result.city,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  ]);
+  const discountRate = extractDiscountRate(result);
+  const details = [];
+  if (companyName) {
+    details.push({ label: 'Société', value: companyName });
+  }
+  if (email) {
+    details.push({ label: 'Contact', value: email });
+  }
+  if (address) {
+    details.push({ label: 'Adresse', value: address });
+  }
+  if (discountRate !== null) {
+    const normalisedRate = clampRate(discountRate);
+    updateDiscountRate(normalisedRate);
+    details.push({
+      label: 'Remise appliquée',
+      value: `${numberFormatter.format(normalisedRate)} %`,
+    });
+  }
+  if (!details.length) {
+    details.push({ value: 'Client identifié.' });
+  }
+  setIdentificationStatus(
+    'success',
+    `Client identifié (${formattedSiret})`,
+    details,
+  );
+  state.lastIdentification = { siret, data: result };
+}
+
+function parseIdentificationResponse(payload) {
+  if (payload == null) return null;
+  if (typeof payload === 'string') {
+    return { status: payload };
+  }
+  if (typeof payload === 'object') {
+    return payload;
+  }
+  return null;
+}
+
+function extractDiscountRate(data) {
+  if (!data || typeof data !== 'object') return null;
+  const candidates = [
+    data.discountRate,
+    data.discount,
+    data.remise,
+    data.remise_percent,
+    data.remisePourcentage,
+  ];
+  for (const candidate of candidates) {
+    const value = toFiniteNumber(candidate);
+    if (value !== null) {
+      return value;
+    }
+  }
+  const nested =
+    data.conditions_tarifaires ||
+    data.conditionsTarifaires ||
+    data.conditions;
+  if (nested && typeof nested === 'object' && nested !== data) {
+    return extractDiscountRate(nested);
+  }
+  return null;
+}
+
+function setIdentificationStatus(status, message, details = []) {
+  const container = elements.siretStatus;
+  if (!container) return;
+  container.className = 'site-nav__identity-status';
+  if (!message) {
+    container.textContent = '';
+    container.removeAttribute('data-status');
+    return;
+  }
+  if (status) {
+    container.classList.add(`site-nav__identity-status--${status}`);
+    container.setAttribute('data-status', status);
+  } else {
+    container.removeAttribute('data-status');
+  }
+  const fragment = document.createDocumentFragment();
+  const messageLine = document.createElement('p');
+  messageLine.textContent = message;
+  fragment.appendChild(messageLine);
+  if (Array.isArray(details)) {
+    details.forEach((detail) => {
+      if (!detail) return;
+      const value =
+        typeof detail.value === 'string'
+          ? detail.value
+          : detail.value != null
+          ? String(detail.value)
+          : '';
+      if (!value) return;
+      const line = document.createElement('p');
+      if (detail.label) {
+        const strong = document.createElement('strong');
+        strong.textContent = `${detail.label} : `;
+        line.appendChild(strong);
+        line.append(value);
+      } else {
+        line.textContent = value;
+      }
+      fragment.appendChild(line);
+    });
+  }
+  container.replaceChildren(fragment);
+}
+
+function normaliseSiret(value) {
+  return value ? String(value).replace(/\D/g, '') : '';
+}
+
+function formatSiret(value) {
+  const digits = normaliseSiret(value);
+  return digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+}
+
+function isValidSiret(value) {
+  return /^\d{14}$/.test(value);
+}
+
+function getFirstNonEmptyValue(values) {
+  for (const entry of values) {
+    if (Array.isArray(entry)) {
+      const nested = getFirstNonEmptyValue(entry);
+      if (nested) return nested;
+      continue;
+    }
+    if (entry == null) continue;
+    const stringValue = String(entry).trim();
+    if (stringValue) {
+      return stringValue;
+    }
+  }
+  return '';
+}
+
+function toFiniteNumber(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/%/g, '').replace(/\s/g, '').replace(',', '.');
+    if (!cleaned) return null;
+    const parsed = Number.parseFloat(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function clampRate(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
 async function generatePdf() {
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
@@ -840,7 +1424,7 @@ async function generatePdf() {
   const quoteNumber = `DEV-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
   const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
 
