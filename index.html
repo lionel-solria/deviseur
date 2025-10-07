@@ -18,7 +18,7 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="true">
+    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="false">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
@@ -42,6 +42,30 @@
             </div>
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
+          <div
+            id="client-identity-display"
+            class="site-nav__identity site-nav__identity-display hidden"
+            aria-live="polite"
+          >
+            <div class="site-nav__identity-summary">
+              <p id="client-identity-name" class="site-nav__identity-name"></p>
+              <p id="client-identity-details" class="site-nav__identity-details"></p>
+            </div>
+            <div class="site-nav__identity-actions">
+              <a
+                id="client-identity-register"
+                class="site-nav__identity-register hidden"
+                href="https://www.idgroup-france.com/bao/NouveauClient.html"
+                target="_blank"
+                rel="noopener"
+              >
+                S'enregistrer comme nouveau client
+              </a>
+              <button id="reset-identification" type="button" class="btn-secondary site-nav__identity-reset">
+                Changer de client
+              </button>
+            </div>
+          </div>
           <div class="site-nav__save-group">
             <label for="save-name" class="save-name-field">
               <span>Nom de la sauvegarde</span>
@@ -69,7 +93,7 @@
         </div>
       </div>
     </nav>
-    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
+    <main class="site-main mx-auto w-full max-w-[120rem] px-4 pb-32">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
           <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
@@ -362,10 +386,18 @@
     <section id="client-form-placeholder" class="client-form-placeholder" aria-live="polite" data-open="false">
       <div class="client-form-placeholder__content">
         <h2>Formulaire client</h2>
-        <p>
-          Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos
-          informations.
+        <p id="client-form-placeholder-message">
+          Le client n'a pas été reconnu. Vous pouvez vous enregistrer comme nouveau client via le lien ci-dessous.
         </p>
+        <a
+          id="client-form-placeholder-link"
+          class="client-form-placeholder__link"
+          href="https://www.idgroup-france.com/bao/NouveauClient.html"
+          target="_blank"
+          rel="noopener"
+        >
+          S'enregistrer comme nouveau client
+        </a>
       </div>
     </section>
 
@@ -377,7 +409,7 @@
       <div id="webhook-panel-content" class="webhook-panel__content"></div>
     </div>
 
-    <footer class="site-footer">
+    <footer class="site-footer mt-20">
       <div class="footer-inner">
         <div>
           <p class="text-lg font-semibold text-white">ID GROUP Devis</p>

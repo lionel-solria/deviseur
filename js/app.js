@@ -58,6 +58,7 @@ const WEBHOOK_ENDPOINTS = {
 
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
+const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
 
 const state = {
@@ -137,10 +138,17 @@ const elements = {
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
   siretFeedback: document.getElementById('siret-feedback'),
+  clientIdentityDisplay: document.getElementById('client-identity-display'),
+  clientIdentityName: document.getElementById('client-identity-name'),
+  clientIdentityDetails: document.getElementById('client-identity-details'),
+  clientIdentityRegister: document.getElementById('client-identity-register'),
+  resetIdentification: document.getElementById('reset-identification'),
   webhookPanel: document.getElementById('webhook-panel'),
   webhookPanelContent: document.getElementById('webhook-panel-content'),
   webhookPanelClose: document.getElementById('webhook-panel-close'),
   clientFormPlaceholder: document.getElementById('client-form-placeholder'),
+  clientFormPlaceholderMessage: document.getElementById('client-form-placeholder-message'),
+  clientFormPlaceholderLink: document.getElementById('client-form-placeholder-link'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -158,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
+  elements.resetIdentification?.addEventListener('click', handleResetIdentification);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   setupModal();
@@ -167,12 +176,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
-  window.addEventListener('resize', setupResponsiveSplit);
+  window.addEventListener('resize', () => {
+    setupResponsiveSplit();
+    updateNavSpacing();
+  });
   syncDiscountInputs();
   syncGeneralCommentInput();
   syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
+  updateClientIdentityDisplay();
+  updateNavSpacing();
 });
 
 function setupResponsiveSplit() {
@@ -201,41 +215,19 @@ function setupResponsiveSplit() {
 }
 
 function setupNavAutoHide() {
-  const nav = elements.siteNav;
-  if (!nav) {
+  if (!elements.siteNav) {
     return;
   }
+  elements.siteNav.dataset.collapsed = 'false';
+  updateNavSpacing();
+}
 
-  if (window.matchMedia('(pointer: coarse)').matches) {
-    nav.dataset.collapsed = 'false';
+function updateNavSpacing() {
+  if (!elements.siteNav) {
     return;
   }
-
-  const collapse = () => {
-    nav.dataset.collapsed = 'true';
-  };
-  const expand = () => {
-    nav.dataset.collapsed = 'false';
-  };
-
-  collapse();
-  nav.addEventListener('mouseenter', expand);
-  nav.addEventListener('mouseleave', () => {
-    if (!nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
-  nav.addEventListener('focusin', expand);
-  nav.addEventListener('focusout', () => {
-    if (!nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
-  window.addEventListener('scroll', () => {
-    if (!nav.matches(':hover') && !nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
+  const height = Math.ceil(elements.siteNav.offsetHeight || 0);
+  document.documentElement.style.setProperty('--site-nav-offset', `${height}px`);
 }
 
 async function loadCatalogue() {
@@ -894,6 +886,15 @@ function extractInitialsForFilename(value) {
   return letters.slice(0, 3).toUpperCase();
 }
 
+function getClientInitialsForFilename() {
+  const clientName = state.identifiedClient?.companyName || '';
+  const initials = extractInitialsForFilename(clientName);
+  if (!initials) {
+    return 'CLT';
+  }
+  return initials.padEnd(3, 'X');
+}
+
 function normaliseFileSegment(value) {
   return String(value || '')
     .normalize('NFD')
@@ -944,24 +945,19 @@ function handleSaveCart() {
     return;
   }
   const saveName = (state.saveName || '').trim();
-  const initials = extractInitialsForFilename(saveName);
   if (!saveName) {
     toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
     return;
   }
-  if (initials.length < 3) {
-    toggleFeedback('Le nom doit contenir au moins trois lettres pour générer le fichier.', 'warning');
-    return;
-  }
+  const clientInitials = getClientInitialsForFilename();
   try {
     const snapshot = buildCartSnapshot();
     const json = JSON.stringify(snapshot, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const now = new Date();
     const dateSegment = formatDateForFilename(now);
-    const slug = normaliseFileSegment(saveName);
-    const filenameBase = `${CART_FILENAME_PREFIX}-${initials}${dateSegment}`;
-    const filename = `${slug ? `${filenameBase}-${slug}` : filenameBase}.json`;
+    const slug = normaliseFileSegment(saveName) || CART_FILENAME_PREFIX;
+    const filename = `${slug}-${clientInitials}-${dateSegment}.json`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -1150,12 +1146,14 @@ function handleSiretInputChange(event) {
       updateDiscountRate(0);
       closeWebhookPanel();
       closeClientFormPlaceholder();
+      updateClientIdentityDisplay();
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
       updateDiscountRate(0);
       closeWebhookPanel();
       closeClientFormPlaceholder();
+      updateClientIdentityDisplay();
     }
   }
 }
@@ -1487,6 +1485,8 @@ function buildIdentificationMessage(result) {
   const parts = [];
   if (result.companyName) {
     parts.push(result.companyName);
+  } else {
+    parts.push('Nom du client non communiqué');
   }
   if (result.contactEmail) {
     parts.push(`Contact : ${result.contactEmail}`);
@@ -1518,12 +1518,14 @@ function setIdentificationState(status, message = null) {
 }
 
 function updateIdentificationFromState() {
-  if (!elements.siretInput) {
-    return;
+  if (elements.siretInput) {
+    if (state.identifiedClient?.siret) {
+      elements.siretInput.value = state.identifiedClient.siret;
+    } else if (!state.isIdentifyingClient) {
+      elements.siretInput.value = '';
+    }
   }
-  if (state.identifiedClient?.siret) {
-    elements.siretInput.value = state.identifiedClient.siret;
-  }
+  updateClientIdentityDisplay();
   if (!state.identifiedClient) {
     setIdentificationState('idle');
     closeClientFormPlaceholder();
@@ -1538,10 +1540,93 @@ function updateIdentificationFromState() {
   }
 }
 
+function updateClientIdentityDisplay() {
+  const display = elements.clientIdentityDisplay;
+  const form = elements.siretForm;
+  if (!display || !form) {
+    updateNavSpacing();
+    return;
+  }
+
+  const client = state.identifiedClient && state.identifiedClient.identified ? state.identifiedClient : null;
+  if (!client) {
+    form.classList.remove('hidden');
+    form.removeAttribute('aria-hidden');
+    form.removeAttribute('hidden');
+    display.classList.add('hidden');
+    display.setAttribute('aria-hidden', 'true');
+    display.setAttribute('hidden', '');
+    if (elements.clientIdentityName) {
+      elements.clientIdentityName.textContent = '';
+    }
+    if (elements.clientIdentityDetails) {
+      elements.clientIdentityDetails.textContent = '';
+      elements.clientIdentityDetails.classList.add('hidden');
+    }
+    if (elements.clientIdentityRegister) {
+      elements.clientIdentityRegister.classList.add('hidden');
+      elements.clientIdentityRegister.href = NEW_CLIENT_URL;
+    }
+    updateNavSpacing();
+    return;
+  }
+
+  form.classList.add('hidden');
+  form.setAttribute('aria-hidden', 'true');
+  form.setAttribute('hidden', '');
+  display.classList.remove('hidden');
+  display.removeAttribute('aria-hidden');
+  display.removeAttribute('hidden');
+
+  const name = client.companyName ? client.companyName.trim() : '';
+  if (elements.clientIdentityName) {
+    elements.clientIdentityName.textContent = name || 'Nom du client non communiqué';
+  }
+
+  if (elements.clientIdentityDetails) {
+    const formattedSiret = formatSiret(client.siret);
+    if (name && formattedSiret) {
+      elements.clientIdentityDetails.textContent = `SIRET : ${formattedSiret}`;
+      elements.clientIdentityDetails.classList.remove('hidden');
+    } else if (!name && formattedSiret) {
+      elements.clientIdentityDetails.textContent = `SIRET : ${formattedSiret}`;
+      elements.clientIdentityDetails.classList.remove('hidden');
+    } else if (!name) {
+      elements.clientIdentityDetails.textContent = 'Merci de vous enregistrer comme nouveau client.';
+      elements.clientIdentityDetails.classList.remove('hidden');
+    } else {
+      elements.clientIdentityDetails.textContent = '';
+      elements.clientIdentityDetails.classList.add('hidden');
+    }
+  }
+
+  if (elements.clientIdentityRegister) {
+    elements.clientIdentityRegister.href = NEW_CLIENT_URL;
+    if (name) {
+      elements.clientIdentityRegister.classList.add('hidden');
+    } else {
+      elements.clientIdentityRegister.classList.remove('hidden');
+    }
+  }
+
+  updateNavSpacing();
+}
+
+function handleResetIdentification() {
+  state.identifiedClient = null;
+  updateDiscountRate(0);
+  closeWebhookPanel();
+  updateIdentificationFromState();
+  if (elements.siretInput) {
+    elements.siretInput.focus();
+  }
+}
+
 function toggleWebhookMode() {
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
   updateDiscountRate(0);
+  updateClientIdentityDisplay();
   updateWebhookModeIndicator();
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
   closeWebhookPanel();
@@ -1595,7 +1680,12 @@ function parsePercentageValue(value) {
     return Number.isFinite(value) ? value : null;
   }
   if (typeof value === 'string') {
-    const cleaned = value.replace(/%/g, '').replace(',', '.').trim();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const withoutTwitter = trimmed.replace(/https?:\/\/twitter\.com\//gi, '');
+    const cleaned = withoutTwitter.replace(/%/g, '').replace(',', '.').trim();
     if (!cleaned) {
       return null;
     }
@@ -2179,12 +2269,16 @@ function openClientFormPlaceholder(siret, options = {}) {
   if (!container) {
     return;
   }
-  const paragraph = container.querySelector('p');
-  if (paragraph) {
+  const message = elements.clientFormPlaceholderMessage;
+  const link = elements.clientFormPlaceholderLink;
+  if (link) {
+    link.href = NEW_CLIENT_URL;
+  }
+  if (message) {
     const formatted = formatSiret(siret);
-    paragraph.textContent = formatted
-      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.`
-      : "Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.";
+    message.textContent = formatted
+      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Vous pouvez vous enregistrer comme nouveau client via le lien ci-dessous.`
+      : "Le client n'a pas été reconnu. Vous pouvez vous enregistrer comme nouveau client via le lien ci-dessous.";
   }
   container.dataset.open = 'true';
   if (options.scroll !== false) {
