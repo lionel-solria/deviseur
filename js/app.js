@@ -2,6 +2,11 @@ const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 const brandLogoAssetPath = 'media/ID%20GROUP.png';
 
+const WEBHOOK_ENDPOINTS = {
+  production: 'https://aiid.app.n8n.cloud/webhook/deviseur',
+  test: 'https://aiid.app.n8n.cloud/webhook-test/deviseur',
+};
+
 const COMPANY_IDENTITY = {
   name: 'ID GROUP',
   legal: [
@@ -68,12 +73,16 @@ const state = {
   lastFocusElement: null,
   categoryMenuOpen: false,
   brandLogoDataUrl: undefined,
+  webhookMode: 'production',
+  customer: null,
 };
 
 const elements = {
   layout: document.getElementById('main-layout'),
   cataloguePanel: document.getElementById('catalogue-panel'),
   quotePanel: document.getElementById('quote-panel'),
+  brandLogo: document.getElementById('brand-logo'),
+  webhookModeBadge: document.getElementById('webhook-mode-badge'),
   search: document.getElementById('search'),
   unitFilter: document.getElementById('unit-filter'),
   categoryFilterButton: document.getElementById('category-filter-button'),
@@ -92,6 +101,13 @@ const elements = {
   headerDiscount: document.getElementById('header-discount'),
   discount: document.getElementById('discount'),
   generalComment: document.getElementById('general-comment'),
+  saveQuote: document.getElementById('save-quote'),
+  restoreQuote: document.getElementById('restore-quote'),
+  restoreQuoteInput: document.getElementById('restore-quote-input'),
+  customerIdentificationForm: document.getElementById('customer-identification-form'),
+  customerSiretInput: document.getElementById('customer-siret'),
+  customerStatus: document.getElementById('customer-identification-status'),
+  customerDetails: document.getElementById('customer-identification-details'),
   summaryDiscount: document.getElementById('summary-discount'),
   summaryNet: document.getElementById('summary-net'),
   summaryVat: document.getElementById('summary-vat'),
@@ -116,6 +132,9 @@ const elements = {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
+  setupBrandingControls();
+  setupCustomerIdentification();
+  setupQuotePersistence();
   elements.search?.addEventListener('input', handleSearch);
   elements.headerDiscount?.addEventListener('input', handleDiscountChange);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
@@ -155,6 +174,309 @@ function setupResponsiveSplit() {
     elements.quotePanel.style.removeProperty('left');
     elements.quotePanel.style.removeProperty('right');
   }
+}
+
+function setupBrandingControls() {
+  updateWebhookModeBadge();
+  if (elements.brandLogo) {
+    elements.brandLogo.addEventListener('click', toggleWebhookMode);
+    elements.brandLogo.setAttribute('role', 'button');
+    elements.brandLogo.setAttribute('aria-label', 'Changer le mode du webhook');
+    elements.brandLogo.setAttribute('tabindex', '0');
+    elements.brandLogo.addEventListener('keydown', handleBrandLogoKeydown);
+  }
+}
+
+function handleBrandLogoKeydown(event) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    toggleWebhookMode();
+  }
+}
+
+function toggleWebhookMode() {
+  state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
+  updateWebhookModeBadge();
+  setCustomerStatus(
+    state.webhookMode === 'production'
+      ? 'Mode webhook : production'
+      : 'Mode webhook : test',
+    'info',
+  );
+}
+
+function updateWebhookModeBadge() {
+  const label = state.webhookMode === 'production' ? 'Production' : 'Test';
+  if (elements.webhookModeBadge) {
+    elements.webhookModeBadge.textContent = label;
+  }
+  if (elements.brandLogo) {
+    elements.brandLogo.setAttribute('title', `${label} – cliquer pour changer de mode`);
+  }
+}
+
+function getActiveWebhookUrl() {
+  return WEBHOOK_ENDPOINTS[state.webhookMode] || WEBHOOK_ENDPOINTS.production;
+}
+
+function setupCustomerIdentification() {
+  if (elements.customerIdentificationForm) {
+    elements.customerIdentificationForm.addEventListener(
+      'submit',
+      handleCustomerIdentificationSubmit,
+    );
+  }
+  if (elements.customerStatus) {
+    setCustomerStatus('Mode webhook : production', 'info');
+  }
+}
+
+function setCustomerStatus(message, status = 'info') {
+  if (!elements.customerStatus) return;
+  if (!message) {
+    elements.customerStatus.textContent = '';
+    delete elements.customerStatus.dataset.status;
+    return;
+  }
+  elements.customerStatus.textContent = message;
+  elements.customerStatus.dataset.status = status;
+}
+
+async function handleCustomerIdentificationSubmit(event) {
+  event.preventDefault();
+  const rawValue = elements.customerSiretInput?.value ?? '';
+  const siret = rawValue.replace(/\D/g, '');
+  if (!siret) {
+    setCustomerStatus('Veuillez saisir un numéro de SIRET valide.', 'warning');
+    renderCustomerDetails(null);
+    return;
+  }
+  setCustomerStatus('Identification en cours…', 'info');
+  try {
+    await identifyCustomer(siret);
+  } catch (error) {
+    console.error('Erreur identification client', error);
+    setCustomerStatus("Une erreur est survenue lors de l'identification.", 'error');
+    renderCustomerDetails(null);
+  }
+}
+
+async function identifyCustomer(siret) {
+  const url = getActiveWebhookUrl();
+  const payload = { siret };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`Webhook ${response.status}`);
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw new Error('Réponse webhook invalide');
+  }
+  processCustomerIdentification(data, siret);
+}
+
+function processCustomerIdentification(data, siret) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Format de réponse inattendu');
+  }
+  const rawStatus = String(data.status || data.result || '').toLowerCase();
+  const isIdentified =
+    rawStatus.includes('identifi') ||
+    Boolean(data.identified) ||
+    String(data.client)?.toLowerCase() === 'identifie';
+  if (!isIdentified) {
+    state.customer = null;
+    setCustomerStatus('Client non identifié.', 'warning');
+    renderCustomerDetails(null);
+    return;
+  }
+  const customer = {
+    siret,
+    companyName:
+      data.companyName ||
+      data.company?.name ||
+      data.societe ||
+      data.nomSociete ||
+      data.raisonSociale ||
+      'Client identifié',
+    address:
+      data.address ||
+      [data.addressLine1, data.addressLine2, data.addressZip, data.addressCity]
+        .filter(Boolean)
+        .join('\n') ||
+      data.adresse ||
+      '',
+    contactEmail: data.contactEmail || data.email || data.contact?.email || '',
+    pricingConditions:
+      data.pricingConditions || data.conditionsTarifaires || data.conditions || {},
+  };
+  const discountSource =
+    customer.pricingConditions?.discountRate ??
+    customer.pricingConditions?.remise ??
+    data.discountRate ??
+    data.remise;
+  if (typeof discountSource !== 'undefined') {
+    const discountValue = parseFloat(String(discountSource).replace(',', '.'));
+    if (Number.isFinite(discountValue)) {
+      updateDiscountRate(Math.max(0, Math.min(discountValue, 100)));
+    }
+  }
+  state.customer = customer;
+  renderCustomerDetails(customer);
+  setCustomerStatus('Client identifié et synchronisé.', 'success');
+}
+
+function renderCustomerDetails(details) {
+  if (!elements.customerDetails) return;
+  if (!details) {
+    elements.customerDetails.innerHTML = '';
+    elements.customerDetails.hidden = true;
+    return;
+  }
+  const fragments = [];
+  if (details.companyName) {
+    fragments.push(`<dt>Société</dt><dd>${escapeHtml(details.companyName)}</dd>`);
+  }
+  if (details.address) {
+    const safeAddress = escapeHtml(details.address).replace(/\n/g, '<br />');
+    fragments.push(`<dt>Adresse</dt><dd>${safeAddress}</dd>`);
+  }
+  if (details.contactEmail) {
+    fragments.push(`<dt>Email</dt><dd>${escapeHtml(details.contactEmail)}</dd>`);
+  }
+  if (Number.isFinite(state.discountRate) && state.discountRate > 0) {
+    fragments.push(
+      `<dt>Remise appliquée</dt><dd>${numberFormatter.format(state.discountRate)} %</dd>`,
+    );
+  }
+  elements.customerDetails.innerHTML = fragments.join('');
+  elements.customerDetails.hidden = fragments.length === 0;
+}
+
+function setupQuotePersistence() {
+  elements.saveQuote?.addEventListener('click', handleSaveQuote);
+  elements.restoreQuote?.addEventListener('click', () => {
+    elements.restoreQuoteInput?.click();
+  });
+  elements.restoreQuoteInput?.addEventListener('change', handleRestoreQuoteInput);
+}
+
+function handleSaveQuote() {
+  if (!state.quote.size) {
+    toggleFeedback('Aucun article à sauvegarder pour le moment.', 'warning');
+    return;
+  }
+  const data = serializeQuote();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, '-')
+    .replace('T', '_')
+    .slice(0, 19);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `panier-${timestamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toggleFeedback('Panier exporté au format JSON.', 'info');
+}
+
+async function handleRestoreQuoteInput(event) {
+  const input = event.target;
+  const file = input?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    restoreQuoteFromData(data);
+    toggleFeedback('Panier restauré depuis le fichier JSON.', 'info');
+  } catch (error) {
+    console.error('Erreur lors du chargement du panier', error);
+    toggleFeedback('Le fichier de panier est invalide.', 'error');
+  } finally {
+    if (input) {
+      input.value = '';
+    }
+  }
+}
+
+function serializeQuote() {
+  const items = Array.from(state.quote.values()).map((item) => ({
+    id: item.id,
+    quantity: item.quantity,
+    quantityMode: item.quantityMode,
+    length: item.length,
+    width: item.width,
+    comment: item.comment,
+  }));
+  return {
+    generatedAt: new Date().toISOString(),
+    discountRate: state.discountRate,
+    generalComment: state.generalComment,
+    items,
+  };
+}
+
+function restoreQuoteFromData(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Format de fichier inattendu');
+  }
+  const items = Array.isArray(data.items) ? data.items : [];
+  state.quote.clear();
+  for (const itemData of items) {
+    const productId = itemData?.id ?? itemData?.productId;
+    if (!productId) continue;
+    const product = state.catalogueById.get(productId);
+    if (!product) continue;
+    const restoredItem = {
+      ...product,
+      comment: typeof itemData.comment === 'string' ? itemData.comment : '',
+      expanded: false,
+    };
+    if (product.quantityMode === 'area') {
+      const lengthValue = parseFloat(String(itemData.length ?? '').replace(',', '.'));
+      const widthValue = parseFloat(String(itemData.width ?? '').replace(',', '.'));
+      restoredItem.length = Number.isFinite(lengthValue) && lengthValue > 0 ? lengthValue : 1;
+      restoredItem.width = Number.isFinite(widthValue) && widthValue > 0 ? widthValue : 1;
+      const areaValue = parseFloat(String(itemData.quantity ?? '').replace(',', '.'));
+      if (Number.isFinite(areaValue) && areaValue >= 0) {
+        restoredItem.quantity = areaValue;
+      } else {
+        const fallback = restoredItem.length * restoredItem.width;
+        restoredItem.quantity = Number.isFinite(fallback) ? fallback : 0;
+      }
+    } else {
+      const quantityValue = parseFloat(String(itemData.quantity ?? '').replace(',', '.'));
+      restoredItem.quantity = Number.isFinite(quantityValue) && quantityValue > 0 ? quantityValue : 1;
+    }
+    state.quote.set(product.id, restoredItem);
+  }
+  if (typeof data.generalComment === 'string') {
+    state.generalComment = data.generalComment;
+  } else {
+    state.generalComment = '';
+  }
+  if (elements.generalComment) {
+    elements.generalComment.value = state.generalComment;
+  }
+  if (typeof data.discountRate !== 'undefined') {
+    const discountValue = parseFloat(String(data.discountRate).replace(',', '.'));
+    if (Number.isFinite(discountValue)) {
+      updateDiscountRate(Math.max(0, Math.min(discountValue, 100)));
+    }
+  }
+  renderQuote();
 }
 
 async function loadCatalogue() {
@@ -737,6 +1059,9 @@ function updateDiscountRate(rate) {
   syncDiscountInputs();
   renderProducts();
   renderQuote();
+  if (state.customer) {
+    renderCustomerDetails(state.customer);
+  }
 }
 
 function syncDiscountInputs() {
@@ -840,7 +1165,10 @@ async function generatePdf() {
   const quoteNumber = `DEV-${issueDate.getFullYear()}${String(issueDate.getMonth() + 1).padStart(2, '0')}${String(issueDate.getDate()).padStart(2, '0')}-${String(issueDate.getHours()).padStart(2, '0')}${String(issueDate.getMinutes()).padStart(2, '0')}`;
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compressPdf: true });
+  if (typeof doc.setCompression === 'function') {
+    doc.setCompression(true);
+  }
   const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -864,7 +1192,7 @@ async function generatePdf() {
   doc.roundedRect(margin, headerTop, headerWidth, headerHeight, 10, 10, 'FD');
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', margin + 18, headerTop + 22, 84, 48);
+    doc.addImage(logoDataUrl, 'PNG', margin + 18, headerTop + 22, 78, 44, undefined, 'FAST');
   }
 
   const titleX = margin + 122;
@@ -1006,7 +1334,7 @@ async function generatePdf() {
     styles: {
       font: 'helvetica',
       fontSize: 9,
-      cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+      cellPadding: { top: 4, right: 5, bottom: 4, left: 5 },
       textColor: colors.text,
       lineColor: colors.border,
       lineWidth: 0.4,
@@ -1228,6 +1556,15 @@ function toggleFeedback(message, type = 'info') {
   box.className = styles[type] || styles.info;
   box.textContent = message;
   box.classList.remove('hidden');
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function parseFrenchNumber(value) {

@@ -21,19 +21,32 @@
     <nav class="site-nav fixed inset-x-0 top-0 z-40">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
-          <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+          <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" id="brand-logo" />
           <div>
             <p class="brand-title">ID GROUP Devis</p>
             <p class="brand-subtitle">Créez vos offres sur mesure en un instant</p>
           </div>
+          <span class="webhook-mode-badge" id="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
         <div class="site-nav__actions">
-          <div class="site-nav__tree">
-            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
-            <select id="catalogue-tree" class="site-nav__tree-select">
-              <option value="">Sélectionner une catégorie ou un article</option>
-            </select>
-          </div>
+          <form class="site-nav__identify" id="customer-identification-form">
+            <label for="customer-siret" class="site-nav__identify-label">Identification client (SIRET)</label>
+            <div class="site-nav__identify-controls">
+              <input
+                id="customer-siret"
+                name="customer-siret"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="Ex. 73282932000074"
+                class="site-nav__identify-input"
+                maxlength="14"
+              />
+              <button type="submit" class="btn-secondary" id="customer-identify">Identifier</button>
+            </div>
+            <p id="customer-identification-status" class="site-nav__identify-status" aria-live="polite"></p>
+            <dl id="customer-identification-details" class="site-nav__identify-details" hidden></dl>
+          </form>
           <label for="header-discount" class="discount-field">
             <span>Remise (%)</span>
             <input
@@ -46,16 +59,27 @@
               class="discount-field__input"
             />
           </label>
+          <div class="site-nav__cart-actions">
+            <button id="save-quote" type="button" class="btn-secondary">Sauvegarder mon panier</button>
+            <button id="restore-quote" type="button" class="btn-link">Restaurer</button>
+            <input id="restore-quote-input" type="file" accept="application/json" class="sr-only" />
+          </div>
           <button id="generate-pdf" class="btn-primary">
             Générer le devis PDF
           </button>
+          <div class="site-nav__tree">
+            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
+            <select id="catalogue-tree" class="site-nav__tree-select">
+              <option value="">Sélectionner une catégorie ou un article</option>
+            </select>
+          </div>
         </div>
       </div>
     </nav>
     <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
+          <header class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface catalogue-sticky-header">
             <div>
               <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
               <p class="mt-1 text-sm text-slate-500 brand-text-muted">

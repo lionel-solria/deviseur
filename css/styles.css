@@ -3,6 +3,7 @@
   --font-heading: 'Barlow', 'Trade Gothic Next LT Pro', 'Helvetica Neue', Arial, sans-serif;
   --font-body: 'Barlow', 'Trade Gothic Next LT Pro', 'Helvetica Neue', Arial, sans-serif;
   --font-rounded: 'Nunito', 'Arial Rounded MT Bold', 'Arial Rounded MT', Arial, sans-serif;
+  --nav-height: 5.5rem;
   --color-primary: #e41e28;
   --color-primary-dark: #c41620;
   --color-secondary: #193f60;
@@ -48,6 +49,18 @@ input,
 select,
 textarea {
   font-family: var(--font-body);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .brand-heading {
@@ -139,10 +152,25 @@ textarea {
   gap: 1rem;
 }
 
+.webhook-mode-badge {
+  align-self: flex-start;
+  margin-left: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(25, 63, 96, 0.12);
+  color: var(--color-secondary);
+  cursor: default;
+}
+
 .brand-logo {
   width: 3rem;
   height: 3rem;
   object-fit: contain;
+  cursor: pointer;
 }
 
 .brand-title {
@@ -168,13 +196,118 @@ textarea {
   gap: 0.75rem;
 }
 
-.site-nav__tree {
+.site-nav__identify {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   min-width: 16rem;
-  flex: 1 1 16rem;
-  width: min(100%, 24rem);
+  max-width: 20rem;
+}
+
+.site-nav__identify-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.site-nav__identify-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.site-nav__identify-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(25, 63, 96, 0.15);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-muted-strong);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.site-nav__identify-input:focus {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.15);
+  outline: none;
+}
+
+.site-nav__identify-status {
+  font-size: 0.75rem;
+  min-height: 1.125rem;
+}
+
+.site-nav__identify-status[data-status='success'] {
+  color: #166534;
+}
+
+.site-nav__identify-status[data-status='error'] {
+  color: #b91c1c;
+}
+
+.site-nav__identify-status[data-status='warning'] {
+  color: #b45309;
+}
+
+.site-nav__identify-status[data-status='info'] {
+  color: var(--color-muted);
+}
+
+.site-nav__identify-details {
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.65rem;
+  background: rgba(25, 63, 96, 0.04);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.site-nav__identify-details dt {
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.site-nav__identify-details dd {
+  margin: 0 0 0.35rem;
+  color: var(--color-muted-strong);
+}
+
+.site-nav__cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-link {
+  border: none;
+  background: transparent;
+  color: var(--color-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-link:hover,
+.btn-link:focus-visible {
+  background: rgba(25, 63, 96, 0.08);
+  color: var(--color-primary);
+  outline: none;
+}
+
+.site-nav__tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 10rem;
+  max-width: 12rem;
+  flex: 0 0 12rem;
+  margin-left: auto;
 }
 
 .site-nav__tree-label {
@@ -201,6 +334,12 @@ textarea {
   outline: none;
   border-color: var(--color-secondary);
   box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.15);
+}
+
+.catalogue-sticky-header {
+  position: sticky;
+  top: calc(var(--nav-height) + 1.25rem);
+  z-index: 20;
 }
 
 .site-nav__tree-select option {
