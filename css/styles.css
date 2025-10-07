@@ -104,6 +104,18 @@ textarea {
   box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.1);
 }
 
+.rounded-2xl {
+  border-radius: 0.9rem !important;
+}
+
+.rounded-xl {
+  border-radius: 0.65rem !important;
+}
+
+.rounded-lg {
+  border-radius: 0.55rem !important;
+}
+
 .site-nav {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
@@ -154,6 +166,45 @@ textarea {
   align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
+}
+
+.site-nav__tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 16rem;
+  flex: 1 1 16rem;
+  width: min(100%, 24rem);
+}
+
+.site-nav__tree-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.site-nav__tree-select {
+  display: block;
+  width: 100%;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(25, 63, 96, 0.15);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-muted-strong);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.site-nav__tree-select:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.15);
+}
+
+.site-nav__tree-select option {
+  color: var(--color-muted-strong);
 }
 
 .discount-field {
@@ -273,6 +324,12 @@ textarea {
   position: relative;
   overflow: hidden;
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.product-card.is-highlighted {
+  box-shadow: 0 0 0 3px rgba(228, 30, 40, 0.2), 0 24px 36px -28px rgba(25, 63, 96, 0.45);
+  outline: 2px solid rgba(228, 30, 40, 0.45);
+  outline-offset: 0;
 }
 
 .product-image-frame {
