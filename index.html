@@ -18,7 +18,7 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="true">
+    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="false">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
@@ -26,6 +26,15 @@
           <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite">Production</span>
         </div>
         <div class="site-nav__actions">
+          <div id="client-identity" class="site-nav__client-summary" hidden>
+            <div class="site-nav__client-summary-details">
+              <p id="client-summary-name" class="site-nav__client-name" aria-live="polite"></p>
+              <p id="client-summary-meta" class="site-nav__client-meta"></p>
+            </div>
+            <button id="client-reset" type="button" class="btn-secondary site-nav__client-reset">
+              Changer de client
+            </button>
+          </div>
           <form id="siret-form" class="site-nav__identity" autocomplete="off">
             <label for="siret-input" class="site-nav__identity-label">SIRET</label>
             <div class="site-nav__identity-controls">
@@ -69,7 +78,7 @@
         </div>
       </div>
     </nav>
-    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
+    <main class="site-main mx-auto w-full max-w-[120rem] px-4 pb-24 pt-28">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
           <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
@@ -363,8 +372,10 @@
       <div class="client-form-placeholder__content">
         <h2>Formulaire client</h2>
         <p>
-          Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos
-          informations.
+          Le client n'a pas été reconnu. Vous pouvez vous enregistrer comme nouveau client en suivant ce lien :
+          <a href="https://www.idgroup-france.com/bao/NouveauClient.html" target="_blank" rel="noopener"
+            >https://www.idgroup-france.com/bao/NouveauClient.html</a
+          >.
         </p>
       </div>
     </section>

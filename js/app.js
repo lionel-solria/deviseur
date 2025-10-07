@@ -1,6 +1,7 @@
 const catalogueUrl = './catalogue/export.csv';
 const defaultImage = 'https://via.placeholder.com/640x480.png?text=Image+indisponible';
 const brandLogoAssetPath = 'media/ID%20GROUP.png';
+const NEW_CLIENT_REGISTRATION_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 
 const COMPANY_IDENTITY = {
   name: 'ID GROUP',
@@ -57,7 +58,6 @@ const WEBHOOK_ENDPOINTS = {
 };
 
 const CART_SNAPSHOT_VERSION = 1;
-const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
 
 const state = {
@@ -82,6 +82,7 @@ const state = {
   isIdentifyingClient: false,
   identifiedClient: null,
   webhookPanelTimeout: null,
+  navResizeObserver: null,
 };
 
 const elements = {
@@ -133,6 +134,10 @@ const elements = {
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
   saveNameInput: document.getElementById('save-name'),
+  clientIdentity: document.getElementById('client-identity'),
+  clientSummaryName: document.getElementById('client-summary-name'),
+  clientSummaryMeta: document.getElementById('client-summary-meta'),
+  clientReset: document.getElementById('client-reset'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -158,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
+  elements.clientReset?.addEventListener('click', resetIdentifiedClient);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   setupModal();
@@ -167,12 +173,16 @@ document.addEventListener('DOMContentLoaded', () => {
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
-  window.addEventListener('resize', setupResponsiveSplit);
+  window.addEventListener('resize', () => {
+    setupResponsiveSplit();
+    updateNavClearance();
+  });
   syncDiscountInputs();
   syncGeneralCommentInput();
   syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
+  updateClientIdentityDisplay();
 });
 
 function setupResponsiveSplit() {
@@ -206,36 +216,33 @@ function setupNavAutoHide() {
     return;
   }
 
-  if (window.matchMedia('(pointer: coarse)').matches) {
-    nav.dataset.collapsed = 'false';
-    return;
+  nav.dataset.collapsed = 'false';
+
+  if (state.navResizeObserver && typeof state.navResizeObserver.disconnect === 'function') {
+    state.navResizeObserver.disconnect();
+    state.navResizeObserver = null;
   }
 
-  const collapse = () => {
-    nav.dataset.collapsed = 'true';
-  };
-  const expand = () => {
-    nav.dataset.collapsed = 'false';
-  };
+  updateNavClearance();
 
-  collapse();
-  nav.addEventListener('mouseenter', expand);
-  nav.addEventListener('mouseleave', () => {
-    if (!nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
-  nav.addEventListener('focusin', expand);
-  nav.addEventListener('focusout', () => {
-    if (!nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
-  window.addEventListener('scroll', () => {
-    if (!nav.matches(':hover') && !nav.contains(document.activeElement)) {
-      collapse();
-    }
-  });
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => {
+      updateNavClearance();
+    });
+    observer.observe(nav);
+    state.navResizeObserver = observer;
+  }
+}
+
+function updateNavClearance() {
+  const nav = elements.siteNav;
+  const body = document.body;
+  if (!nav || !body) {
+    return;
+  }
+  const height = Math.ceil(nav.getBoundingClientRect().height);
+  const offset = Number.isFinite(height) && height > 0 ? `${height}px` : '0px';
+  body.style.setProperty('--site-nav-offset', offset);
 }
 
 async function loadCatalogue() {
@@ -813,6 +820,7 @@ function updateDiscountRate(rate) {
   syncDiscountInputs();
   renderProducts();
   renderQuote();
+  updateClientIdentityDisplay();
 }
 
 function syncDiscountInputs() {
@@ -903,6 +911,18 @@ function normaliseFileSegment(value) {
     .toLowerCase();
 }
 
+function getClientCodeForFilename() {
+  const name = state.identifiedClient?.companyName || '';
+  const initials = extractInitialsForFilename(name);
+  if (initials.length >= 3) {
+    return initials.slice(0, 3);
+  }
+  if (initials.length > 0) {
+    return initials.padEnd(3, 'X');
+  }
+  return 'NCL';
+}
+
 function formatDateForFilename(date) {
   const year = String(date.getFullYear()).slice(-2);
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -944,13 +964,8 @@ function handleSaveCart() {
     return;
   }
   const saveName = (state.saveName || '').trim();
-  const initials = extractInitialsForFilename(saveName);
   if (!saveName) {
     toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
-    return;
-  }
-  if (initials.length < 3) {
-    toggleFeedback('Le nom doit contenir au moins trois lettres pour générer le fichier.', 'warning');
     return;
   }
   try {
@@ -959,9 +974,9 @@ function handleSaveCart() {
     const blob = new Blob([json], { type: 'application/json' });
     const now = new Date();
     const dateSegment = formatDateForFilename(now);
-    const slug = normaliseFileSegment(saveName);
-    const filenameBase = `${CART_FILENAME_PREFIX}-${initials}${dateSegment}`;
-    const filename = `${slug ? `${filenameBase}-${slug}` : filenameBase}.json`;
+    const slug = normaliseFileSegment(saveName) || 'sauvegarde';
+    const clientCode = getClientCodeForFilename();
+    const filename = `${slug}-${clientCode}-${dateSegment}.json`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -1150,12 +1165,14 @@ function handleSiretInputChange(event) {
       updateDiscountRate(0);
       closeWebhookPanel();
       closeClientFormPlaceholder();
+      updateClientIdentityDisplay();
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
       setIdentificationState('idle');
       updateDiscountRate(0);
       closeWebhookPanel();
       closeClientFormPlaceholder();
+      updateClientIdentityDisplay();
     }
   }
 }
@@ -1517,6 +1534,67 @@ function setIdentificationState(status, message = null) {
   }
 }
 
+function updateClientIdentityDisplay() {
+  const client = state.identifiedClient;
+  const isIdentified = Boolean(client && client.identified);
+
+  if (elements.siretForm) {
+    elements.siretForm.hidden = isIdentified;
+  }
+
+  if (elements.clientIdentity) {
+    elements.clientIdentity.hidden = !isIdentified;
+  }
+
+  if (isIdentified) {
+    const displayName = client?.companyName?.trim() || 'Client identifié';
+    if (elements.clientSummaryName) {
+      elements.clientSummaryName.textContent = displayName;
+    }
+
+    if (elements.clientSummaryMeta) {
+      const parts = [];
+      const formattedSiret = formatSiret(client?.siret);
+      if (formattedSiret) {
+        parts.push(`SIRET : ${formattedSiret}`);
+      }
+      const rawDiscount =
+        typeof client?.discountRate === 'number' && !Number.isNaN(client.discountRate)
+          ? client.discountRate
+          : state.discountRate;
+      if (typeof rawDiscount === 'number' && Number.isFinite(rawDiscount) && rawDiscount >= 0) {
+        parts.push(`Remise : ${quantityFormatter.format(rawDiscount)} %`);
+      }
+      elements.clientSummaryMeta.textContent = parts.join(' • ');
+      elements.clientSummaryMeta.style.display = parts.length ? 'block' : 'none';
+    }
+  } else {
+    if (elements.clientSummaryName) {
+      elements.clientSummaryName.textContent = '';
+    }
+    if (elements.clientSummaryMeta) {
+      elements.clientSummaryMeta.textContent = '';
+      elements.clientSummaryMeta.style.display = 'none';
+    }
+  }
+
+  updateNavClearance();
+}
+
+function resetIdentifiedClient() {
+  if (state.isIdentifyingClient) {
+    return;
+  }
+  state.identifiedClient = null;
+  if (elements.siretInput) {
+    elements.siretInput.value = '';
+  }
+  updateDiscountRate(0);
+  setIdentificationState('idle');
+  closeWebhookPanel();
+  closeClientFormPlaceholder();
+}
+
 function updateIdentificationFromState() {
   if (!elements.siretInput) {
     return;
@@ -1527,6 +1605,7 @@ function updateIdentificationFromState() {
   if (!state.identifiedClient) {
     setIdentificationState('idle');
     closeClientFormPlaceholder();
+    updateClientIdentityDisplay();
     return;
   }
   const message = buildIdentificationMessage(state.identifiedClient);
@@ -1536,6 +1615,7 @@ function updateIdentificationFromState() {
   } else if (state.identifiedClient.siret) {
     openClientFormPlaceholder(state.identifiedClient.siret, { scroll: false });
   }
+  updateClientIdentityDisplay();
 }
 
 function toggleWebhookMode() {
@@ -1546,6 +1626,7 @@ function toggleWebhookMode() {
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
   closeWebhookPanel();
   closeClientFormPlaceholder();
+  updateClientIdentityDisplay();
 }
 
 function updateWebhookModeIndicator() {
@@ -1595,7 +1676,12 @@ function parsePercentageValue(value) {
     return Number.isFinite(value) ? value : null;
   }
   if (typeof value === 'string') {
-    const cleaned = value.replace(/%/g, '').replace(',', '.').trim();
+    const withoutUrl = value.replace(/https?:\/\/twitter\.com\/?/gi, '');
+    const cleaned = withoutUrl
+      .replace(/%/g, '')
+      .replace(/[^0-9.,-]/g, '')
+      .replace(/,/g, '.')
+      .trim();
     if (!cleaned) {
       return null;
     }
@@ -2152,8 +2238,8 @@ function showWebhookPanel(result) {
 
   if (!result?.identified) {
     const warning = document.createElement('p');
-    warning.textContent =
-      "Client non reconnu. Merci de préparer les informations complémentaires via le formulaire dès sa disponibilité.";
+    warning.innerHTML =
+      `Client non reconnu. Vous pouvez vous enregistrer comme nouveau client en suivant ce lien : <a href="${NEW_CLIENT_REGISTRATION_URL}" target="_blank" rel="noopener">${NEW_CLIENT_REGISTRATION_URL}</a>.`;
     elements.webhookPanelContent.appendChild(warning);
   }
 
@@ -2182,9 +2268,10 @@ function openClientFormPlaceholder(siret, options = {}) {
   const paragraph = container.querySelector('p');
   if (paragraph) {
     const formatted = formatSiret(siret);
-    paragraph.textContent = formatted
-      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.`
-      : "Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos informations.";
+    const baseMessage = formatted
+      ? `Le client n'a pas été reconnu pour le SIRET ${formatted}.`
+      : "Le client n'a pas été reconnu.";
+    paragraph.innerHTML = `${baseMessage} Vous pouvez vous enregistrer comme nouveau client en suivant ce lien : <a href="${NEW_CLIENT_REGISTRATION_URL}" target="_blank" rel="noopener">${NEW_CLIENT_REGISTRATION_URL}</a>.`;
   }
   container.dataset.open = 'true';
   if (options.scroll !== false) {
