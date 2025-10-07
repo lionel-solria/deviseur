@@ -59,8 +59,9 @@ const WEBHOOK_ENDPOINTS = {
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 
 const CART_SNAPSHOT_VERSION = 1;
-const CART_FILENAME_PREFIX = 'panier-deviseur';
+const CART_FILENAME_PREFIX = 'proposition-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
+const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
 
 const state = {
   catalogue: [],
@@ -130,11 +131,11 @@ const elements = {
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
   brandLogo: document.querySelector('.brand-logo'),
-  webhookModeBadge: document.getElementById('webhook-mode-badge'),
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
   saveNameInput: document.getElementById('save-name'),
+  placeOrder: document.getElementById('place-order'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -165,9 +166,9 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
-  elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
+  elements.placeOrder?.addEventListener('click', handlePlaceOrder);
   setupModal();
   setupResponsiveSplit();
   setupCategoryFilter();
@@ -179,7 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
   syncDiscountInputs();
   syncGeneralCommentInput();
   syncSaveNameInput();
-  updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
 });
@@ -941,7 +941,7 @@ function updateSummary() {
 
 function handleSaveCart() {
   if (!state.quote.size) {
-    toggleFeedback('Ajoutez des articles avant de sauvegarder votre panier.', 'warning');
+    toggleFeedback('Ajoutez des articles avant de sauvegarder votre proposition.', 'warning');
     return;
   }
   const saveName = (state.saveName || '').trim();
@@ -968,10 +968,10 @@ function handleSaveCart() {
     anchor.click();
     document.body.removeChild(anchor);
     setTimeout(() => URL.revokeObjectURL(url), 0);
-    toggleFeedback('Le panier a été exporté au format JSON.', 'info');
+    toggleFeedback('La proposition a été exportée au format JSON.', 'info');
   } catch (error) {
     console.error(error);
-    toggleFeedback('Impossible de sauvegarder le panier. Merci de réessayer.', 'error');
+    toggleFeedback('Impossible de sauvegarder la proposition. Merci de réessayer.', 'error');
   }
 }
 
@@ -984,13 +984,13 @@ async function handleRestoreCartInput(event) {
     const text = await readFileAsText(file);
     const snapshot = parseCartSnapshot(text);
     applyCartSnapshot(snapshot);
-    toggleFeedback('Le panier a été restauré avec succès.', 'info');
+    toggleFeedback('La proposition a été restaurée avec succès.', 'info');
   } catch (error) {
     console.error(error);
     if (error instanceof Error && error.message === 'Catalogue indisponible') {
-      toggleFeedback('Le catalogue doit être chargé avant de restaurer un panier.', 'warning');
+      toggleFeedback('Le catalogue doit être chargé avant de restaurer une proposition.', 'warning');
     } else {
-      toggleFeedback('Impossible de restaurer le panier. Vérifiez le fichier JSON fourni.', 'error');
+      toggleFeedback('Impossible de restaurer la proposition. Vérifiez le fichier JSON fourni.', 'error');
     }
   } finally {
     if (elements.restoreCartInput) {
@@ -1045,7 +1045,7 @@ function parseCartSnapshot(text) {
     throw new Error('Snapshot invalide');
   }
   if (!Array.isArray(data.items)) {
-    throw new Error('Structure de panier non valide');
+    throw new Error('Structure de proposition non valide');
   }
   return data;
 }
@@ -1612,29 +1612,6 @@ function handleClientIdentityReset() {
   }
 }
 
-function toggleWebhookMode() {
-  state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
-  state.identifiedClient = null;
-  updateDiscountRate(0);
-  updateWebhookModeIndicator();
-  setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
-  closeWebhookPanel();
-  closeClientFormPlaceholder();
-}
-
-function updateWebhookModeIndicator() {
-  if (!elements.webhookModeBadge) {
-    return;
-  }
-  const mode = state.webhookMode === 'test' ? 'test' : 'production';
-  elements.webhookModeBadge.textContent = mode === 'test' ? 'Test' : 'Production';
-  elements.webhookModeBadge.dataset.mode = mode;
-  elements.webhookModeBadge.setAttribute(
-    'aria-label',
-    mode === 'test' ? 'Mode webhook test actif' : 'Mode webhook production actif',
-  );
-}
-
 function getActiveWebhookUrl() {
   return WEBHOOK_ENDPOINTS[state.webhookMode] || WEBHOOK_ENDPOINTS.production;
 }
@@ -1693,11 +1670,7 @@ function clampPercentage(value) {
   return Math.min(100, Math.max(0, numeric));
 }
 
-async function generatePdf() {
-  if (!state.quote.size) {
-    toggleFeedback('Ajoutez au moins un article avant de générer le devis.', 'warning');
-    return;
-  }
+async function createQuotePdf() {
   toggleFeedback('', 'hide');
   const items = Array.from(state.quote.values());
   const productsSubtotal = items.reduce((sum, item) => sum + getProductSubtotal(item), 0);
@@ -2089,7 +2062,97 @@ async function generatePdf() {
   };
 
   addFooter();
-  doc.save(`devis-${quoteNumber}.pdf`);
+  return {
+    doc,
+    quoteNumber,
+    metadata: {
+      issueDate: issueDate.toISOString(),
+      validityDate: validityDate.toISOString(),
+      totals: {
+        productsSubtotal,
+        discountAmount,
+        baseAfterDiscount,
+        ecotaxTotal,
+        net,
+        vat,
+        total,
+      },
+    },
+  };
+}
+
+async function generatePdf() {
+  if (!state.quote.size) {
+    toggleFeedback("Ajoutez au moins un article avant d'imprimer la proposition.", 'warning');
+    return;
+  }
+  try {
+    const { doc, quoteNumber } = await createQuotePdf();
+    doc.save(`devis-${quoteNumber}.pdf`);
+  } catch (error) {
+    console.error(error);
+    toggleFeedback("Impossible d'imprimer la proposition. Merci de réessayer.", 'error');
+  }
+}
+
+async function handlePlaceOrder() {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez des articles avant de passer commande.', 'warning');
+    return;
+  }
+  const confirmed = window.confirm('Confirmez-vous l\'envoi de cette commande à ID GROUP ?');
+  if (!confirmed) {
+    return;
+  }
+  try {
+    const { doc, quoteNumber, metadata } = await createQuotePdf();
+    const pdfArrayBuffer = doc.output('arraybuffer');
+    const pdfBlob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+    const pdfBase64 = await blobToBase64(pdfBlob);
+    const snapshot = buildCartSnapshot();
+    const cartJson = JSON.stringify(snapshot, null, 2);
+    const cartBase64 = stringToBase64(cartJson);
+    const now = new Date();
+    const dateSegment = formatDateForFilename(now);
+    const slug = normaliseFileSegment(state.saveName || '') || CART_FILENAME_PREFIX;
+    const clientCode = getClientCodeForFilename();
+    const cartFilename = `${slug}-${clientCode}-${dateSegment}.json`;
+    const pdfFilename = `devis-${quoteNumber}.pdf`;
+    const payload = {
+      quoteNumber,
+      pdf: {
+        filename: pdfFilename,
+        base64: pdfBase64,
+        mimeType: 'application/pdf',
+      },
+      cart: {
+        filename: cartFilename,
+        base64: cartBase64,
+        mimeType: 'application/json',
+      },
+      snapshot,
+      metadata: {
+        saveName: state.saveName || '',
+        discountRate: state.discountRate,
+        generalComment: state.generalComment || '',
+        issueDate: metadata.issueDate,
+        validityDate: metadata.validityDate,
+        totals: metadata.totals,
+      },
+    };
+    const response = await fetch(ORDER_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Requête webhook échouée (${response.status})`);
+    }
+    toggleFeedback('La commande a été transmise à ID GROUP.', 'info');
+  } catch (error) {
+    console.error(error);
+    toggleFeedback("Impossible d'envoyer la commande. Merci de réessayer.", 'error');
+  }
 }
 
 async function getBrandLogoDataUrl() {
@@ -2123,6 +2186,22 @@ function blobToDataUrl(blob) {
     };
     reader.readAsDataURL(blob);
   });
+}
+
+async function blobToBase64(blob) {
+  const dataUrl = await blobToDataUrl(blob);
+  const [, base64] = dataUrl.split(',');
+  return base64 || '';
+}
+
+function stringToBase64(value) {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(value);
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
 }
 
 function toggleFeedback(message, type = 'info') {
