@@ -18,7 +18,7 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="true">
+    <nav class="site-nav fixed inset-x-0 top-0 z-40" data-collapsed="false">
       <div class="site-nav__inner">
         <div class="site-nav__branding">
           <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
@@ -42,6 +42,20 @@
             </div>
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
+          <div id="client-identity" class="site-nav__client" aria-live="polite" hidden>
+            <div class="site-nav__client-text">
+              <p id="client-identity-name" class="site-nav__client-name"></p>
+              <p id="client-identity-meta" class="site-nav__client-meta"></p>
+              <p id="client-identity-register" class="site-nav__client-register">
+                <a href="https://www.idgroup-france.com/bao/NouveauClient.html" target="_blank" rel="noopener"
+                  >S'enregistrer comme nouveau client</a
+                >
+              </p>
+            </div>
+            <button id="client-identity-reset" type="button" class="btn-secondary btn-secondary--compact">
+              Modifier
+            </button>
+          </div>
           <div class="site-nav__save-group">
             <label for="save-name" class="save-name-field">
               <span>Nom de la sauvegarde</span>
@@ -363,8 +377,11 @@
       <div class="client-form-placeholder__content">
         <h2>Formulaire client</h2>
         <p>
-          Le client n'a pas été reconnu. Un formulaire d'inscription sera bientôt disponible pour compléter vos
-          informations.
+          Le client n'a pas été reconnu. Vous pouvez
+          <a href="https://www.idgroup-france.com/bao/NouveauClient.html" target="_blank" rel="noopener"
+            >vous enregistrer comme nouveau client</a
+          >
+          pour accéder à nos services.
         </p>
       </div>
     </section>
