@@ -59,6 +59,7 @@ const WEBHOOK_ENDPOINTS = {
 const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
 
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
+const NEW_CLIENT_INSTRUCTION_TEXT = `Merci de remplir le formulaire nouveau client : ${NEW_CLIENT_URL}`;
 
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
@@ -86,6 +87,14 @@ const state = {
   isIdentifyingClient: false,
   identifiedClient: null,
   webhookPanelTimeout: null,
+  debugModeActive: false,
+  debugTooltip: null,
+  debugPanel: null,
+  debugPanelContent: null,
+  debugHighlightedElement: null,
+  debugPointerHandlers: {},
+  debugLogs: [],
+  debugDragState: { active: false, offsetX: 0, offsetY: 0 },
 };
 
 const elements = {
@@ -186,6 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
   updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
+  applyFieldTooltips();
+  updateDebugModeFromSaveName(elements.saveNameInput?.value || '');
 });
 
 function setupResponsiveSplit() {
@@ -859,12 +870,434 @@ function syncGeneralCommentInput() {
 function handleSaveNameInput(event) {
   const value = typeof event.target.value === 'string' ? event.target.value : '';
   state.saveName = value;
+  updateDebugModeFromSaveName(value);
 }
 
 function syncSaveNameInput() {
   if (elements.saveNameInput) {
-    elements.saveNameInput.value = state.saveName || '';
+    const value = state.saveName || '';
+    elements.saveNameInput.value = value;
+    updateDebugModeFromSaveName(value);
   }
+}
+
+function escapeCssIdentifier(value) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return String(value || '').replace(/(["\\])/g, '\\$1');
+}
+
+function getAssociatedLabelText(element) {
+  if (!(element instanceof HTMLElement)) {
+    return '';
+  }
+  const candidates = [];
+  const id = element.id ? escapeCssIdentifier(element.id) : null;
+  if (id) {
+    const label = document.querySelector(`label[for="${id}"]`);
+    if (label) {
+      candidates.push(label.textContent || '');
+    }
+  }
+  const labelledBy = (element.getAttribute('aria-labelledby') || '')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (labelledBy.length) {
+    const text = labelledBy
+      .map((ref) => {
+        const target = document.getElementById(ref);
+        return target ? target.textContent || '' : '';
+      })
+      .filter(Boolean)
+      .join(' ');
+    if (text) {
+      candidates.push(text);
+    }
+  }
+  const ariaLabel = element.getAttribute('aria-label');
+  if (ariaLabel) {
+    candidates.push(ariaLabel);
+  }
+  const wrappingLabel = element.closest('label');
+  if (wrappingLabel) {
+    candidates.push(wrappingLabel.textContent || '');
+  }
+  const candidate = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+  return candidate ? candidate.replace(/\s+/g, ' ').trim() : '';
+}
+
+function applyFieldTooltips() {
+  const selectors = ['input', 'select', 'textarea', 'button'];
+  const controls = document.querySelectorAll(selectors.join(','));
+  controls.forEach((control) => {
+    if (!(control instanceof HTMLElement)) {
+      return;
+    }
+    const existingTitle = control.getAttribute('title');
+    if (existingTitle && existingTitle.trim().length > 0) {
+      return;
+    }
+    const labelText = getAssociatedLabelText(control);
+    const buttonText = control.tagName === 'BUTTON' ? control.textContent || '' : '';
+    const placeholderText =
+      control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement ? control.placeholder || '' : '';
+    const fallback = control.getAttribute('name') || control.getAttribute('id');
+    const tooltip = (labelText || buttonText || placeholderText || fallback || '').trim();
+    if (tooltip) {
+      control.setAttribute('title', tooltip);
+    }
+  });
+}
+
+function updateDebugModeFromSaveName(value) {
+  const shouldEnable = String(value || '').toLowerCase().includes('debug');
+  if (shouldEnable) {
+    enableDebugMode();
+  } else {
+    disableDebugMode();
+  }
+}
+
+function enableDebugMode() {
+  if (state.debugModeActive) {
+    if (state.debugPanel) {
+      state.debugPanel.hidden = false;
+    }
+    return;
+  }
+  state.debugModeActive = true;
+  ensureDebugTooltip();
+  ensureDebugPanel();
+  if (state.debugPanel) {
+    state.debugPanel.hidden = false;
+  }
+  const pointerHandlers = {
+    over: (event) => handleDebugPointerOver(event),
+    move: (event) => handleDebugPointerMove(event),
+    out: (event) => handleDebugPointerOut(event),
+  };
+  state.debugPointerHandlers = pointerHandlers;
+  document.addEventListener('pointerover', pointerHandlers.over, true);
+  document.addEventListener('pointermove', pointerHandlers.move, true);
+  document.addEventListener('pointerout', pointerHandlers.out, true);
+  renderDebugLogs();
+  logDebugEvent('Mode debug activé');
+}
+
+function disableDebugMode() {
+  if (!state.debugModeActive) {
+    hideDebugTooltip();
+    return;
+  }
+  logDebugEvent('Mode debug désactivé');
+  state.debugModeActive = false;
+  const { over, move, out } = state.debugPointerHandlers || {};
+  if (over) {
+    document.removeEventListener('pointerover', over, true);
+  }
+  if (move) {
+    document.removeEventListener('pointermove', move, true);
+  }
+  if (out) {
+    document.removeEventListener('pointerout', out, true);
+  }
+  state.debugPointerHandlers = {};
+  if (state.debugHighlightedElement) {
+    state.debugHighlightedElement.classList.remove('debug-highlight');
+    state.debugHighlightedElement = null;
+  }
+  hideDebugTooltip();
+  if (state.debugPanel) {
+    state.debugPanel.hidden = true;
+  }
+}
+
+function ensureDebugTooltip() {
+  if (state.debugTooltip && document.body.contains(state.debugTooltip)) {
+    return state.debugTooltip;
+  }
+  const tooltip = document.createElement('div');
+  tooltip.className = 'debug-tooltip';
+  tooltip.dataset.visible = 'false';
+  document.body.appendChild(tooltip);
+  state.debugTooltip = tooltip;
+  return tooltip;
+}
+
+function ensureDebugPanel() {
+  if (state.debugPanel && document.body.contains(state.debugPanel)) {
+    return state.debugPanel;
+  }
+  const panel = document.createElement('div');
+  panel.className = 'debug-panel';
+  panel.hidden = true;
+  panel.setAttribute('role', 'log');
+  panel.setAttribute('aria-live', 'polite');
+
+  const header = document.createElement('div');
+  header.className = 'debug-panel__header';
+  const title = document.createElement('p');
+  title.className = 'debug-panel__title';
+  title.textContent = 'Mode debug';
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'debug-panel__close';
+  closeButton.setAttribute('aria-label', 'Quitter le mode debug');
+  closeButton.textContent = '×';
+  closeButton.addEventListener('click', () => {
+    if (elements.saveNameInput) {
+      const cleaned = elements.saveNameInput.value
+        .replace(/debug/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      elements.saveNameInput.value = cleaned;
+      elements.saveNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      disableDebugMode();
+    }
+  });
+  header.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('.debug-panel__close')) {
+      return;
+    }
+    startDebugDrag(event);
+  });
+  header.append(title, closeButton);
+
+  const content = document.createElement('div');
+  content.className = 'debug-panel__content';
+
+  panel.append(header, content);
+  document.body.appendChild(panel);
+
+  state.debugPanel = panel;
+  state.debugPanelContent = content;
+  return panel;
+}
+
+function describeDebugElement(element) {
+  if (!(element instanceof HTMLElement)) {
+    return '';
+  }
+  const tag = element.tagName ? element.tagName.toLowerCase() : '';
+  let descriptor = tag;
+  if (element.id) {
+    descriptor += `#${element.id}`;
+  }
+  const classList = Array.from(element.classList || []).filter(Boolean);
+  if (classList.length) {
+    descriptor += `.${classList.join('.')}`;
+  }
+  const labelText = getAssociatedLabelText(element);
+  const nameAttribute = element.getAttribute('name');
+  const ariaLabel = element.getAttribute('aria-label');
+  const descriptiveText = [labelText, ariaLabel, nameAttribute]
+    .find((value) => typeof value === 'string' && value.trim().length > 0);
+  if (descriptiveText) {
+    const trimmed = descriptiveText.trim();
+    const formatted = trimmed.length > 120 ? `${trimmed.slice(0, 117)}…` : trimmed;
+    descriptor += ` — ${formatted}`;
+  }
+  return descriptor;
+}
+
+function handleDebugPointerOver(event) {
+  if (!state.debugModeActive) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  if (state.debugTooltip && (target === state.debugTooltip || state.debugTooltip.contains(target))) {
+    return;
+  }
+  if (target.closest('.debug-panel')) {
+    hideDebugTooltip();
+    if (state.debugHighlightedElement) {
+      state.debugHighlightedElement.classList.remove('debug-highlight');
+      state.debugHighlightedElement = null;
+    }
+    return;
+  }
+  const descriptor = describeDebugElement(target);
+  if (!descriptor) {
+    hideDebugTooltip();
+    if (state.debugHighlightedElement && state.debugHighlightedElement !== target) {
+      state.debugHighlightedElement.classList.remove('debug-highlight');
+      state.debugHighlightedElement = null;
+    }
+    return;
+  }
+  const tooltip = ensureDebugTooltip();
+  tooltip.textContent = descriptor;
+  tooltip.dataset.visible = 'true';
+  updateDebugTooltipPosition(event.clientX, event.clientY);
+  if (state.debugHighlightedElement && state.debugHighlightedElement !== target) {
+    state.debugHighlightedElement.classList.remove('debug-highlight');
+  }
+  target.classList.add('debug-highlight');
+  state.debugHighlightedElement = target;
+}
+
+function handleDebugPointerMove(event) {
+  if (!state.debugModeActive || !state.debugTooltip) {
+    return;
+  }
+  if (state.debugTooltip.dataset.visible !== 'true') {
+    return;
+  }
+  updateDebugTooltipPosition(event.clientX, event.clientY);
+}
+
+function handleDebugPointerOut(event) {
+  if (!state.debugModeActive) {
+    return;
+  }
+  const nextTarget = event.relatedTarget;
+  if (!(nextTarget instanceof HTMLElement)) {
+    hideDebugTooltip();
+    if (state.debugHighlightedElement) {
+      state.debugHighlightedElement.classList.remove('debug-highlight');
+      state.debugHighlightedElement = null;
+    }
+    return;
+  }
+  if (nextTarget.closest('.debug-panel')) {
+    hideDebugTooltip();
+    if (state.debugHighlightedElement) {
+      state.debugHighlightedElement.classList.remove('debug-highlight');
+      state.debugHighlightedElement = null;
+    }
+  }
+}
+
+function updateDebugTooltipPosition(x, y) {
+  const tooltip = state.debugTooltip;
+  if (!tooltip) {
+    return;
+  }
+  const margin = 16;
+  const clampedX = Math.min(window.innerWidth - margin, Math.max(margin, x));
+  const clampedY = Math.min(window.innerHeight - margin, Math.max(margin, y));
+  tooltip.style.left = `${clampedX}px`;
+  tooltip.style.top = `${clampedY}px`;
+}
+
+function hideDebugTooltip() {
+  if (!state.debugTooltip) {
+    return;
+  }
+  state.debugTooltip.dataset.visible = 'false';
+}
+
+function logDebugEvent(title, details = null) {
+  const entry = {
+    timestamp: new Date(),
+    title: title || 'Événement',
+    details,
+  };
+  state.debugLogs.push(entry);
+  if (state.debugLogs.length > 100) {
+    state.debugLogs.splice(0, state.debugLogs.length - 100);
+  }
+  if (state.debugModeActive) {
+    ensureDebugPanel();
+    renderDebugLogs();
+  }
+  return entry;
+}
+
+function renderDebugLogs() {
+  if (!state.debugPanelContent) {
+    return;
+  }
+  state.debugPanelContent.innerHTML = '';
+  const items = state.debugLogs.slice(-100);
+  items.forEach((entry) => {
+    const element = createDebugLogElement(entry);
+    state.debugPanelContent.appendChild(element);
+  });
+  state.debugPanelContent.scrollTop = state.debugPanelContent.scrollHeight;
+}
+
+function createDebugLogElement(entry) {
+  const container = document.createElement('article');
+  container.className = 'debug-panel__entry';
+  const time = document.createElement('time');
+  time.className = 'debug-panel__time';
+  time.dateTime = entry.timestamp.toISOString();
+  time.textContent = entry.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const message = document.createElement('p');
+  message.className = 'debug-panel__message';
+  const detailsText = formatDebugDetails(entry.details);
+  message.textContent = detailsText ? `${entry.title}\n${detailsText}` : entry.title;
+  container.append(time, message);
+  return container;
+}
+
+function formatDebugDetails(details) {
+  if (details === null || details === undefined) {
+    return '';
+  }
+  if (details instanceof Error) {
+    return details.message;
+  }
+  if (typeof details === 'object') {
+    try {
+      return JSON.stringify(details, null, 2);
+    } catch (error) {
+      return String(details);
+    }
+  }
+  return String(details);
+}
+
+function startDebugDrag(event) {
+  if (!state.debugPanel) {
+    return;
+  }
+  event.preventDefault();
+  const rect = state.debugPanel.getBoundingClientRect();
+  state.debugDragState = {
+    active: true,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+  };
+  state.debugPanel.style.left = `${rect.left}px`;
+  state.debugPanel.style.top = `${rect.top}px`;
+  state.debugPanel.style.right = 'auto';
+  state.debugPanel.style.bottom = 'auto';
+  document.addEventListener('pointermove', handleDebugDragMove);
+  document.addEventListener('pointerup', handleDebugDragEnd);
+  document.addEventListener('pointercancel', handleDebugDragEnd);
+}
+
+function handleDebugDragMove(event) {
+  if (!state.debugDragState?.active || !state.debugPanel) {
+    return;
+  }
+  const proposedX = event.clientX - state.debugDragState.offsetX;
+  const proposedY = event.clientY - state.debugDragState.offsetY;
+  const minX = 8;
+  const minY = 8;
+  const maxX = Math.max(minX, window.innerWidth - state.debugPanel.offsetWidth - 8);
+  const maxY = Math.max(minY, window.innerHeight - state.debugPanel.offsetHeight - 8);
+  const clampedX = Math.min(Math.max(minX, proposedX), maxX);
+  const clampedY = Math.min(Math.max(minY, proposedY), maxY);
+  state.debugPanel.style.left = `${clampedX}px`;
+  state.debugPanel.style.top = `${clampedY}px`;
+}
+
+function handleDebugDragEnd() {
+  if (!state.debugDragState?.active) {
+    return;
+  }
+  state.debugDragState.active = false;
+  document.removeEventListener('pointermove', handleDebugDragMove);
+  document.removeEventListener('pointerup', handleDebugDragEnd);
+  document.removeEventListener('pointercancel', handleDebugDragEnd);
 }
 
 function extractInitialsForFilename(value) {
@@ -1174,6 +1607,7 @@ async function handleSiretSubmit(event) {
     return;
   }
   const endpoint = getActiveWebhookUrl();
+  logDebugEvent("Envoi d'une demande d'identification", { siret: formatSiret(siret), endpoint });
   state.isIdentifyingClient = true;
   setIdentificationState('loading', 'Identification en cours...');
   try {
@@ -1199,6 +1633,11 @@ async function handleSiretSubmit(event) {
     }
     const result = normaliseWebhookResponse(payload, siret);
     state.identifiedClient = result;
+    logDebugEvent('Réponse webhook reçue', {
+      statut: result?.statusLabel || null,
+      identifie: Boolean(result?.identified),
+      remise: typeof result?.discountRate === 'number' ? result.discountRate : null,
+    });
     updateDiscountRate(typeof result.discountRate === 'number' ? result.discountRate : 0);
     updateIdentificationFromState();
     showWebhookPanel(result);
@@ -1209,7 +1648,8 @@ async function handleSiretSubmit(event) {
     }
   } catch (error) {
     console.error(error);
-    setIdentificationState('error', "Erreur lors de l'identification. Merci de réessayer.");
+    logDebugEvent('Erreur identification SIRET', { message: error instanceof Error ? error.message : String(error) });
+    setIdentificationState('error', `Erreur lors de l'identification. ${NEW_CLIENT_INSTRUCTION_TEXT}`);
     updateDiscountRate(0);
     closeWebhookPanel();
     closeClientFormPlaceholder();
@@ -1485,10 +1925,12 @@ function buildIdentificationMessage(result) {
     return '';
   }
   if (!result.identified) {
-    return result.statusLabel || 'Client non identifié';
+    const label = result.statusLabel && result.statusLabel.trim().length > 0 ? result.statusLabel.trim() : 'Client non identifié';
+    const normalised = label.endsWith('.') ? label.slice(0, -1) : label;
+    return `${normalised}. ${NEW_CLIENT_INSTRUCTION_TEXT}`;
   }
   if (!result.companyName) {
-    return "Client non référencé. Merci de vous enregistrer comme nouveau client.";
+    return `Client non référencé. ${NEW_CLIENT_INSTRUCTION_TEXT}`;
   }
   const parts = [];
   if (result.companyName) {
@@ -2304,6 +2746,7 @@ function showWebhookPanel(result) {
     elements.webhookPanelContent.appendChild(warning);
   }
 
+  logDebugEvent('Mise à jour du panneau webhook', { statut: statusLabel, identifie: Boolean(result?.identified) });
   elements.webhookPanel.dataset.open = 'true';
   state.webhookPanelTimeout = window.setTimeout(() => {
     closeWebhookPanel();
@@ -2335,6 +2778,7 @@ function openClientFormPlaceholder(siret, options = {}) {
       : `Le client n'a pas été reconnu. Vous pouvez ${link} pour accéder à nos services.`;
   }
   container.dataset.open = 'true';
+  logDebugEvent('Formulaire nouveau client proposé', { siret: formatSiret(siret) || siret || '' });
   if (options.scroll !== false) {
     container.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
