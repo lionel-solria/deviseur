@@ -62,13 +62,19 @@ const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 const SIRET_ERROR_FALLBACK_MESSAGE =
   "Le numéro SIRET renseigné n'a pas été reconnu, veuillez réessayer ou remplir le formulaire de nouveau client et nous vous contacterons pour vous ouvrir un accès partenaire.";
 
-const DEBUG_KEYWORD = 'debug';
 const DEBUG_MAX_LOGS = 150;
 const DEBUG_TOOLTIP_OFFSET = 16;
 
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
+
+const VIEWPORT_MODE_SEQUENCE = ['auto', 'desktop', 'tablet', 'mobile'];
+const VIEWPORT_LABELS = {
+  desktop: 'Bureau',
+  tablet: 'Tablette',
+  mobile: 'Téléphone',
+};
 
 const state = {
   catalogue: [],
@@ -98,6 +104,8 @@ const state = {
   debugTooltip: null,
   debugHighlightTarget: null,
   lastOrderDetails: null,
+  viewportMode: 'auto',
+  detectedViewportMode: 'desktop',
 };
 
 const elements = {
@@ -149,7 +157,16 @@ const elements = {
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
-  saveNameInput: document.getElementById('save-name'),
+  saveCartModal: document.getElementById('save-cart-modal'),
+  saveCartForm: document.getElementById('save-cart-form'),
+  saveCartInput: document.getElementById('save-cart-name'),
+  saveCartCancel: document.getElementById('save-cart-cancel'),
+  saveCartError: document.getElementById('save-cart-error'),
+  viewportToggle: document.getElementById('viewport-mode-toggle'),
+  viewportModeLabel: document.getElementById('viewport-mode-label'),
+  viewportToggleWrapper: document.querySelector('.viewport-toggle'),
+  viewportIconScreen: document.querySelector('[data-role="viewport-screen"]'),
+  viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -175,9 +192,12 @@ const elements = {
   orderEmail: document.getElementById('order-email'),
   orderPhone: document.getElementById('order-phone'),
   orderCopy: document.getElementById('order-copy'),
+  globalLoader: document.getElementById('global-loader'),
+  globalLoaderMessage: document.getElementById('global-loader-message'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  initialiseViewportMode();
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
@@ -186,7 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
-  elements.saveNameInput?.addEventListener('input', handleSaveNameInput);
+  elements.saveCartForm?.addEventListener('submit', handleSaveCartFormSubmit);
+  elements.saveCartCancel?.addEventListener('click', closeSaveCartModal);
+  elements.saveCartModal?.addEventListener('click', handleSaveCartBackdropClick);
   elements.restoreCart?.addEventListener('click', () => {
     elements.restoreCartInput?.click();
   });
@@ -194,6 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
+  elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
@@ -205,16 +229,15 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.siretErrorLink.href = NEW_CLIENT_URL;
   }
   setupModal();
-  setupResponsiveSplit();
   setupCategoryFilter();
   setupNavAutoHide();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
-  window.addEventListener('resize', setupResponsiveSplit);
+  window.addEventListener('resize', handleWindowResize);
+  setupResponsiveSplit();
   syncDiscountInputs();
   syncGeneralCommentInput();
-  syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
@@ -222,7 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupResponsiveSplit() {
-  const shouldSplit = window.innerWidth >= 1024;
+  const mode = getEffectiveViewportMode();
+  const shouldSplit = mode === 'desktop' && window.innerWidth >= 1024;
   if (shouldSplit && !state.splitInstance && typeof window.Split === 'function') {
     state.splitInstance = window.Split(['#catalogue-panel', '#quote-panel'], {
       sizes: [60, 40],
@@ -252,6 +276,142 @@ function setupNavAutoHide() {
     return;
   }
   nav.dataset.collapsed = 'false';
+}
+
+function initialiseViewportMode() {
+  state.detectedViewportMode = detectViewportMode();
+  state.viewportMode = 'auto';
+  applyViewportMode();
+}
+
+function handleWindowResize() {
+  const detected = detectViewportMode();
+  const previous = state.detectedViewportMode;
+  state.detectedViewportMode = detected;
+  const shouldApply = state.viewportMode === 'auto';
+  if (shouldApply) {
+    applyViewportMode();
+  } else if (previous !== detected) {
+    updateViewportToggleLabel();
+    updateViewportIcon(getEffectiveViewportMode());
+  }
+  if (!shouldApply) {
+    setupResponsiveSplit();
+  }
+}
+
+function detectViewportMode(width = window.innerWidth) {
+  const value = Number(width);
+  const target = Number.isFinite(value) && value > 0 ? value : window.innerWidth;
+  if (target < 768) {
+    return 'mobile';
+  }
+  if (target < 1024) {
+    return 'tablet';
+  }
+  return 'desktop';
+}
+
+function getEffectiveViewportMode() {
+  if (state.viewportMode === 'auto') {
+    return state.detectedViewportMode;
+  }
+  if (state.viewportMode === 'desktop' || state.viewportMode === 'tablet' || state.viewportMode === 'mobile') {
+    return state.viewportMode;
+  }
+  return state.detectedViewportMode;
+}
+
+function applyViewportMode() {
+  const mode = getEffectiveViewportMode();
+  if (document.body) {
+    document.body.setAttribute('data-viewport-mode', mode);
+  }
+  updateViewportToggleLabel();
+  updateViewportIcon(mode);
+  setupResponsiveSplit();
+}
+
+function getNextViewportMode(current = state.viewportMode) {
+  const index = VIEWPORT_MODE_SEQUENCE.indexOf(current);
+  if (index === -1) {
+    return VIEWPORT_MODE_SEQUENCE[0];
+  }
+  return VIEWPORT_MODE_SEQUENCE[(index + 1) % VIEWPORT_MODE_SEQUENCE.length];
+}
+
+function formatViewportLabel(mode) {
+  const baseMode = mode === 'auto' ? state.detectedViewportMode : mode;
+  const baseLabel = VIEWPORT_LABELS[baseMode] || VIEWPORT_LABELS.desktop;
+  return mode === 'auto' ? `Mode auto : ${baseLabel}` : `Mode : ${baseLabel}`;
+}
+
+function updateViewportToggleLabel() {
+  const currentText = formatViewportLabel(state.viewportMode);
+  if (elements.viewportModeLabel) {
+    elements.viewportModeLabel.textContent = currentText;
+  }
+  const effective = getEffectiveViewportMode();
+  if (elements.viewportToggleWrapper) {
+    elements.viewportToggleWrapper.dataset.mode = effective;
+  }
+  if (elements.viewportToggle) {
+    const nextMode = getNextViewportMode();
+    const nextText = formatViewportLabel(nextMode);
+    elements.viewportToggle.setAttribute(
+      'aria-label',
+      `Changer de mode d'affichage. ${currentText}. Prochain : ${nextText}.`,
+    );
+  }
+}
+
+function updateViewportIcon(mode) {
+  if (!elements.viewportIconScreen || !elements.viewportIconStand) {
+    return;
+  }
+  if (mode === 'tablet') {
+    elements.viewportIconScreen.setAttribute('x', '7');
+    elements.viewportIconScreen.setAttribute('y', '6');
+    elements.viewportIconScreen.setAttribute('width', '18');
+    elements.viewportIconScreen.setAttribute('height', '20');
+    elements.viewportIconScreen.setAttribute('rx', '4');
+    elements.viewportIconScreen.setAttribute('ry', '4');
+    elements.viewportIconStand.setAttribute('x', '12');
+    elements.viewportIconStand.setAttribute('y', '27');
+    elements.viewportIconStand.setAttribute('width', '8');
+    elements.viewportIconStand.setAttribute('height', '1.5');
+  } else if (mode === 'mobile') {
+    elements.viewportIconScreen.setAttribute('x', '11');
+    elements.viewportIconScreen.setAttribute('y', '5');
+    elements.viewportIconScreen.setAttribute('width', '10');
+    elements.viewportIconScreen.setAttribute('height', '22');
+    elements.viewportIconScreen.setAttribute('rx', '4');
+    elements.viewportIconScreen.setAttribute('ry', '4');
+    elements.viewportIconStand.setAttribute('x', '14');
+    elements.viewportIconStand.setAttribute('y', '27');
+    elements.viewportIconStand.setAttribute('width', '4');
+    elements.viewportIconStand.setAttribute('height', '2');
+  } else {
+    elements.viewportIconScreen.setAttribute('x', '3');
+    elements.viewportIconScreen.setAttribute('y', '6');
+    elements.viewportIconScreen.setAttribute('width', '26');
+    elements.viewportIconScreen.setAttribute('height', '20');
+    elements.viewportIconScreen.setAttribute('rx', '3');
+    elements.viewportIconScreen.setAttribute('ry', '3');
+    elements.viewportIconStand.setAttribute('x', '12');
+    elements.viewportIconStand.setAttribute('y', '26');
+    elements.viewportIconStand.setAttribute('width', '8');
+    elements.viewportIconStand.setAttribute('height', '2');
+  }
+}
+
+function handleViewportToggleClick(event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+  const nextMode = getNextViewportMode();
+  state.viewportMode = nextMode;
+  applyViewportMode();
 }
 
 async function loadCatalogue() {
@@ -942,19 +1102,6 @@ function syncGeneralCommentInput() {
   }
 }
 
-function handleSaveNameInput(event) {
-  const value = typeof event.target.value === 'string' ? event.target.value : '';
-  state.saveName = value;
-  updateDebugModeFromSaveName(value);
-}
-
-function syncSaveNameInput() {
-  if (elements.saveNameInput) {
-    elements.saveNameInput.value = state.saveName || '';
-    updateDebugModeFromSaveName(elements.saveNameInput.value || '');
-  }
-}
-
 function applyFieldTooltips(root = document) {
   if (!root || typeof root.querySelectorAll !== 'function') {
     return;
@@ -998,16 +1145,6 @@ function applyFieldTooltips(root = document) {
   });
 }
 
-function updateDebugModeFromSaveName(rawValue) {
-  const value = typeof rawValue === 'string' ? rawValue : '';
-  const shouldEnable = value.toLowerCase().includes(DEBUG_KEYWORD);
-  if (shouldEnable && !state.debugMode) {
-    enableDebugMode();
-  } else if (!shouldEnable && state.debugMode) {
-    disableDebugMode();
-  }
-}
-
 function enableDebugMode() {
   if (state.debugMode) {
     return;
@@ -1041,6 +1178,22 @@ function disableDebugMode() {
   hideDebugTooltip();
   if (state.debugPanel) {
     state.debugPanel.hidden = true;
+  }
+}
+
+function handleBrandLogoDoubleClick(event) {
+  if (event) {
+    if (typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    if (typeof event.stopPropagation === 'function') {
+      event.stopPropagation();
+    }
+  }
+  if (state.debugMode) {
+    disableDebugMode();
+  } else {
+    enableDebugMode();
   }
 }
 
@@ -1432,16 +1585,78 @@ function updateSummary() {
   }
 }
 
-function handleSaveCart() {
+function clearSaveCartError() {
+  if (elements.saveCartError) {
+    elements.saveCartError.textContent = '';
+    elements.saveCartError.hidden = true;
+  }
+}
+
+function setSaveCartError(message) {
+  if (!elements.saveCartError) {
+    return;
+  }
+  elements.saveCartError.textContent = message;
+  elements.saveCartError.hidden = !message;
+}
+
+function openSaveCartModal() {
+  if (!elements.saveCartModal) {
+    return;
+  }
+  state.lastFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  clearSaveCartError();
+  if (elements.saveCartInput) {
+    elements.saveCartInput.value = state.saveName || '';
+  }
+  elements.saveCartModal.dataset.open = 'true';
+  syncBodyScrollLock();
+  window.setTimeout(() => {
+    if (elements.saveCartInput && typeof elements.saveCartInput.focus === 'function') {
+      elements.saveCartInput.focus();
+      elements.saveCartInput.select?.();
+    }
+  }, 0);
+}
+
+function closeSaveCartModal() {
+  if (!elements.saveCartModal || elements.saveCartModal.dataset.open !== 'true') {
+    return;
+  }
+  elements.saveCartModal.dataset.open = 'false';
+  syncBodyScrollLock();
+  if (state.lastFocusElement && typeof state.lastFocusElement.focus === 'function') {
+    state.lastFocusElement.focus();
+    state.lastFocusElement = null;
+  }
+}
+
+function handleSaveCartBackdropClick(event) {
+  if (event.target === elements.saveCartModal) {
+    closeSaveCartModal();
+  }
+}
+
+function handleSaveCartFormSubmit(event) {
+  event.preventDefault();
   if (!state.quote.size) {
+    closeSaveCartModal();
     toggleFeedback('Ajoutez des articles avant de sauvegarder votre panier.', 'warning');
     return;
   }
-  const saveName = (state.saveName || '').trim();
-  if (!saveName) {
-    toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
+  const value = (elements.saveCartInput?.value || '').trim();
+  if (!value) {
+    setSaveCartError('Indiquez un nom pour identifier votre sauvegarde.');
+    elements.saveCartInput?.focus();
     return;
   }
+  clearSaveCartError();
+  state.saveName = value;
+  closeSaveCartModal();
+  exportCartSnapshot(value);
+}
+
+function exportCartSnapshot(saveName) {
   try {
     const snapshot = buildCartSnapshot();
     const json = JSON.stringify(snapshot, null, 2);
@@ -1466,6 +1681,14 @@ function handleSaveCart() {
     console.error(error);
     toggleFeedback('Impossible de sauvegarder le panier. Merci de réessayer.', 'error');
   }
+}
+
+function handleSaveCart() {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez des articles avant de sauvegarder votre panier.', 'warning');
+    return;
+  }
+  openSaveCartModal();
 }
 
 async function handleRestoreCartInput(event) {
@@ -1558,7 +1781,6 @@ function applyCartSnapshot(snapshot) {
   } else {
     state.saveName = '';
   }
-  syncSaveNameInput();
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
@@ -2380,6 +2602,31 @@ function handleOrderModalBackdropClick(event) {
   }
 }
 
+function updateGlobalLoaderMessage(message) {
+  if (elements.globalLoaderMessage && typeof message === 'string') {
+    elements.globalLoaderMessage.textContent = message;
+  }
+}
+
+function showGlobalLoader(message) {
+  if (!elements.globalLoader) {
+    return;
+  }
+  if (message) {
+    updateGlobalLoaderMessage(message);
+  }
+  elements.globalLoader.hidden = false;
+  syncBodyScrollLock();
+}
+
+function hideGlobalLoader() {
+  if (!elements.globalLoader) {
+    return;
+  }
+  elements.globalLoader.hidden = true;
+  syncBodyScrollLock();
+}
+
 async function handleOrderFormSubmit(event) {
   event.preventDefault();
   if (!state.quote.size) {
@@ -2401,12 +2648,14 @@ async function handleOrderFormSubmit(event) {
 
 async function sendOrderRequest(orderDetails) {
   toggleFeedback('Envoi de la commande en cours...', 'info');
+  showGlobalLoader('Préparation du devis en cours…');
   logDebug('Préparation de la commande pour envoi.', {
     lignes: state.quote.size,
     contact: orderDetails.email || null,
   });
   try {
     const { doc, filename, quoteNumber } = await buildQuotePdfDocument();
+    updateGlobalLoaderMessage('Transmission de la commande…');
     const pdfBlob = doc.output('blob');
     const snapshot = buildCartSnapshot();
     const now = new Date();
@@ -2457,6 +2706,8 @@ async function sendOrderRequest(orderDetails) {
     logDebug('Erreur lors de l\'envoi de la commande.', {
       message: error instanceof Error ? error.message : String(error),
     });
+  } finally {
+    hideGlobalLoader();
   }
 }
 
@@ -3193,7 +3444,9 @@ function syncBodyScrollLock() {
   const shouldLock =
     (elements.modalBackdrop && elements.modalBackdrop.dataset.open === 'true') ||
     (elements.siretErrorModal && elements.siretErrorModal.dataset.open === 'true') ||
-    (elements.orderModal && elements.orderModal.dataset.open === 'true');
+    (elements.orderModal && elements.orderModal.dataset.open === 'true') ||
+    (elements.saveCartModal && elements.saveCartModal.dataset.open === 'true') ||
+    (elements.globalLoader && !elements.globalLoader.hidden);
   if (shouldLock) {
     document.body.style.overflow = 'hidden';
   } else {

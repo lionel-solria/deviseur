@@ -85,76 +85,88 @@
               <span class="sr-only">Modifier</span>
             </button>
           </div>
-          <div class="site-nav__save-group">
-            <label for="save-name" class="save-name-field">
-              <span>Proposition</span>
-              <input id="save-name" type="text" maxlength="80" placeholder="Ex. Projet magasin" />
-            </label>
-            <div class="site-nav__cart-actions">
-              <button
-                id="save-cart"
-                type="button"
-                class="btn-secondary btn-icon"
-                data-tooltip="Sauvegarder le panier"
-                aria-label="Sauvegarder le panier"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
-                  <path
-                    d="M7 4h10l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm5 0v5"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                  />
-                  <path
-                    d="M9 3h6"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                  />
-                  <path
-                    d="M9 13h6v6H9z"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                  />
-                </svg>
-                <span class="sr-only">Sauvegarder</span>
-              </button>
-              <button
-                id="restore-cart"
-                type="button"
-                class="btn-secondary btn-icon"
-                data-tooltip="Restaurer une sauvegarde"
-                aria-label="Restaurer une sauvegarde"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
-                  <path
-                    d="M4 4v6h6M20 20v-6h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                  />
-                  <path
-                    d="M19 5a8.5 8.5 0 0 0-14.5 6.36M5 19a8.5 8.5 0 0 0 14.5-6.36"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                  />
-                </svg>
-                <span class="sr-only">Restaurer</span>
-              </button>
-              <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
-            </div>
+          <div class="site-nav__cart-actions">
+            <button
+              id="save-cart"
+              type="button"
+              class="btn-secondary btn-icon"
+              data-tooltip="Sauvegarder le panier"
+              aria-label="Sauvegarder le panier"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M7 4h10l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm5 0v5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M9 3h6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M9 13h6v6H9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+              </svg>
+              <span class="sr-only">Sauvegarder</span>
+            </button>
+            <button
+              id="restore-cart"
+              type="button"
+              class="btn-secondary btn-icon"
+              data-tooltip="Restaurer une sauvegarde"
+              aria-label="Restaurer une sauvegarde"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M4 4v6h6M20 20v-6h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M19 5a8.5 8.5 0 0 0-14.5 6.36M5 19a8.5 8.5 0 0 0 14.5-6.36"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+              </svg>
+              <span class="sr-only">Restaurer</span>
+            </button>
+            <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+          </div>
+          <div class="viewport-toggle" data-mode="desktop">
+            <button id="viewport-mode-toggle" type="button" class="viewport-toggle__button">
+              <svg aria-hidden="true" class="viewport-toggle__icon" viewBox="0 0 32 32">
+                <rect data-role="viewport-screen" x="3" y="6" width="26" height="20" rx="3" ry="3" />
+                <rect
+                  data-role="viewport-stand"
+                  class="viewport-toggle__icon-stand"
+                  x="12"
+                  y="26"
+                  width="8"
+                  height="2"
+                  rx="1"
+                  ry="1"
+                />
+              </svg>
+              <span id="viewport-mode-label" class="viewport-toggle__label">Mode : Bureau</span>
+            </button>
           </div>
           <div class="discount-field" aria-live="polite">
             <span>Remise</span>
@@ -209,24 +221,7 @@
             <span class="sr-only">Passer commande</span>
           </button>
           <div class="site-nav__tree">
-            <label
-              for="catalogue-tree"
-              class="site-nav__tree-label icon-label"
-              data-tooltip="Sélectionner une catégorie"
-              aria-label="Sélectionner une catégorie"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
-                <path
-                  d="M4 6h16M4 12h16M4 18h16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                />
-              </svg>
-              <span class="sr-only">Sélectionner une catégorie</span>
-            </label>
+            <label for="catalogue-tree" class="site-nav__tree-label">Catégories</label>
             <select id="catalogue-tree" class="site-nav__tree-select">
               <option value="">Sélectionner une catégorie ou un article</option>
             </select>
@@ -487,7 +482,38 @@
       </div>
     </template>
 
-      <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title" data-open="false">
+    <div
+      id="save-cart-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="save-cart-title"
+      data-open="false"
+    >
+      <div class="modal-card save-cart-modal">
+        <form id="save-cart-form" class="modal-body save-cart-modal__body">
+          <h2 id="save-cart-title" class="save-cart-modal__title">Sauvegarder le panier</h2>
+          <p class="save-cart-modal__subtitle">Choisissez un nom pour retrouver facilement votre sélection.</p>
+          <label for="save-cart-name" class="save-cart-modal__label">Nom du panier</label>
+          <input
+            id="save-cart-name"
+            name="saveCartName"
+            type="text"
+            maxlength="80"
+            class="save-cart-modal__input"
+            placeholder="Ex. Projet magasin"
+            required
+          />
+          <p id="save-cart-error" class="form-error" role="alert" hidden></p>
+          <div class="modal-actions save-cart-modal__actions">
+            <button id="save-cart-cancel" type="button" class="btn-secondary">Annuler</button>
+            <button type="submit" class="btn-primary">Sauvegarder</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="product-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="product-modal-title" data-open="false">
         <div class="modal-card">
           <img id="product-modal-image" alt="" />
           <div class="modal-body">
@@ -618,6 +644,13 @@
         <button id="webhook-panel-close" type="button" class="webhook-panel__close" aria-label="Fermer">×</button>
       </div>
       <div id="webhook-panel-content" class="webhook-panel__content"></div>
+    </div>
+
+    <div id="global-loader" class="loader-backdrop" role="status" aria-live="assertive" hidden>
+      <div class="loader-card">
+        <div class="loader-hourglass" aria-hidden="true"></div>
+        <p id="global-loader-message">Préparation en cours…</p>
+      </div>
     </div>
 
     <footer class="site-footer">
