@@ -37,7 +37,25 @@
                 placeholder="Numéro SIRET (14 chiffres)"
                 class="site-nav__identity-input"
               />
-              <button id="siret-submit" type="submit" class="btn-secondary">Identifier</button>
+              <button
+                id="siret-submit"
+                type="submit"
+                class="btn-secondary btn-icon"
+                data-tooltip="Identifier le client"
+                aria-label="Identifier le client"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M21 21l-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <span class="sr-only">Identifier</span>
+              </button>
             </div>
             <p id="siret-feedback" class="site-nav__identity-feedback" aria-live="polite"></p>
           </form>
@@ -51,8 +69,20 @@
                 >
               </p>
             </div>
-            <button id="client-identity-reset" type="button" class="btn-secondary btn-secondary--compact">
-              Modifier
+            <button
+              id="client-identity-reset"
+              type="button"
+              class="btn-secondary btn-secondary--compact btn-icon"
+              data-tooltip="Modifier l'identification"
+              aria-label="Modifier l'identification"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm14.71-9.54a1 1 0 0 0 0-1.41l-2.54-2.54a1 1 0 0 0-1.41 0L12 5.56l3.75 3.75 1.96-1.6Z"
+                  fill="currentColor"
+                />
+              </svg>
+              <span class="sr-only">Modifier</span>
             </button>
           </div>
           <div class="site-nav__save-group">
@@ -61,23 +91,142 @@
               <input id="save-name" type="text" maxlength="80" placeholder="Ex. Projet magasin" />
             </label>
             <div class="site-nav__cart-actions">
-              <button id="save-cart" type="button" class="btn-secondary">Sauvegarder</button>
-              <button id="restore-cart" type="button" class="btn-secondary">Restaurer</button>
+              <button
+                id="save-cart"
+                type="button"
+                class="btn-secondary btn-icon"
+                data-tooltip="Sauvegarder le panier"
+                aria-label="Sauvegarder le panier"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M7 4h10l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm5 0v5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M9 3h6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M9 13h6v6H9z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <span class="sr-only">Sauvegarder</span>
+              </button>
+              <button
+                id="restore-cart"
+                type="button"
+                class="btn-secondary btn-icon"
+                data-tooltip="Restaurer une sauvegarde"
+                aria-label="Restaurer une sauvegarde"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M4 4v6h6M20 20v-6h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M19 5a8.5 8.5 0 0 0-14.5 6.36M5 19a8.5 8.5 0 0 0 14.5-6.36"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <span class="sr-only">Restaurer</span>
+              </button>
               <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
             </div>
           </div>
           <div class="discount-field" aria-live="polite">
-            <span>Remise client</span>
+            <span>Remise</span>
             <span id="header-discount" class="discount-field__value">0&nbsp;%</span>
           </div>
-          <button id="generate-pdf" class="btn-primary">
-            Imprimer
+          <button
+            id="generate-pdf"
+            class="btn-primary btn-icon"
+            data-tooltip="Imprimer le devis"
+            aria-label="Imprimer le devis"
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+              <path
+                d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+              />
+              <path
+                d="M7 13h10v8H7z"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+              />
+            </svg>
+            <span class="sr-only">Imprimer</span>
           </button>
-          <button id="submit-order" class="btn-primary">
-            Passer commande
+          <button
+            id="submit-order"
+            class="btn-primary btn-icon"
+            data-tooltip="Passer commande"
+            aria-label="Passer commande"
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+              <path
+                d="M3 5h2l2 12h12l2-8H6"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+              />
+              <circle cx="9" cy="19" r="1.5" fill="currentColor" />
+              <circle cx="18" cy="19" r="1.5" fill="currentColor" />
+            </svg>
+            <span class="sr-only">Passer commande</span>
           </button>
           <div class="site-nav__tree">
-            <label for="catalogue-tree" class="site-nav__tree-label">Arborescence du catalogue</label>
+            <label
+              for="catalogue-tree"
+              class="site-nav__tree-label icon-label"
+              data-tooltip="Sélectionner une catégorie"
+              aria-label="Sélectionner une catégorie"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M4 6h16M4 12h16M4 18h16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+              </svg>
+              <span class="sr-only">Sélectionner une catégorie</span>
+            </label>
             <select id="catalogue-tree" class="site-nav__tree-select">
               <option value="">Sélectionner une catégorie ou un article</option>
             </select>
@@ -388,13 +537,65 @@
           <h2 id="siret-error-title" class="siret-modal-title">Client non identifié</h2>
           <p id="siret-error-message" class="siret-modal-message"></p>
           <p class="siret-modal-note">
-            Si vous ne disposez pas encore de compte, vous pouvez faire une demande via notre formulaire dédié.
+            Le numéro SIRET renseigné n'a pas été reconnu, veuillez réessayer ou remplir le formulaire de nouveau client et nous
+            vous contacterons pour vous ouvrir un accès partenaire.
           </p>
           <div class="modal-actions siret-modal-actions">
             <a id="siret-error-link" class="btn-primary" target="_blank" rel="noopener">Accéder au formulaire</a>
             <button id="siret-error-close" type="button" class="btn-secondary">Fermer</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div
+      id="order-confirmation-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="order-confirmation-title"
+      data-open="false"
+    >
+      <div class="modal-card order-modal-card">
+        <form id="order-confirmation-form" class="modal-body order-modal-body">
+          <h2 id="order-confirmation-title" class="order-modal-title">Confirmer la commande</h2>
+          <p class="order-modal-intro">
+            Merci de confirmer les informations de la personne qui passe commande. Vous pouvez les modifier avant l'envoi.
+          </p>
+          <div class="order-modal-grid">
+            <label class="order-modal-field">
+              <span>Nom</span>
+              <input id="order-lastname" name="lastname" type="text" autocomplete="family-name" />
+            </label>
+            <label class="order-modal-field">
+              <span>Prénom</span>
+              <input id="order-firstname" name="firstname" type="text" autocomplete="given-name" />
+            </label>
+            <label class="order-modal-field order-modal-field--full">
+              <span>Adresse e-mail *</span>
+              <input
+                id="order-email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                required
+                placeholder="nom@exemple.com"
+              />
+            </label>
+            <label class="order-modal-field order-modal-field--full">
+              <span>Téléphone</span>
+              <input id="order-phone" name="phone" type="tel" autocomplete="tel" placeholder="Ex. 0601020304" />
+            </label>
+          </div>
+          <label class="order-modal-checkbox">
+            <input id="order-copy" name="copy" type="checkbox" checked />
+            <span>Je souhaite recevoir une copie de la demande</span>
+          </label>
+          <div class="modal-actions order-modal-actions">
+            <button id="order-cancel" type="button" class="btn-secondary">Annuler</button>
+            <button type="submit" class="btn-primary">Confirmer l'envoi</button>
+          </div>
+        </form>
       </div>
     </div>
 
