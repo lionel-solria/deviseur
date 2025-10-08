@@ -106,6 +106,7 @@ const state = {
   lastOrderDetails: null,
   viewportMode: 'auto',
   detectedViewportMode: 'desktop',
+  mobilePanelView: 'catalogue',
 };
 
 const elements = {
@@ -167,6 +168,7 @@ const elements = {
   viewportToggleWrapper: document.querySelector('.viewport-toggle'),
   viewportIconScreen: document.querySelector('[data-role="viewport-screen"]'),
   viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
+  mobilePanelToggle: document.getElementById('mobile-panel-toggle'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -218,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
+  elements.mobilePanelToggle?.addEventListener('click', toggleMobilePanelView);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
@@ -327,9 +330,47 @@ function applyViewportMode() {
   if (document.body) {
     document.body.setAttribute('data-viewport-mode', mode);
   }
+  syncMobilePanelWithViewport(mode);
   updateViewportToggleLabel();
   updateViewportIcon(mode);
   setupResponsiveSplit();
+}
+
+function syncMobilePanelWithViewport(mode) {
+  if (!document.body) {
+    return;
+  }
+  if (mode === 'desktop') {
+    state.mobilePanelView = 'catalogue';
+  }
+  document.body.setAttribute('data-mobile-panel', state.mobilePanelView);
+  updateMobilePanelToggle();
+}
+
+function setMobilePanelView(view) {
+  const next = view === 'footer' ? 'footer' : 'catalogue';
+  state.mobilePanelView = next;
+  if (document.body) {
+    document.body.setAttribute('data-mobile-panel', next);
+  }
+  updateMobilePanelToggle();
+}
+
+function toggleMobilePanelView() {
+  const next = state.mobilePanelView === 'footer' ? 'catalogue' : 'footer';
+  setMobilePanelView(next);
+}
+
+function updateMobilePanelToggle() {
+  if (!elements.mobilePanelToggle) {
+    return;
+  }
+  const showingFooter = state.mobilePanelView === 'footer';
+  const label = showingFooter ? 'Voir la recherche' : 'Voir le pied de page';
+  const ariaLabel = showingFooter ? "Afficher la liste de recherche" : "Afficher le pied de page";
+  elements.mobilePanelToggle.textContent = label;
+  elements.mobilePanelToggle.setAttribute('aria-pressed', showingFooter ? 'true' : 'false');
+  elements.mobilePanelToggle.setAttribute('aria-label', ariaLabel);
 }
 
 function getNextViewportMode(current = state.viewportMode) {
