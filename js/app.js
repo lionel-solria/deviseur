@@ -62,13 +62,19 @@ const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
 const SIRET_ERROR_FALLBACK_MESSAGE =
   "Le numéro SIRET renseigné n'a pas été reconnu, veuillez réessayer ou remplir le formulaire de nouveau client et nous vous contacterons pour vous ouvrir un accès partenaire.";
 
-const DEBUG_KEYWORD = 'debug';
 const DEBUG_MAX_LOGS = 150;
 const DEBUG_TOOLTIP_OFFSET = 16;
 
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
+const DISPLAY_MODE_SEQUENCE = ['auto', 'desktop', 'tablet', 'phone'];
+const DISPLAY_MODE_LABELS = {
+  auto: 'Automatique',
+  desktop: 'Bureau',
+  tablet: 'Tablette',
+  phone: 'Téléphone',
+};
 
 const state = {
   catalogue: [],
@@ -98,6 +104,10 @@ const state = {
   debugTooltip: null,
   debugHighlightTarget: null,
   lastOrderDetails: null,
+  displayModePreference: 'auto',
+  detectedDisplayMode: 'desktop',
+  activeDisplayMode: 'desktop',
+  brandLogoClickTimer: null,
 };
 
 const elements = {
@@ -149,7 +159,7 @@ const elements = {
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
   restoreCartInput: document.getElementById('restore-cart-input'),
-  saveNameInput: document.getElementById('save-name'),
+  displayModeToggle: document.getElementById('display-mode-toggle'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -175,6 +185,13 @@ const elements = {
   orderEmail: document.getElementById('order-email'),
   orderPhone: document.getElementById('order-phone'),
   orderCopy: document.getElementById('order-copy'),
+  saveCartModal: document.getElementById('save-cart-modal'),
+  saveCartForm: document.getElementById('save-cart-form'),
+  saveCartName: document.getElementById('save-cart-name'),
+  saveCartCancel: document.getElementById('save-cart-cancel'),
+  saveCartFeedback: document.getElementById('save-cart-feedback'),
+  globalLoading: document.getElementById('global-loading'),
+  globalLoadingText: document.getElementById('global-loading-text'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -186,14 +203,15 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
   elements.saveCart?.addEventListener('click', handleSaveCart);
-  elements.saveNameInput?.addEventListener('input', handleSaveNameInput);
   elements.restoreCart?.addEventListener('click', () => {
     elements.restoreCartInput?.click();
   });
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
-  elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.brandLogo?.addEventListener('click', handleBrandLogoClick);
+  elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
+  elements.displayModeToggle?.addEventListener('click', handleDisplayModeToggle);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
@@ -201,20 +219,23 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.orderModal?.addEventListener('click', handleOrderModalBackdropClick);
   elements.orderCancel?.addEventListener('click', closeOrderModal);
   elements.orderForm?.addEventListener('submit', handleOrderFormSubmit);
+  elements.saveCartForm?.addEventListener('submit', handleSaveCartFormSubmit);
+  elements.saveCartCancel?.addEventListener('click', closeSaveCartModal);
+  elements.saveCartModal?.addEventListener('click', handleSaveCartModalBackdropClick);
   if (elements.siretErrorLink) {
     elements.siretErrorLink.href = NEW_CLIENT_URL;
   }
   setupModal();
+  initialiseDisplayMode();
   setupResponsiveSplit();
   setupCategoryFilter();
   setupNavAutoHide();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
-  window.addEventListener('resize', setupResponsiveSplit);
+  window.addEventListener('resize', handleWindowResize);
   syncDiscountInputs();
   syncGeneralCommentInput();
-  syncSaveNameInput();
   updateWebhookModeIndicator();
   setIdentificationState('idle');
   renderClientIdentity();
@@ -222,8 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupResponsiveSplit() {
-  const shouldSplit = window.innerWidth >= 1024;
-  if (shouldSplit && !state.splitInstance && typeof window.Split === 'function') {
+  const canSplit = typeof window.Split === 'function';
+  const shouldSplit = state.activeDisplayMode === 'desktop' && canSplit;
+  if (shouldSplit && !state.splitInstance) {
     state.splitInstance = window.Split(['#catalogue-panel', '#quote-panel'], {
       sizes: [60, 40],
       minSize: [320, 320],
@@ -232,7 +254,7 @@ function setupResponsiveSplit() {
     });
   }
 
-  if (!shouldSplit && state.splitInstance) {
+  if ((!shouldSplit || !canSplit) && state.splitInstance) {
     state.splitInstance.destroy();
     state.splitInstance = null;
     elements.cataloguePanel.style.removeProperty('width');
@@ -252,6 +274,83 @@ function setupNavAutoHide() {
     return;
   }
   nav.dataset.collapsed = 'false';
+}
+
+function initialiseDisplayMode() {
+  updateDisplayMode();
+  if (document.body && !document.body.dataset.displayMode) {
+    document.body.dataset.displayMode = state.activeDisplayMode;
+  }
+}
+
+function handleDisplayModeToggle() {
+  const currentIndex = DISPLAY_MODE_SEQUENCE.indexOf(state.displayModePreference);
+  const nextIndex = (currentIndex + 1) % DISPLAY_MODE_SEQUENCE.length;
+  state.displayModePreference = DISPLAY_MODE_SEQUENCE[nextIndex];
+  updateDisplayMode();
+  setupResponsiveSplit();
+}
+
+function handleWindowResize() {
+  if (state.displayModePreference === 'auto') {
+    updateDisplayMode();
+  } else {
+    applyDisplayMode(state.displayModePreference);
+    updateDisplayModeToggleUi();
+  }
+  setupResponsiveSplit();
+}
+
+function updateDisplayMode() {
+  const detected = detectDisplayModeFromWidth(window.innerWidth || document.documentElement.clientWidth || 0);
+  state.detectedDisplayMode = detected;
+  if (!DISPLAY_MODE_SEQUENCE.includes(state.displayModePreference)) {
+    state.displayModePreference = 'auto';
+  }
+  const targetMode = state.displayModePreference === 'auto' ? detected : state.displayModePreference;
+  applyDisplayMode(targetMode);
+  updateDisplayModeToggleUi();
+}
+
+function applyDisplayMode(mode) {
+  const normalised = DISPLAY_MODE_SEQUENCE.includes(mode) ? mode : 'desktop';
+  state.activeDisplayMode = normalised;
+  if (document.body) {
+    document.body.dataset.displayMode = normalised;
+  }
+}
+
+function detectDisplayModeFromWidth(width) {
+  if (Number.isFinite(width) && width < 768) {
+    return 'phone';
+  }
+  if (Number.isFinite(width) && width < 1280) {
+    return 'tablet';
+  }
+  return 'desktop';
+}
+
+function updateDisplayModeToggleUi() {
+  if (!elements.displayModeToggle) {
+    return;
+  }
+  const toggle = elements.displayModeToggle;
+  toggle.dataset.mode = state.activeDisplayMode;
+  const nextMode = getNextDisplayMode(state.displayModePreference);
+  const activeLabel = DISPLAY_MODE_LABELS[state.activeDisplayMode] || DISPLAY_MODE_LABELS.desktop;
+  const nextLabel = DISPLAY_MODE_LABELS[nextMode] || DISPLAY_MODE_LABELS.desktop;
+  const currentLabel =
+    state.displayModePreference === 'auto'
+      ? `automatique (${(DISPLAY_MODE_LABELS[state.detectedDisplayMode] || activeLabel).toLowerCase()})`
+      : activeLabel.toLowerCase();
+  toggle.setAttribute('aria-label', `Mode d'affichage ${currentLabel}. Cliquer pour passer en ${nextLabel.toLowerCase()}.`);
+  toggle.setAttribute('title', `Mode actuel : ${activeLabel} • Prochain : ${nextLabel}`);
+}
+
+function getNextDisplayMode(current) {
+  const index = DISPLAY_MODE_SEQUENCE.indexOf(current);
+  const nextIndex = index === -1 ? 1 : (index + 1) % DISPLAY_MODE_SEQUENCE.length;
+  return DISPLAY_MODE_SEQUENCE[nextIndex];
 }
 
 async function loadCatalogue() {
@@ -942,19 +1041,6 @@ function syncGeneralCommentInput() {
   }
 }
 
-function handleSaveNameInput(event) {
-  const value = typeof event.target.value === 'string' ? event.target.value : '';
-  state.saveName = value;
-  updateDebugModeFromSaveName(value);
-}
-
-function syncSaveNameInput() {
-  if (elements.saveNameInput) {
-    elements.saveNameInput.value = state.saveName || '';
-    updateDebugModeFromSaveName(elements.saveNameInput.value || '');
-  }
-}
-
 function applyFieldTooltips(root = document) {
   if (!root || typeof root.querySelectorAll !== 'function') {
     return;
@@ -998,16 +1084,6 @@ function applyFieldTooltips(root = document) {
   });
 }
 
-function updateDebugModeFromSaveName(rawValue) {
-  const value = typeof rawValue === 'string' ? rawValue : '';
-  const shouldEnable = value.toLowerCase().includes(DEBUG_KEYWORD);
-  if (shouldEnable && !state.debugMode) {
-    enableDebugMode();
-  } else if (!shouldEnable && state.debugMode) {
-    disableDebugMode();
-  }
-}
-
 function enableDebugMode() {
   if (state.debugMode) {
     return;
@@ -1041,6 +1117,14 @@ function disableDebugMode() {
   hideDebugTooltip();
   if (state.debugPanel) {
     state.debugPanel.hidden = true;
+  }
+}
+
+function toggleDebugMode() {
+  if (state.debugMode) {
+    disableDebugMode();
+  } else {
+    enableDebugMode();
   }
 }
 
@@ -1437,35 +1521,107 @@ function handleSaveCart() {
     toggleFeedback('Ajoutez des articles avant de sauvegarder votre panier.', 'warning');
     return;
   }
-  const saveName = (state.saveName || '').trim();
-  if (!saveName) {
-    toggleFeedback('Indiquez un nom pour identifier votre sauvegarde.', 'warning');
+  openSaveCartModal();
+}
+
+function openSaveCartModal() {
+  if (!elements.saveCartModal || !elements.saveCartName) {
+    return;
+  }
+  clearSaveCartModalFeedback();
+  elements.saveCartName.value = state.saveName || '';
+  state.lastFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  elements.saveCartModal.dataset.open = 'true';
+  syncBodyScrollLock();
+  window.setTimeout(() => {
+    elements.saveCartName?.focus();
+    elements.saveCartName?.select();
+  }, 0);
+}
+
+function closeSaveCartModal() {
+  if (!elements.saveCartModal) {
+    return;
+  }
+  if (elements.saveCartModal.dataset.open !== 'true') {
+    return;
+  }
+  elements.saveCartModal.dataset.open = 'false';
+  syncBodyScrollLock();
+  if (state.lastFocusElement && typeof state.lastFocusElement.focus === 'function') {
+    state.lastFocusElement.focus();
+    state.lastFocusElement = null;
+  }
+}
+
+function handleSaveCartModalBackdropClick(event) {
+  if (event.target === elements.saveCartModal) {
+    closeSaveCartModal();
+  }
+}
+
+function handleSaveCartFormSubmit(event) {
+  event.preventDefault();
+  if (!state.quote.size) {
+    closeSaveCartModal();
+    toggleFeedback('Ajoutez des articles avant de sauvegarder votre panier.', 'warning');
+    return;
+  }
+  const value = elements.saveCartName?.value ?? '';
+  const trimmed = value.trim();
+  if (!trimmed) {
+    showSaveCartModalFeedback('Veuillez indiquer un nom pour votre sauvegarde.');
+    elements.saveCartName?.focus();
     return;
   }
   try {
-    const snapshot = buildCartSnapshot();
-    const json = JSON.stringify(snapshot, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const now = new Date();
-    const dateSegment = formatDateForFilename(now);
-    const slug = normaliseFileSegment(saveName) || CART_FILENAME_PREFIX;
-    const clientCode = getClientCodeForFilename();
-    const filenameBase = `${slug}-${clientCode}-${dateSegment}`;
-    const filename = `${filenameBase}.json`;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-    toggleFeedback('Le panier a été exporté au format JSON.', 'info');
+    exportCartWithName(trimmed);
+    clearSaveCartModalFeedback();
+    closeSaveCartModal();
   } catch (error) {
     console.error(error);
+    showSaveCartModalFeedback('Impossible de sauvegarder le panier. Merci de réessayer.');
     toggleFeedback('Impossible de sauvegarder le panier. Merci de réessayer.', 'error');
   }
+}
+
+function showSaveCartModalFeedback(message) {
+  if (elements.saveCartFeedback) {
+    elements.saveCartFeedback.textContent = message;
+  }
+}
+
+function clearSaveCartModalFeedback() {
+  if (elements.saveCartFeedback) {
+    elements.saveCartFeedback.textContent = '';
+  }
+}
+
+function exportCartWithName(rawName) {
+  const saveName = typeof rawName === 'string' ? rawName.trim() : '';
+  if (!saveName) {
+    throw new Error('EMPTY_NAME');
+  }
+  state.saveName = saveName;
+  const snapshot = buildCartSnapshot();
+  const json = JSON.stringify(snapshot, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const now = new Date();
+  const dateSegment = formatDateForFilename(now);
+  const slug = normaliseFileSegment(saveName) || CART_FILENAME_PREFIX;
+  const clientCode = getClientCodeForFilename();
+  const filenameBase = `${slug}-${clientCode}-${dateSegment}`;
+  const filename = `${filenameBase}.json`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  toggleFeedback('Le panier a été exporté au format JSON.', 'info');
 }
 
 async function handleRestoreCartInput(event) {
@@ -1490,6 +1646,25 @@ async function handleRestoreCartInput(event) {
       elements.restoreCartInput.value = '';
     }
   }
+}
+
+function showGlobalLoading(message) {
+  if (!elements.globalLoading) {
+    return;
+  }
+  if (elements.globalLoadingText && typeof message === 'string' && message.trim().length > 0) {
+    elements.globalLoadingText.textContent = message.trim();
+  }
+  elements.globalLoading.hidden = false;
+  syncBodyScrollLock();
+}
+
+function hideGlobalLoading() {
+  if (!elements.globalLoading) {
+    return;
+  }
+  elements.globalLoading.hidden = true;
+  syncBodyScrollLock();
 }
 
 function buildCartSnapshot() {
@@ -1558,7 +1733,6 @@ function applyCartSnapshot(snapshot) {
   } else {
     state.saveName = '';
   }
-  syncSaveNameInput();
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
@@ -2163,6 +2337,34 @@ function handleClientIdentityReset() {
   }
 }
 
+function handleBrandLogoClick(event) {
+  if (event?.detail && event.detail > 1) {
+    if (state.brandLogoClickTimer) {
+      window.clearTimeout(state.brandLogoClickTimer);
+      state.brandLogoClickTimer = null;
+    }
+    return;
+  }
+  if (state.brandLogoClickTimer) {
+    window.clearTimeout(state.brandLogoClickTimer);
+  }
+  state.brandLogoClickTimer = window.setTimeout(() => {
+    toggleWebhookMode();
+    state.brandLogoClickTimer = null;
+  }, 220);
+}
+
+function handleBrandLogoDoubleClick(event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+  if (state.brandLogoClickTimer) {
+    window.clearTimeout(state.brandLogoClickTimer);
+    state.brandLogoClickTimer = null;
+  }
+  toggleDebugMode();
+}
+
 function toggleWebhookMode() {
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
@@ -2401,6 +2603,7 @@ async function handleOrderFormSubmit(event) {
 
 async function sendOrderRequest(orderDetails) {
   toggleFeedback('Envoi de la commande en cours...', 'info');
+  showGlobalLoading('Préparation du devis en cours…');
   logDebug('Préparation de la commande pour envoi.', {
     lignes: state.quote.size,
     contact: orderDetails.email || null,
@@ -2457,6 +2660,8 @@ async function sendOrderRequest(orderDetails) {
     logDebug('Erreur lors de l\'envoi de la commande.', {
       message: error instanceof Error ? error.message : String(error),
     });
+  } finally {
+    hideGlobalLoading();
   }
 }
 
@@ -3078,6 +3283,11 @@ function setupModal() {
     if (elements.siretErrorModal?.dataset.open === 'true') {
       event.preventDefault();
       closeSiretErrorModal();
+      return;
+    }
+    if (elements.saveCartModal?.dataset.open === 'true') {
+      event.preventDefault();
+      closeSaveCartModal();
     }
   });
 }
@@ -3193,7 +3403,9 @@ function syncBodyScrollLock() {
   const shouldLock =
     (elements.modalBackdrop && elements.modalBackdrop.dataset.open === 'true') ||
     (elements.siretErrorModal && elements.siretErrorModal.dataset.open === 'true') ||
-    (elements.orderModal && elements.orderModal.dataset.open === 'true');
+    (elements.orderModal && elements.orderModal.dataset.open === 'true') ||
+    (elements.saveCartModal && elements.saveCartModal.dataset.open === 'true') ||
+    (elements.globalLoading && !elements.globalLoading.hidden);
   if (shouldLock) {
     document.body.style.overflow = 'hidden';
   } else {
