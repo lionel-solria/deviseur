@@ -59,8 +59,10 @@ const WEBHOOK_ENDPOINTS = {
 const ORDER_WEBHOOK_URL = 'https://aiid.app.n8n.cloud/webhook/7a151e50-f47b-4357-a9b9-1755de70d310';
 
 const NEW_CLIENT_URL = 'https://www.idgroup-france.com/bao/NouveauClient.html';
+const SIRET_ERROR_INSTRUCTIONS =
+  'veuillez réessayer ou remplir le formulaire de nouveau client et nous vous contacterons pour vous ouvrir un accès partenaire.';
 const SIRET_ERROR_FALLBACK_MESSAGE =
-  "Nous n'avons pas pu identifier ce client. Veuillez vérifier le numéro de SIRET saisi ou effectuer une demande de nouveau client.";
+  `Le numéro SIRET renseigné n'a pas été reconnu, ${SIRET_ERROR_INSTRUCTIONS}`;
 
 const DEBUG_KEYWORD = 'debug';
 const DEBUG_MAX_LOGS = 150;
@@ -69,6 +71,16 @@ const DEBUG_TOOLTIP_OFFSET = 16;
 const CART_SNAPSHOT_VERSION = 1;
 const CART_FILENAME_PREFIX = 'panier-deviseur';
 const WEBHOOK_PANEL_TIMEOUT = 10000;
+
+function createEmptyOrderContact() {
+  return {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    sendCopy: true,
+  };
+}
 
 const state = {
   catalogue: [],
@@ -97,6 +109,8 @@ const state = {
   debugPanelContent: null,
   debugTooltip: null,
   debugHighlightTarget: null,
+  orderContact: createEmptyOrderContact(),
+  lastSiretAttempt: '',
 };
 
 const elements = {
@@ -142,6 +156,17 @@ const elements = {
   modalWeightRow: document.querySelector('[data-role="modal-meta-weight"]'),
   modalScore: document.getElementById('product-modal-score'),
   modalClose: document.getElementById('product-modal-close'),
+  orderModal: document.getElementById('order-confirmation-modal'),
+  orderForm: document.getElementById('order-confirmation-form'),
+  orderFirstName: document.getElementById('order-contact-first-name'),
+  orderLastName: document.getElementById('order-contact-last-name'),
+  orderEmail: document.getElementById('order-contact-email'),
+  orderPhone: document.getElementById('order-contact-phone'),
+  orderSendCopy: document.getElementById('order-send-copy'),
+  orderCancel: document.getElementById('order-cancel'),
+  orderSubmitButton: document.getElementById('order-submit'),
+  orderClient: document.getElementById('order-modal-client'),
+  orderDescription: document.getElementById('order-modal-description'),
   currentYear: document.getElementById('current-year'),
   brandLogo: document.querySelector('.brand-logo'),
   webhookModeBadge: document.getElementById('webhook-mode-badge'),
@@ -189,6 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
   elements.siretErrorModal?.addEventListener('click', handleSiretErrorBackdropClick);
+  elements.orderForm?.addEventListener('submit', handleOrderConfirmationSubmit);
+  elements.orderCancel?.addEventListener('click', () => {
+    closeOrderModal();
+  });
   if (elements.siretErrorLink) {
     elements.siretErrorLink.href = NEW_CLIENT_URL;
   }
@@ -1504,6 +1533,7 @@ function buildCartSnapshot() {
       companyName: state.identifiedClient.companyName || '',
       contactEmail: state.identifiedClient.contactEmail || '',
       contactName: state.identifiedClient.contactName || '',
+      contactPhone: state.identifiedClient.contactPhone || '',
       addressLines: Array.isArray(state.identifiedClient.addressLines)
         ? state.identifiedClient.addressLines
         : [],
@@ -1553,6 +1583,7 @@ function applyCartSnapshot(snapshot) {
       companyName: snapshot.identifiedClient.companyName || '',
       contactEmail: snapshot.identifiedClient.contactEmail || '',
       contactName: snapshot.identifiedClient.contactName || '',
+      contactPhone: snapshot.identifiedClient.contactPhone || '',
       addressLines: Array.isArray(snapshot.identifiedClient.addressLines)
         ? snapshot.identifiedClient.addressLines.filter((line) => typeof line === 'string' && line.trim().length > 0)
         : [],
@@ -1567,8 +1598,12 @@ function applyCartSnapshot(snapshot) {
           : undefined,
       statusLabel: snapshot.identifiedClient.statusLabel || '',
     };
+    prefillOrderContactFromIdentification(state.identifiedClient);
+    state.lastSiretAttempt = state.identifiedClient.siret || '';
   } else {
     state.identifiedClient = null;
+    state.orderContact = createEmptyOrderContact();
+    state.lastSiretAttempt = '';
   }
 
   for (const itemData of snapshot.items) {
@@ -1624,6 +1659,8 @@ function handleSiretInputChange(event) {
   if (!state.isIdentifyingClient) {
     if (!digits) {
       state.identifiedClient = null;
+      state.orderContact = createEmptyOrderContact();
+      state.lastSiretAttempt = '';
       setIdentificationState('idle');
       updateDiscountRate(0);
       closeWebhookPanel();
@@ -1631,6 +1668,7 @@ function handleSiretInputChange(event) {
       renderClientIdentity();
     } else if (state.identifiedClient && state.identifiedClient.siret !== digits) {
       state.identifiedClient = null;
+      state.orderContact = createEmptyOrderContact();
       setIdentificationState('idle');
       updateDiscountRate(0);
       closeWebhookPanel();
@@ -1650,6 +1688,7 @@ async function handleSiretSubmit(event) {
     setIdentificationState('error', 'Saisissez un numéro de SIRET valide (14 chiffres).');
     return;
   }
+  state.lastSiretAttempt = siret;
   const endpoint = getActiveWebhookUrl();
   state.isIdentifyingClient = true;
   setIdentificationState('loading', 'Identification en cours...');
@@ -1677,6 +1716,7 @@ async function handleSiretSubmit(event) {
     }
     const result = normaliseWebhookResponse(payload, siret);
     state.identifiedClient = result;
+    prefillOrderContactFromIdentification(result);
     updateDiscountRate(typeof result.discountRate === 'number' ? result.discountRate : 0);
     updateIdentificationFromState();
     logDebug('Identification SIRET : réponse reçue.', {
@@ -1711,6 +1751,7 @@ function normaliseWebhookResponse(payload, siret) {
     companyName: '',
     contactEmail: '',
     contactName: '',
+    contactPhone: '',
     addressLines: [],
     conditionsLines: [],
     discountRate: undefined,
@@ -1820,6 +1861,26 @@ function normaliseWebhookResponse(payload, siret) {
     (coordonneesField && typeof coordonneesField === 'object' ? coordonneesField.email : undefined);
   if (typeof emailCandidate === 'string') {
     result.contactEmail = emailCandidate.trim();
+  }
+
+  const phoneCandidate =
+    getValue('contactPhone') ??
+    getValue('phone') ??
+    getValue('telephone') ??
+    getValue('tel') ??
+    getValue('mobile') ??
+    getValue('portable') ??
+    (contactField && typeof contactField === 'object'
+      ? contactField.phone || contactField.telephone || contactField.mobile || contactField.tel
+      : undefined) ??
+    (coordonneesField && typeof coordonneesField === 'object'
+      ? coordonneesField.phone || coordonneesField.telephone || coordonneesField.mobile || coordonneesField.tel
+      : undefined);
+  if (typeof phoneCandidate === 'string' || typeof phoneCandidate === 'number') {
+    const value = String(phoneCandidate).trim();
+    if (value) {
+      result.contactPhone = value;
+    }
   }
 
   const contactCandidate =
@@ -2044,12 +2105,24 @@ function renderClientIdentity() {
 }
 
 function formatSiretErrorFeedback(message) {
-  const base = escapeHtml(message ?? '');
-  const trimmed = base.trim();
-  if (trimmed) {
-    return trimmed;
+  const formattedSiret = formatSiret(state.lastSiretAttempt || elements.siretInput?.value || '');
+  const hasSiret = (state.lastSiretAttempt || '').length === 14 || formattedSiret.length === 14;
+  const safeMessage = escapeHtml(message ?? '').trim();
+  const instructions = escapeHtml(SIRET_ERROR_INSTRUCTIONS);
+  const parts = [];
+  if (hasSiret) {
+    const base = formattedSiret
+      ? `Le numéro SIRET <strong>${escapeHtml(formattedSiret)}</strong> n'a pas été reconnu`
+      : "Le numéro SIRET renseigné n'a pas été reconnu";
+    parts.push(instructions ? `${base}, ${instructions}` : `${base}.`);
   }
-  return SIRET_ERROR_FALLBACK_MESSAGE;
+  if (safeMessage) {
+    parts.push(safeMessage);
+  }
+  if (parts.length === 0) {
+    return escapeHtml(SIRET_ERROR_FALLBACK_MESSAGE);
+  }
+  return parts.join(' ');
 }
 
 function setIdentificationState(status, message = null) {
@@ -2109,6 +2182,8 @@ function updateIdentificationFromState() {
 function handleClientIdentityReset() {
   state.isIdentifyingClient = false;
   state.identifiedClient = null;
+  state.orderContact = createEmptyOrderContact();
+  state.lastSiretAttempt = '';
   if (elements.siretForm) {
     elements.siretForm.reset();
   }
@@ -2125,6 +2200,8 @@ function handleClientIdentityReset() {
 function toggleWebhookMode() {
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
+  state.orderContact = createEmptyOrderContact();
+  state.lastSiretAttempt = '';
   updateDiscountRate(0);
   updateWebhookModeIndicator();
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
@@ -2222,17 +2299,78 @@ async function generatePdf() {
   }
 }
 
-async function handleSubmitOrder() {
+function handleSubmitOrder() {
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
     return;
   }
-  const confirmed = window.confirm('Confirmez-vous vouloir passer la commande à ID GROUP ?');
-  if (!confirmed) {
+  openOrderModal();
+}
+
+async function handleOrderConfirmationSubmit(event) {
+  event.preventDefault();
+  if (!state.quote.size) {
+    closeOrderModal();
+    toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
     return;
   }
+  const contact = {
+    firstName: (elements.orderFirstName?.value || '').trim(),
+    lastName: (elements.orderLastName?.value || '').trim(),
+    email: (elements.orderEmail?.value || '').trim(),
+    phone: (elements.orderPhone?.value || '').replace(/\s+/g, ' ').trim(),
+    sendCopy: elements.orderSendCopy ? Boolean(elements.orderSendCopy.checked) : true,
+  };
+  if (elements.orderEmail) {
+    elements.orderEmail.setCustomValidity('');
+    if (!contact.email) {
+      elements.orderEmail.setCustomValidity('Adresse e-mail obligatoire.');
+      elements.orderEmail.reportValidity();
+      return;
+    }
+    if (!elements.orderEmail.checkValidity()) {
+      elements.orderEmail.reportValidity();
+      return;
+    }
+  } else if (!contact.email) {
+    toggleFeedback("Indiquez l'adresse e-mail de la personne à contacter.", 'warning');
+    return;
+  }
+
+  state.orderContact = {
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    email: contact.email,
+    phone: contact.phone,
+    sendCopy: contact.sendCopy,
+  };
+
+  const submitButton = elements.orderSubmitButton;
+  if (submitButton) {
+    submitButton.disabled = true;
+  }
+
+  closeOrderModal();
+
+  try {
+    await submitOrder(contact);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+    }
+  }
+}
+
+async function submitOrder(contact) {
+  if (!state.quote.size) {
+    toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
+    throw new Error('PANIER_VIDE');
+  }
   toggleFeedback('Envoi de la commande en cours...', 'info');
-  logDebug('Préparation de la commande pour envoi.', { lignes: state.quote.size });
+  logDebug('Préparation de la commande pour envoi.', {
+    lignes: state.quote.size,
+    contactEmail: contact?.email || null,
+  });
   try {
     const { doc, filename, quoteNumber } = await buildQuotePdfDocument();
     const pdfBlob = doc.output('blob');
@@ -2242,6 +2380,7 @@ async function handleSubmitOrder() {
     const slug = normaliseFileSegment(state.saveName) || CART_FILENAME_PREFIX;
     const clientCode = getClientCodeForFilename();
     const snapshotFilename = `${slug}-${clientCode}-${dateSegment}.json`;
+    const contactFullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
     const formData = new FormData();
     formData.append('quoteNumber', quoteNumber);
     formData.append('pdf', pdfBlob, filename);
@@ -2250,7 +2389,19 @@ async function handleSubmitOrder() {
       new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }),
       snapshotFilename,
     );
-    logDebug('Commande : envoi du webhook.', { quoteNumber, fichierPdf: filename, fichierPanier: snapshotFilename });
+    formData.append('contactFirstName', contact.firstName || '');
+    formData.append('contactLastName', contact.lastName || '');
+    formData.append('contactFullName', contactFullName || '');
+    formData.append('contactEmail', contact.email || '');
+    formData.append('contactPhone', contact.phone || '');
+    formData.append('contactSendCopy', contact.sendCopy ? 'true' : 'false');
+    formData.append('contactCopyRequested', contact.sendCopy ? '1' : '0');
+    logDebug('Commande : envoi du webhook.', {
+      quoteNumber,
+      fichierPdf: filename,
+      fichierPanier: snapshotFilename,
+      contactEmail: contact?.email || null,
+    });
     const response = await fetch(ORDER_WEBHOOK_URL, {
       method: 'POST',
       body: formData,
@@ -2267,9 +2418,142 @@ async function handleSubmitOrder() {
     }
     console.error(error);
     toggleFeedback("Impossible d'envoyer la commande. Merci de réessayer.", 'error');
-    logDebug('Erreur lors de l\'envoi de la commande.', {
+    logDebug("Erreur lors de l'envoi de la commande.", {
       message: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+function openOrderModal() {
+  if (!elements.orderModal) {
+    return;
+  }
+  if (!state.orderContact) {
+    state.orderContact = createEmptyOrderContact();
+  }
+  prefillOrderContactFromIdentification(state.identifiedClient);
+  const values = getOrderContactInitialValues();
+  if (elements.orderDescription) {
+    elements.orderDescription.textContent =
+      "Vérifiez ou complétez les coordonnées de la personne qui passe commande. L'adresse e-mail est obligatoire.";
+  }
+  if (elements.orderFirstName) {
+    elements.orderFirstName.value = values.firstName || '';
+  }
+  if (elements.orderLastName) {
+    elements.orderLastName.value = values.lastName || '';
+  }
+  if (elements.orderEmail) {
+    elements.orderEmail.value = values.email || '';
+    elements.orderEmail.setCustomValidity('');
+  }
+  if (elements.orderPhone) {
+    elements.orderPhone.value = values.phone || '';
+  }
+  if (elements.orderSendCopy) {
+    elements.orderSendCopy.checked = values.sendCopy !== false;
+  }
+  if (elements.orderClient) {
+    const client = state.identifiedClient && state.identifiedClient.identified ? state.identifiedClient : null;
+    if (client && (client.companyName || client.siret)) {
+      const clientParts = [];
+      if (client.companyName) {
+        clientParts.push(client.companyName);
+      }
+      if (client.siret) {
+        clientParts.push(`SIRET ${formatSiret(client.siret)}`);
+      }
+      elements.orderClient.textContent = clientParts.join(' • ');
+      elements.orderClient.hidden = false;
+    } else {
+      elements.orderClient.textContent = '';
+      elements.orderClient.hidden = true;
+    }
+  }
+  state.lastFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  elements.orderModal.dataset.open = 'true';
+  syncBodyScrollLock();
+  const focusTarget = (!values.email ? elements.orderEmail : elements.orderFirstName) || elements.orderEmail || elements.orderSubmitButton;
+  if (focusTarget && typeof focusTarget.focus === 'function') {
+    window.setTimeout(() => focusTarget.focus(), 0);
+  }
+}
+
+function closeOrderModal() {
+  if (!elements.orderModal || elements.orderModal.dataset.open !== 'true') {
+    return;
+  }
+  elements.orderModal.dataset.open = 'false';
+  if (elements.orderEmail) {
+    elements.orderEmail.setCustomValidity('');
+  }
+  syncBodyScrollLock();
+  if (state.lastFocusElement && typeof state.lastFocusElement.focus === 'function') {
+    state.lastFocusElement.focus();
+  }
+  state.lastFocusElement = null;
+}
+
+function getOrderContactInitialValues() {
+  if (!state.orderContact) {
+    state.orderContact = createEmptyOrderContact();
+  }
+  const values = {
+    firstName: state.orderContact.firstName || '',
+    lastName: state.orderContact.lastName || '',
+    email: state.orderContact.email || '',
+    phone: state.orderContact.phone || '',
+    sendCopy: typeof state.orderContact.sendCopy === 'boolean' ? state.orderContact.sendCopy : true,
+  };
+  return values;
+}
+
+function deriveContactNameParts(fullName) {
+  const result = { firstName: '', lastName: '' };
+  if (typeof fullName !== 'string') {
+    return result;
+  }
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return result;
+  }
+  const segments = trimmed.split(/\s+/).filter(Boolean);
+  if (segments.length === 0) {
+    return result;
+  }
+  if (segments.length === 1) {
+    result.firstName = segments[0];
+    return result;
+  }
+  result.lastName = segments.pop() || '';
+  result.firstName = segments.join(' ');
+  return result;
+}
+
+function prefillOrderContactFromIdentification(result) {
+  if (!result || typeof result !== 'object') {
+    return;
+  }
+  if (!state.orderContact) {
+    state.orderContact = createEmptyOrderContact();
+  }
+  if (typeof result.contactEmail === 'string' && !state.orderContact.email) {
+    state.orderContact.email = result.contactEmail.trim();
+  }
+  if (typeof result.contactPhone === 'string' && !state.orderContact.phone) {
+    state.orderContact.phone = result.contactPhone.trim();
+  }
+  if (typeof result.contactName === 'string') {
+    const parts = deriveContactNameParts(result.contactName);
+    if (parts.firstName && !state.orderContact.firstName) {
+      state.orderContact.firstName = parts.firstName;
+    }
+    if (parts.lastName && !state.orderContact.lastName) {
+      state.orderContact.lastName = parts.lastName;
+    }
+  }
+  if (typeof state.orderContact.sendCopy !== 'boolean') {
+    state.orderContact.sendCopy = true;
   }
 }
 
@@ -2371,6 +2655,7 @@ async function buildQuotePdfDocument() {
         ...(identifiedClient.addressLines || []),
         identifiedClient.contactName ? `Contact : ${identifiedClient.contactName}` : '',
         identifiedClient.contactEmail ? `Email : ${identifiedClient.contactEmail}` : '',
+        identifiedClient.contactPhone ? `Téléphone : ${identifiedClient.contactPhone}` : '',
       ].filter(Boolean)
     : ['Nom du client', 'Adresse', 'Code postal - Ville', 'Email', 'Téléphone'];
 
@@ -2767,6 +3052,7 @@ function showWebhookPanel(result) {
   addRow('SIRET', formatSiret(result?.siret));
   addRow('Contact', result?.contactName);
   addRow('Email', result?.contactEmail);
+  addRow('Téléphone', result?.contactPhone);
   addRow('Remise appliquée', `${quantityFormatter.format(state.discountRate)} %`);
 
   if (Array.isArray(result?.addressLines) && result.addressLines.length) {
@@ -2873,6 +3159,14 @@ function setupModal() {
     });
   }
 
+  if (elements.orderModal) {
+    elements.orderModal.addEventListener('click', (event) => {
+      if (event.target === elements.orderModal) {
+        closeOrderModal();
+      }
+    });
+  }
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') {
       return;
@@ -2885,6 +3179,11 @@ function setupModal() {
     if (elements.siretErrorModal?.dataset.open === 'true') {
       event.preventDefault();
       closeSiretErrorModal();
+      return;
+    }
+    if (elements.orderModal?.dataset.open === 'true') {
+      event.preventDefault();
+      closeOrderModal();
     }
   });
 }
@@ -2999,7 +3298,8 @@ function syncBodyScrollLock() {
   }
   const shouldLock =
     (elements.modalBackdrop && elements.modalBackdrop.dataset.open === 'true') ||
-    (elements.siretErrorModal && elements.siretErrorModal.dataset.open === 'true');
+    (elements.siretErrorModal && elements.siretErrorModal.dataset.open === 'true') ||
+    (elements.orderModal && elements.orderModal.dataset.open === 'true');
   if (shouldLock) {
     document.body.style.overflow = 'hidden';
   } else {
