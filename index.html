@@ -150,6 +150,49 @@
             </button>
             <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
           </div>
+          <div class="site-nav__filter-config">
+            <button
+              id="filter-config-button"
+              type="button"
+              class="btn-secondary"
+              aria-haspopup="true"
+              aria-expanded="false"
+              disabled
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M10.325 4.317a1.75 1.75 0 0 1 3.35 0l.246.886a1.75 1.75 0 0 0 2.145 1.236l.905-.242a1.75 1.75 0 0 1 2.117 2.117l-.242.905a1.75 1.75 0 0 0 1.236 2.145l.886.246a1.75 1.75 0 0 1 0 3.35l-.886.246a1.75 1.75 0 0 0-1.236 2.145l.242.905a1.75 1.75 0 0 1-2.117 2.117l-.905-.242a1.75 1.75 0 0 0-2.145 1.236l-.246.886a1.75 1.75 0 0 1-3.35 0l-.246-.886a1.75 1.75 0 0 0-2.145-1.236l-.905.242a1.75 1.75 0 0 1-2.117-2.117l.242-.905a1.75 1.75 0 0 0-1.236-2.145l-.886-.246a1.75 1.75 0 0 1 0-3.35l.886-.246a1.75 1.75 0 0 0 1.236-2.145l-.242-.905a1.75 1.75 0 0 1 2.117-2.117l.905.242a1.75 1.75 0 0 0 2.145-1.236l.246-.886Z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+                <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+              <span class="filter-config-button-label">
+                <span class="filter-config-button-title">Filtres de recherche</span>
+                <span class="filter-config-button-helper">Champs supplémentaires</span>
+              </span>
+              <span id="filter-config-count" class="filter-config-badge">0</span>
+            </button>
+            <div
+              id="filter-config-menu"
+              class="filter-config-menu"
+              role="menu"
+              aria-labelledby="filter-config-button"
+            >
+              <div class="filter-config-header">
+                <p class="filter-config-title">Filtres disponibles</p>
+                <button id="filter-config-close" type="button" class="filter-config-close">Fermer</button>
+              </div>
+              <p class="filter-config-description">
+                Sélectionnez les colonnes à inclure dans la recherche produits.
+              </p>
+              <div id="filter-config-options" class="filter-config-options" role="group" aria-label="Filtres supplémentaires"></div>
+              <p id="filter-config-empty" class="filter-config-empty" hidden>Aucune colonne supplémentaire disponible.</p>
+            </div>
+          </div>
           <button
             id="mobile-view-toggle"
             type="button"
