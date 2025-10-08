@@ -150,6 +150,55 @@
             </button>
             <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
           </div>
+          <div class="site-nav__config">
+            <button
+              id="filter-config-button"
+              type="button"
+              class="btn-secondary btn-secondary--compact site-nav__config-toggle"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09A1.65 1.65 0 0 0 9 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+              </svg>
+              <span class="sr-only">Configurer les filtres</span>
+            </button>
+            <div
+              id="filter-config-menu"
+              class="filter-config-menu"
+              role="menu"
+              aria-labelledby="filter-config-button"
+            >
+              <div class="filter-config-header">
+                <p class="text-sm font-semibold text-slate-900">Filtres supplémentaires</p>
+                <button id="filter-config-close" type="button" class="text-xs font-semibold text-blue-600 transition hover:text-blue-700">
+                  Fermer
+                </button>
+              </div>
+              <p class="filter-config-description">Sélectionnez les colonnes à afficher dans la recherche produit.</p>
+              <div
+                id="filter-config-options"
+                class="filter-config-options"
+                role="group"
+                aria-label="Sélection des filtres"
+              ></div>
+            </div>
+          </div>
           <button
             id="mobile-view-toggle"
             type="button"
@@ -297,6 +346,11 @@
                     <option value="">Toutes les unités</option>
                   </select>
                 </label>
+                <div
+                  id="dynamic-filters"
+                  class="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+                  hidden
+                ></div>
               </div>
             </div>
           </header>

@@ -93,6 +93,11 @@ const state = {
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
+  filterConfigOpen: false,
+  dynamicFilterDefinitions: [],
+  enabledDynamicFilters: new Set(),
+  activeDynamicFilters: new Map(),
+  dynamicFilterOptions: new Map(),
   brandLogoDataUrl: undefined,
   webhookMode: 'production',
   isIdentifyingClient: false,
@@ -121,6 +126,11 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  filterConfigButton: document.getElementById('filter-config-button'),
+  filterConfigMenu: document.getElementById('filter-config-menu'),
+  filterConfigOptions: document.getElementById('filter-config-options'),
+  filterConfigClose: document.getElementById('filter-config-close'),
+  dynamicFilters: document.getElementById('dynamic-filters'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
@@ -235,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   setupModal();
   setupCategoryFilter();
+  setupFilterConfig();
   setupNavAutoHide();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
@@ -507,16 +518,30 @@ async function loadCatalogue() {
       throw new Error(`Impossible de charger le fichier (${response.status})`);
     }
     const csvText = await response.text();
-    const entries = parseCsv(csvText);
+    const { rows: entries, rawHeaders, headers } = parseCsv(csvText);
+    const dynamicDefinitions = deriveDynamicFilterDefinitions(rawHeaders, headers);
+    state.dynamicFilterDefinitions = dynamicDefinitions;
+    syncDynamicFilterState();
+    state.catalogueById.clear();
     state.catalogue = entries
-      .map(toProduct)
+      .map((entry) => {
+        const product = toProduct(entry);
+        if (product && product.name) {
+          product.dynamicAttributes = buildDynamicAttributes(entry, dynamicDefinitions);
+          state.catalogueById.set(product.id, product);
+          return product;
+        }
+        return null;
+      })
       .filter((item) => item && item.name);
-    state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
+    updateDynamicFilterOptions();
     populateCategoryFilter();
     populateUnitFilter();
+    populateDynamicFilterConfig();
     populateCatalogueTree();
+    renderDynamicFilters();
     applyFilters();
     toggleFeedback('', 'hide');
     logDebug('Catalogue chargé avec succès.', { produits: state.catalogue.length });
@@ -531,9 +556,12 @@ async function loadCatalogue() {
 
 function parseCsv(text, delimiter = ';') {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (!lines.length) return [];
-  const headers = splitCsvLine(lines.shift(), delimiter).map(slugifyHeader);
-  return lines.map((line) => {
+  if (!lines.length) {
+    return { rows: [], headers: [], rawHeaders: [] };
+  }
+  const rawHeaders = splitCsvLine(lines.shift(), delimiter);
+  const headers = rawHeaders.map(slugifyHeader);
+  const rows = lines.map((line) => {
     const cells = splitCsvLine(line, delimiter);
     const entry = {};
     headers.forEach((header, index) => {
@@ -541,6 +569,25 @@ function parseCsv(text, delimiter = ';') {
     });
     return entry;
   });
+  return { rows, headers, rawHeaders };
+}
+
+function deriveDynamicFilterDefinitions(rawHeaders, headers) {
+  if (!Array.isArray(rawHeaders) || !Array.isArray(headers)) {
+    return [];
+  }
+  const definitions = [];
+  headers.forEach((key, index) => {
+    if (index >= 14) {
+      const rawLabel = typeof rawHeaders[index] === 'string' ? rawHeaders[index].trim() : '';
+      definitions.push({
+        key,
+        label: rawLabel || key,
+        index,
+      });
+    }
+  });
+  return definitions;
 }
 
 function splitCsvLine(line, delimiter) {
@@ -584,6 +631,19 @@ function cleanCsvValue(value) {
     return '';
   }
   return trimmed;
+}
+
+function buildDynamicAttributes(entry, definitions) {
+  if (!entry || !Array.isArray(definitions) || !definitions.length) {
+    return {};
+  }
+  const attributes = {};
+  definitions.forEach((definition) => {
+    if (definition && definition.key) {
+      attributes[definition.key] = cleanCsvValue(entry[definition.key]);
+    }
+  });
+  return attributes;
 }
 
 function parseCsvNumber(value) {
@@ -738,7 +798,20 @@ function applyFilters() {
       selectedUnit === UNIT_FILTER_ALL ||
       (selectedUnit === UNIT_FILTER_NONE && productUnitValue === UNIT_FILTER_NONE) ||
       (selectedUnit !== UNIT_FILTER_ALL && selectedUnit === productUnitValue);
-    return matchesSearch && matchesCategory && matchesUnit;
+    let matchesDynamic = true;
+    if (state.activeDynamicFilters.size) {
+      for (const [key, selectedValue] of state.activeDynamicFilters.entries()) {
+        if (!selectedValue) {
+          continue;
+        }
+        const productValue = product.dynamicAttributes?.[key] ?? '';
+        if (!productValue || productValue !== selectedValue) {
+          matchesDynamic = false;
+          break;
+        }
+      }
+    }
+    return matchesSearch && matchesCategory && matchesUnit && matchesDynamic;
   });
   renderProducts();
 }
@@ -3554,6 +3627,242 @@ function deriveUnits(items) {
     set.add(item.unit || '');
   });
   return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
+}
+
+function updateDynamicFilterOptions() {
+  const optionSets = new Map();
+  state.dynamicFilterDefinitions.forEach((definition) => {
+    optionSets.set(definition.key, new Set());
+  });
+  state.catalogue.forEach((product) => {
+    if (!product) return;
+    const attributes = product.dynamicAttributes || {};
+    state.dynamicFilterDefinitions.forEach((definition) => {
+      const rawValue = attributes[definition.key];
+      const value = cleanCsvValue(rawValue);
+      if (value && optionSets.has(definition.key)) {
+        optionSets.get(definition.key).add(value);
+      }
+    });
+  });
+  const normalised = new Map();
+  optionSets.forEach((set, key) => {
+    normalised.set(key, Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })));
+  });
+  state.dynamicFilterOptions = normalised;
+}
+
+function syncDynamicFilterState() {
+  const availableKeys = new Set(state.dynamicFilterDefinitions.map((definition) => definition.key));
+  Array.from(state.enabledDynamicFilters).forEach((key) => {
+    if (!availableKeys.has(key)) {
+      state.enabledDynamicFilters.delete(key);
+    }
+  });
+  Array.from(state.activeDynamicFilters.keys()).forEach((key) => {
+    if (!availableKeys.has(key)) {
+      state.activeDynamicFilters.delete(key);
+    }
+  });
+}
+
+function populateDynamicFilterConfig() {
+  if (!elements.filterConfigOptions) return;
+  elements.filterConfigOptions.innerHTML = '';
+  const button = elements.filterConfigButton;
+  if (!state.dynamicFilterDefinitions.length) {
+    const empty = document.createElement('p');
+    empty.className = 'text-xs text-slate-500';
+    empty.textContent = 'Aucune colonne supplémentaire détectée.';
+    elements.filterConfigOptions.appendChild(empty);
+    if (button) {
+      button.setAttribute('disabled', 'disabled');
+      button.setAttribute('aria-expanded', 'false');
+    }
+    closeFilterConfigMenu();
+    return;
+  }
+
+  if (button) {
+    button.removeAttribute('disabled');
+  }
+
+  const fragment = document.createDocumentFragment();
+  state.dynamicFilterDefinitions.forEach((definition) => {
+    const label = document.createElement('label');
+    label.className = 'filter-config-option';
+    label.addEventListener('click', (event) => event.stopPropagation());
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = definition.key;
+    checkbox.checked = state.enabledDynamicFilters.has(definition.key);
+    if (checkbox.checked) {
+      label.classList.add('is-active');
+    }
+    checkbox.addEventListener('click', (event) => event.stopPropagation());
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        state.enabledDynamicFilters.add(definition.key);
+        label.classList.add('is-active');
+      } else {
+        state.enabledDynamicFilters.delete(definition.key);
+        state.activeDynamicFilters.delete(definition.key);
+        label.classList.remove('is-active');
+      }
+      renderDynamicFilters();
+      applyFilters();
+    });
+
+    const text = document.createElement('span');
+    text.textContent = definition.label;
+    label.append(checkbox, text);
+    fragment.appendChild(label);
+  });
+
+  elements.filterConfigOptions.appendChild(fragment);
+}
+
+function renderDynamicFilters() {
+  const container = elements.dynamicFilters;
+  if (!container) return false;
+  container.innerHTML = '';
+  if (!state.enabledDynamicFilters.size) {
+    container.hidden = true;
+    return false;
+  }
+  const fragment = document.createDocumentFragment();
+  let selectionChanged = false;
+  const activeDefinitions = state.dynamicFilterDefinitions.filter((definition) =>
+    state.enabledDynamicFilters.has(definition.key)
+  );
+  activeDefinitions.forEach((definition) => {
+    const wrapper = document.createElement('label');
+    wrapper.className =
+      'dynamic-filter-control flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select';
+
+    const caption = document.createElement('span');
+    caption.className = 'text-xs uppercase tracking-wide text-slate-500';
+    caption.textContent = definition.label;
+
+    const select = document.createElement('select');
+    select.className =
+      'dynamic-filter-select w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+    select.dataset.filterKey = definition.key;
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    const options = state.dynamicFilterOptions.get(definition.key) ?? [];
+    if (!options.length) {
+      placeholder.textContent = 'Aucune valeur disponible';
+      select.disabled = true;
+    } else {
+      placeholder.textContent = 'Toutes les valeurs';
+    }
+    select.appendChild(placeholder);
+
+    const current = state.activeDynamicFilters.get(definition.key) ?? '';
+    let hasCurrent = false;
+    options.forEach((value) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+      if (value === current) {
+        hasCurrent = true;
+      }
+    });
+
+    if (!hasCurrent && current) {
+      state.activeDynamicFilters.delete(definition.key);
+      selectionChanged = true;
+    }
+
+    select.value = hasCurrent ? current : '';
+    select.addEventListener('change', handleDynamicFilterChange);
+
+    wrapper.append(caption, select);
+    fragment.appendChild(wrapper);
+  });
+
+  container.appendChild(fragment);
+  container.hidden = activeDefinitions.length === 0;
+  return selectionChanged;
+}
+
+function handleDynamicFilterChange(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  const key = target.dataset.filterKey;
+  if (!key) return;
+  const value = target.value;
+  if (!value) {
+    state.activeDynamicFilters.delete(key);
+  } else {
+    state.activeDynamicFilters.set(key, value);
+  }
+  applyFilters();
+}
+
+function setupFilterConfig() {
+  if (!elements.filterConfigButton || !elements.filterConfigMenu) return;
+  elements.filterConfigButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleFilterConfigMenu();
+  });
+  elements.filterConfigClose?.addEventListener('click', () => {
+    closeFilterConfigMenu();
+    elements.filterConfigButton?.focus();
+  });
+  elements.filterConfigMenu.addEventListener('click', (event) => event.stopPropagation());
+  document.addEventListener('click', handleFilterConfigOutsideClick);
+  document.addEventListener('keydown', handleFilterConfigKeydown);
+  closeFilterConfigMenu();
+}
+
+function toggleFilterConfigMenu() {
+  if (!state.dynamicFilterDefinitions.length) return;
+  if (state.filterConfigOpen) {
+    closeFilterConfigMenu();
+  } else {
+    openFilterConfigMenu();
+  }
+}
+
+function openFilterConfigMenu() {
+  if (!elements.filterConfigMenu || !elements.filterConfigButton) return;
+  elements.filterConfigMenu.dataset.open = 'true';
+  elements.filterConfigButton.setAttribute('aria-expanded', 'true');
+  state.filterConfigOpen = true;
+}
+
+function closeFilterConfigMenu() {
+  if (!elements.filterConfigMenu || !elements.filterConfigButton) return;
+  elements.filterConfigMenu.dataset.open = 'false';
+  elements.filterConfigButton.setAttribute('aria-expanded', 'false');
+  state.filterConfigOpen = false;
+}
+
+function handleFilterConfigOutsideClick(event) {
+  if (!state.filterConfigOpen) return;
+  if (!elements.filterConfigMenu || !elements.filterConfigButton) return;
+  const target = event.target;
+  if (target instanceof Node) {
+    if (
+      !elements.filterConfigMenu.contains(target) &&
+      !elements.filterConfigButton.contains(target)
+    ) {
+      closeFilterConfigMenu();
+    }
+  }
+}
+
+function handleFilterConfigKeydown(event) {
+  if (event.key === 'Escape' && state.filterConfigOpen) {
+    closeFilterConfigMenu();
+    elements.filterConfigButton?.focus();
+  }
 }
 
 function setupCategoryFilter() {
