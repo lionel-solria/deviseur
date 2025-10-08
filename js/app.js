@@ -167,6 +167,8 @@ const elements = {
   viewportToggleWrapper: document.querySelector('.viewport-toggle'),
   viewportIconScreen: document.querySelector('[data-role="viewport-screen"]'),
   viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
+  mobileViewToggle: document.getElementById('mobile-view-toggle'),
+  mobileViewToggleLabel: document.getElementById('mobile-view-toggle-label'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -194,10 +196,12 @@ const elements = {
   orderCopy: document.getElementById('order-copy'),
   globalLoader: document.getElementById('global-loader'),
   globalLoaderMessage: document.getElementById('global-loader-message'),
+  siteFooter: document.querySelector('.site-footer'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   initialiseViewportMode();
+  initialiseMobileViewToggle();
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
@@ -218,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
+  elements.mobileViewToggle?.addEventListener('click', handleMobileViewToggleClick);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
@@ -327,9 +332,88 @@ function applyViewportMode() {
   if (document.body) {
     document.body.setAttribute('data-viewport-mode', mode);
   }
+  syncMobileViewState(mode);
   updateViewportToggleLabel();
   updateViewportIcon(mode);
   setupResponsiveSplit();
+}
+
+function syncMobileViewState(mode) {
+  if (!document.body) {
+    return;
+  }
+  const isResponsiveMode = mode === 'mobile' || mode === 'tablet';
+  if (!isResponsiveMode) {
+    document.body.removeAttribute('data-mobile-view');
+    updateMobileViewToggleControl('search', mode);
+    return;
+  }
+  const current = document.body.getAttribute('data-mobile-view');
+  const normalized = current === 'footer' ? 'footer' : 'search';
+  document.body.setAttribute('data-mobile-view', normalized);
+  updateMobileViewToggleControl(normalized, mode);
+}
+
+function initialiseMobileViewToggle() {
+  syncMobileViewState(getEffectiveViewportMode());
+}
+
+function getCurrentMobileView() {
+  if (!document.body) {
+    return 'search';
+  }
+  return document.body.getAttribute('data-mobile-view') === 'footer' ? 'footer' : 'search';
+}
+
+function setMobileView(view) {
+  if (!document.body) {
+    return;
+  }
+  const normalized = view === 'footer' ? 'footer' : 'search';
+  document.body.setAttribute('data-mobile-view', normalized);
+  const mode = getEffectiveViewportMode();
+  updateMobileViewToggleControl(normalized, mode);
+  if (mode === 'mobile' || mode === 'tablet') {
+    if (normalized === 'footer' && elements.siteFooter) {
+      elements.siteFooter.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (elements.cataloguePanel) {
+      elements.cataloguePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+function updateMobileViewToggleControl(view, mode = getEffectiveViewportMode()) {
+  if (!elements.mobileViewToggle) {
+    return;
+  }
+  const isResponsiveMode = mode === 'mobile' || mode === 'tablet';
+  elements.mobileViewToggle.hidden = !isResponsiveMode;
+  if (!isResponsiveMode) {
+    elements.mobileViewToggle.removeAttribute('data-view');
+    elements.mobileViewToggle.setAttribute('aria-pressed', 'false');
+    elements.mobileViewToggle.setAttribute('aria-label', 'Voir le pied de page');
+    if (elements.mobileViewToggleLabel) {
+      elements.mobileViewToggleLabel.textContent = 'Voir le pied de page';
+    }
+    return;
+  }
+  const isFooter = view === 'footer';
+  const labelText = isFooter ? 'Voir la liste de recherche' : 'Voir le pied de page';
+  elements.mobileViewToggle.hidden = false;
+  elements.mobileViewToggle.dataset.view = view;
+  elements.mobileViewToggle.setAttribute('aria-pressed', isFooter ? 'true' : 'false');
+  elements.mobileViewToggle.setAttribute('aria-label', labelText);
+  if (elements.mobileViewToggleLabel) {
+    elements.mobileViewToggleLabel.textContent = labelText;
+  }
+}
+
+function handleMobileViewToggleClick(event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+  const nextView = getCurrentMobileView() === 'footer' ? 'search' : 'footer';
+  setMobileView(nextView);
 }
 
 function getNextViewportMode(current = state.viewportMode) {
