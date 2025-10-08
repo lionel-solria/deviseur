@@ -158,6 +158,42 @@
           >
             <span id="mobile-view-toggle-label" class="site-nav__mobile-toggle-label">Voir le pied de page</span>
           </button>
+          <div class="site-nav__filter-config">
+            <button
+              id="filter-config-button"
+              type="button"
+              class="btn-secondary btn-secondary--compact site-nav__filter-config-trigger"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                <path
+                  d="M10.325 4.317a1 1 0 0 1 1.35-.447l.098.052 1.825 1.054a1 1 0 0 0 .476.132h2.106a2 2 0 0 1 2 2v2.106a1 1 0 0 0 .132.476l1.054 1.825a1 1 0 0 1-.349 1.35l-.098.057-1.825 1.054a1 1 0 0 0-.476.132h-2.106a2 2 0 0 0-2 2v2.106a1 1 0 0 1-1.482.874l-.098-.057-1.825-1.054a1 1 0 0 0-.476-.132H7.718a2 2 0 0 1-2-2v-2.106a1 1 0 0 0-.132-.476L4.532 11.89a1 1 0 0 1 .349-1.35l.098-.057 1.825-1.054a1 1 0 0 0 .476-.132h2.106a2 2 0 0 0 2-2V5.146a1 1 0 0 1 .939-.829Z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                />
+              </svg>
+              <span class="site-nav__filter-config-label">Filtres supplémentaires</span>
+              <span id="filter-config-count" class="site-nav__filter-config-count" aria-hidden="true"></span>
+            </button>
+            <div
+              id="filter-config-menu"
+              class="filter-config-menu"
+              role="menu"
+              aria-labelledby="filter-config-button"
+              data-open="false"
+            >
+              <div class="filter-config-header">
+                <p class="filter-config-title">Filtres disponibles</p>
+                <button id="filter-config-close" type="button" class="filter-config-close">Fermer</button>
+              </div>
+              <div id="filter-config-list" class="filter-config-list" role="group" aria-label="Filtres supplémentaires"></div>
+              <p id="filter-config-empty" class="filter-config-empty">Aucun filtre supplémentaire disponible.</p>
+            </div>
+          </div>
           <div class="viewport-toggle" data-mode="desktop">
             <button id="viewport-mode-toggle" type="button" class="viewport-toggle__button">
               <svg aria-hidden="true" class="viewport-toggle__icon" viewBox="0 0 32 32">
@@ -260,7 +296,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
                 </svg>
               </div>
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center xl:w-auto">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap xl:w-auto" id="product-filter-controls">
                 <div class="relative sm:w-56 xl:w-64">
                   <button
                     id="category-filter-button"
@@ -297,6 +333,11 @@
                     <option value="">Toutes les unités</option>
                   </select>
                 </label>
+                <div
+                  id="extra-filters-container"
+                  class="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto"
+                  data-visible="false"
+                ></div>
               </div>
             </div>
           </header>

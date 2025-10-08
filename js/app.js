@@ -85,6 +85,10 @@ const state = {
   units: [],
   selectedCategories: new Set(),
   selectedUnit: '__all__',
+  extraFilterColumns: [],
+  extraFilterValues: new Map(),
+  activeExtraFilters: new Set(),
+  selectedExtraFilters: new Map(),
   searchQuery: '',
   discountRate: 0,
   vatRate: 0.2,
@@ -106,6 +110,7 @@ const state = {
   lastOrderDetails: null,
   viewportMode: 'auto',
   detectedViewportMode: 'desktop',
+  filterConfigMenuOpen: false,
 };
 
 const elements = {
@@ -121,6 +126,13 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  filterConfigButton: document.getElementById('filter-config-button'),
+  filterConfigMenu: document.getElementById('filter-config-menu'),
+  filterConfigList: document.getElementById('filter-config-list'),
+  filterConfigEmpty: document.getElementById('filter-config-empty'),
+  filterConfigClose: document.getElementById('filter-config-close'),
+  filterConfigCount: document.getElementById('filter-config-count'),
+  extraFiltersContainer: document.getElementById('extra-filters-container'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
@@ -235,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   setupModal();
   setupCategoryFilter();
+  setupFilterConfiguration();
   setupNavAutoHide();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
@@ -507,16 +520,19 @@ async function loadCatalogue() {
       throw new Error(`Impossible de charger le fichier (${response.status})`);
     }
     const csvText = await response.text();
-    const entries = parseCsv(csvText);
+    const { headers, entries } = parseCsv(csvText);
+    state.extraFilterColumns = deriveExtraFilterColumns(headers);
     state.catalogue = entries
-      .map(toProduct)
+      .map((entry) => toProduct(entry, state.extraFilterColumns))
       .filter((item) => item && item.name);
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
+    state.extraFilterValues = deriveExtraFilterValues(state.catalogue, state.extraFilterColumns);
     populateCategoryFilter();
     populateUnitFilter();
     populateCatalogueTree();
+    initialiseExtraFilters();
     applyFilters();
     toggleFeedback('', 'hide');
     logDebug('Catalogue chargé avec succès.', { produits: state.catalogue.length });
@@ -531,16 +547,24 @@ async function loadCatalogue() {
 
 function parseCsv(text, delimiter = ';') {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (!lines.length) return [];
-  const headers = splitCsvLine(lines.shift(), delimiter).map(slugifyHeader);
-  return lines.map((line) => {
+  if (!lines.length) {
+    return { headers: [], entries: [] };
+  }
+  const rawHeaders = splitCsvLine(lines.shift(), delimiter).map((header) => header.trim());
+  const headers = rawHeaders.map((label, index) => ({
+    key: slugifyHeader(label) || `colonne_${index + 1}`,
+    label: label || `Colonne ${index + 1}`,
+    index,
+  }));
+  const entries = lines.map((line) => {
     const cells = splitCsvLine(line, delimiter);
     const entry = {};
     headers.forEach((header, index) => {
-      entry[header] = (cells[index] ?? '').trim();
+      entry[header.key] = (cells[index] ?? '').trim();
     });
     return entry;
   });
+  return { headers, entries };
 }
 
 function splitCsvLine(line, delimiter) {
@@ -687,7 +711,7 @@ function getQuantityMode(unit) {
   return 'unit';
 }
 
-function toProduct(entry) {
+function toProduct(entry, extraFilters = []) {
   if (!entry) return null;
   const reference = cleanCsvValue(entry.ref);
   const name = cleanCsvValue(entry.design);
@@ -701,6 +725,10 @@ function toProduct(entry) {
   const image = cleanCsvValue(entry.image);
   const link = cleanCsvValue(entry.url);
   const score = normaliseScoreValue(entry.score);
+  const filters = {};
+  extraFilters.forEach((column) => {
+    filters[column.key] = cleanCsvValue(entry[column.key]);
+  });
 
   return {
     id: reference,
@@ -717,6 +745,7 @@ function toProduct(entry) {
     image,
     link,
     category,
+    filters,
   };
 }
 
@@ -738,7 +767,15 @@ function applyFilters() {
       selectedUnit === UNIT_FILTER_ALL ||
       (selectedUnit === UNIT_FILTER_NONE && productUnitValue === UNIT_FILTER_NONE) ||
       (selectedUnit !== UNIT_FILTER_ALL && selectedUnit === productUnitValue);
-    return matchesSearch && matchesCategory && matchesUnit;
+    const matchesDynamicFilters = Array.from(state.activeExtraFilters).every((key) => {
+      const selectedValue = state.selectedExtraFilters.get(key) || '';
+      if (!selectedValue) {
+        return true;
+      }
+      const productValue = cleanCsvValue(product.filters?.[key]);
+      return productValue && productValue === selectedValue;
+    });
+    return matchesSearch && matchesCategory && matchesUnit && matchesDynamicFilters;
   });
   renderProducts();
 }
@@ -3556,6 +3593,36 @@ function deriveUnits(items) {
   return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
 }
 
+function deriveExtraFilterColumns(headers) {
+  if (!Array.isArray(headers) || !headers.length) {
+    return [];
+  }
+  return headers.filter((header) => Number.isInteger(header?.index) && header.index >= 14);
+}
+
+function deriveExtraFilterValues(products, columns) {
+  const values = new Map();
+  if (!Array.isArray(columns) || !columns.length) {
+    return values;
+  }
+  columns.forEach((column) => {
+    values.set(column.key, new Set());
+  });
+  products.forEach((product) => {
+    columns.forEach((column) => {
+      const value = cleanCsvValue(product.filters?.[column.key]);
+      if (value) {
+        values.get(column.key)?.add(value);
+      }
+    });
+  });
+  const sortedValues = new Map();
+  values.forEach((set, key) => {
+    sortedValues.set(key, Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })));
+  });
+  return sortedValues;
+}
+
 function setupCategoryFilter() {
   if (!elements.categoryFilterButton || !elements.categoryFilterMenu) return;
   elements.categoryFilterButton.addEventListener('click', (event) => {
@@ -3570,6 +3637,24 @@ function setupCategoryFilter() {
   });
   document.addEventListener('click', handleCategoryMenuOutsideClick);
   document.addEventListener('keydown', handleCategoryMenuKeydown);
+}
+
+function setupFilterConfiguration() {
+  if (!elements.filterConfigButton || !elements.filterConfigMenu) {
+    return;
+  }
+  elements.filterConfigButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleFilterConfigMenu();
+  });
+  elements.filterConfigMenu.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+  elements.filterConfigClose?.addEventListener('click', () => {
+    closeFilterConfigMenu();
+  });
+  document.addEventListener('click', handleFilterConfigOutsideClick);
+  document.addEventListener('keydown', handleFilterConfigKeydown);
 }
 
 function populateCategoryFilter() {
@@ -3604,6 +3689,211 @@ function populateCategoryFilter() {
   });
   elements.categoryFilterOptions.appendChild(fragment);
   updateCategoryFilterLabel();
+}
+
+function initialiseExtraFilters() {
+  pruneInactiveExtraFilters();
+  populateFilterConfigurationList();
+  renderExtraFilters();
+  syncFilterConfigButtonState();
+}
+
+function pruneInactiveExtraFilters() {
+  const availableKeys = new Set(state.extraFilterColumns.map((column) => column.key));
+  Array.from(state.activeExtraFilters).forEach((key) => {
+    if (!availableKeys.has(key)) {
+      state.activeExtraFilters.delete(key);
+      state.selectedExtraFilters.delete(key);
+    }
+  });
+  Array.from(state.selectedExtraFilters.keys()).forEach((key) => {
+    if (!availableKeys.has(key)) {
+      state.selectedExtraFilters.delete(key);
+      return;
+    }
+    const values = state.extraFilterValues.get(key) || [];
+    const current = state.selectedExtraFilters.get(key) || '';
+    if (current && !values.includes(current)) {
+      state.selectedExtraFilters.set(key, '');
+    }
+  });
+}
+
+function populateFilterConfigurationList() {
+  const list = elements.filterConfigList;
+  if (!list) {
+    return;
+  }
+  list.innerHTML = '';
+  const hasColumns = Array.isArray(state.extraFilterColumns) && state.extraFilterColumns.length > 0;
+  updateFilterConfigEmptyState(!hasColumns);
+  if (!hasColumns) {
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  state.extraFilterColumns.forEach((column) => {
+    const option = document.createElement('label');
+    option.className = 'filter-config-option';
+    option.addEventListener('click', (event) => event.stopPropagation());
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = column.key;
+    input.dataset.filterKey = column.key;
+    input.checked = state.activeExtraFilters.has(column.key);
+    input.addEventListener('change', handleFilterConfigCheckboxChange);
+    const text = document.createElement('span');
+    text.textContent = column.label;
+    option.append(input, text);
+    fragment.appendChild(option);
+  });
+  list.appendChild(fragment);
+}
+
+function updateFilterConfigEmptyState(isEmpty) {
+  if (!elements.filterConfigEmpty) {
+    return;
+  }
+  elements.filterConfigEmpty.hidden = !isEmpty;
+}
+
+function renderExtraFilters() {
+  const container = elements.extraFiltersContainer;
+  if (!container) {
+    return;
+  }
+  container.innerHTML = '';
+  if (!state.activeExtraFilters.size) {
+    container.dataset.visible = 'false';
+    return;
+  }
+  container.dataset.visible = 'true';
+  const fragment = document.createDocumentFragment();
+  state.extraFilterColumns
+    .filter((column) => state.activeExtraFilters.has(column.key))
+    .forEach((column) => {
+      const control = createExtraFilterControl(column);
+      fragment.appendChild(control);
+    });
+  container.appendChild(fragment);
+}
+
+function createExtraFilterControl(column) {
+  const wrapper = document.createElement('label');
+  wrapper.className =
+    'flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select extra-filter-control';
+  wrapper.dataset.filterKey = column.key;
+
+  const label = document.createElement('span');
+  label.className = 'text-xs uppercase tracking-wide text-slate-500';
+  label.textContent = column.label;
+
+  const select = document.createElement('select');
+  select.className =
+    'w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+  select.dataset.filterKey = column.key;
+  const currentValue = state.selectedExtraFilters.get(column.key) || '';
+  const values = state.extraFilterValues.get(column.key) || [];
+  if (!values.length) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Aucune valeur disponible';
+    select.appendChild(placeholder);
+    select.disabled = true;
+    select.value = '';
+  } else {
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Toutes';
+    select.appendChild(defaultOption);
+    values.forEach((value) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    });
+    select.disabled = false;
+    select.value = values.includes(currentValue) ? currentValue : '';
+  }
+  select.addEventListener('change', handleExtraFilterSelectChange);
+  wrapper.append(label, select);
+  return wrapper;
+}
+
+function handleFilterConfigCheckboxChange(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || !target.dataset.filterKey) {
+    return;
+  }
+  const key = target.dataset.filterKey;
+  if (target.checked) {
+    state.activeExtraFilters.add(key);
+    if (!state.selectedExtraFilters.has(key)) {
+      state.selectedExtraFilters.set(key, '');
+    }
+  } else {
+    state.activeExtraFilters.delete(key);
+    state.selectedExtraFilters.delete(key);
+  }
+  renderExtraFilters();
+  syncFilterConfigButtonState();
+  applyFilters();
+}
+
+function handleExtraFilterSelectChange(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement) || !target.dataset.filterKey) {
+    return;
+  }
+  state.selectedExtraFilters.set(target.dataset.filterKey, target.value);
+  applyFilters();
+}
+
+function toggleFilterConfigMenu(forceState) {
+  if (!elements.filterConfigMenu || !elements.filterConfigButton) {
+    return;
+  }
+  const nextState = typeof forceState === 'boolean' ? forceState : !state.filterConfigMenuOpen;
+  state.filterConfigMenuOpen = nextState;
+  elements.filterConfigMenu.dataset.open = nextState ? 'true' : 'false';
+  elements.filterConfigButton.setAttribute('aria-expanded', nextState ? 'true' : 'false');
+}
+
+function closeFilterConfigMenu() {
+  toggleFilterConfigMenu(false);
+}
+
+function handleFilterConfigOutsideClick(event) {
+  if (!state.filterConfigMenuOpen) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  const clickedInsideMenu = elements.filterConfigMenu?.contains(target);
+  const clickedButton = elements.filterConfigButton?.contains(target);
+  if (!clickedInsideMenu && !clickedButton) {
+    closeFilterConfigMenu();
+  }
+}
+
+function handleFilterConfigKeydown(event) {
+  if (event.key === 'Escape' && state.filterConfigMenuOpen) {
+    closeFilterConfigMenu();
+  }
+}
+
+function syncFilterConfigButtonState() {
+  const button = elements.filterConfigButton;
+  if (!button) {
+    return;
+  }
+  const count = state.activeExtraFilters.size;
+  button.dataset.hasActive = count > 0 ? 'true' : 'false';
+  button.setAttribute('data-active-count', String(count));
+  if (elements.filterConfigCount) {
+    elements.filterConfigCount.textContent = count > 0 ? `(${count})` : '';
+  }
 }
 
 function populateUnitFilter() {
