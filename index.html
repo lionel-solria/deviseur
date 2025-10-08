@@ -34,7 +34,7 @@
                 type="text"
                 inputmode="numeric"
                 maxlength="14"
-                placeholder="Numéro SIRET (14 chiffres)"
+                placeholder="SIRET (14 chiffres)"
                 class="site-nav__identity-input"
               />
               <button
@@ -85,17 +85,107 @@
               <span class="sr-only">Modifier</span>
             </button>
           </div>
-          <div class="site-nav__cart-actions">
+          <div class="site-nav__command-bar">
+            <button id="mobile-content-toggle" type="button" class="btn-secondary site-nav__mobile-toggle" hidden>
+              Voir le pied de page
+            </button>
+            <div class="site-nav__cart-actions">
+              <button
+                id="save-cart"
+                type="button"
+                class="btn-secondary btn-icon"
+                data-tooltip="Sauvegarder le panier"
+                aria-label="Sauvegarder le panier"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M7 4h10l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm5 0v5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M9 3h6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M9 13h6v6H9z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <span class="sr-only">Sauvegarder</span>
+              </button>
+              <button
+                id="restore-cart"
+                type="button"
+                class="btn-secondary btn-icon"
+                data-tooltip="Restaurer une sauvegarde"
+                aria-label="Restaurer une sauvegarde"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M4 4v6h6M20 20v-6h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M19 5a8.5 8.5 0 0 0-14.5 6.36M5 19a8.5 8.5 0 0 0 14.5-6.36"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <span class="sr-only">Restaurer</span>
+              </button>
+              <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
+            </div>
+            <div class="viewport-toggle" data-mode="desktop">
+              <button id="viewport-mode-toggle" type="button" class="viewport-toggle__button">
+                <svg aria-hidden="true" class="viewport-toggle__icon" viewBox="0 0 32 32">
+                  <rect data-role="viewport-screen" x="3" y="6" width="26" height="20" rx="3" ry="3" />
+                  <rect
+                    data-role="viewport-stand"
+                    class="viewport-toggle__icon-stand"
+                    x="12"
+                    y="26"
+                    width="8"
+                    height="2"
+                    rx="1"
+                    ry="1"
+                  />
+                </svg>
+                <span id="viewport-mode-label" class="viewport-toggle__label">Mode : Bureau</span>
+              </button>
+            </div>
+            <div class="discount-field" aria-live="polite">
+              <span>Remise</span>
+              <span id="header-discount" class="discount-field__value">0&nbsp;%</span>
+            </div>
             <button
-              id="save-cart"
+              id="generate-pdf"
+              class="btn-primary btn-icon"
+              data-tooltip="Imprimer le devis"
+              aria-label="Imprimer le devis"
               type="button"
-              class="btn-secondary btn-icon"
-              data-tooltip="Sauvegarder le panier"
-              aria-label="Sauvegarder le panier"
             >
               <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
                 <path
-                  d="M7 4h10l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm5 0v5"
+                  d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"
                   fill="none"
                   stroke="currentColor"
                   stroke-linecap="round"
@@ -103,15 +193,7 @@
                   stroke-width="1.5"
                 />
                 <path
-                  d="M9 3h6"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                />
-                <path
-                  d="M9 13h6v6H9z"
+                  d="M7 13h10v8H7z"
                   fill="none"
                   stroke="currentColor"
                   stroke-linecap="round"
@@ -119,107 +201,30 @@
                   stroke-width="1.5"
                 />
               </svg>
-              <span class="sr-only">Sauvegarder</span>
+              <span class="sr-only">Imprimer</span>
             </button>
             <button
-              id="restore-cart"
+              id="submit-order"
+              class="btn-primary btn-icon"
+              data-tooltip="Passer commande"
+              aria-label="Passer commande"
               type="button"
-              class="btn-secondary btn-icon"
-              data-tooltip="Restaurer une sauvegarde"
-              aria-label="Restaurer une sauvegarde"
             >
               <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
                 <path
-                  d="M4 4v6h6M20 20v-6h-6"
+                  d="M3 5h2l2 12h12l2-8H6"
                   fill="none"
                   stroke="currentColor"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="1.5"
                 />
-                <path
-                  d="M19 5a8.5 8.5 0 0 0-14.5 6.36M5 19a8.5 8.5 0 0 0 14.5-6.36"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                />
+                <circle cx="9" cy="19" r="1.5" fill="currentColor" />
+                <circle cx="18" cy="19" r="1.5" fill="currentColor" />
               </svg>
-              <span class="sr-only">Restaurer</span>
-            </button>
-            <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
-          </div>
-          <div class="viewport-toggle" data-mode="desktop">
-            <button id="viewport-mode-toggle" type="button" class="viewport-toggle__button">
-              <svg aria-hidden="true" class="viewport-toggle__icon" viewBox="0 0 32 32">
-                <rect data-role="viewport-screen" x="3" y="6" width="26" height="20" rx="3" ry="3" />
-                <rect
-                  data-role="viewport-stand"
-                  class="viewport-toggle__icon-stand"
-                  x="12"
-                  y="26"
-                  width="8"
-                  height="2"
-                  rx="1"
-                  ry="1"
-                />
-              </svg>
-              <span id="viewport-mode-label" class="viewport-toggle__label">Mode : Bureau</span>
+              <span class="sr-only">Passer commande</span>
             </button>
           </div>
-          <div class="discount-field" aria-live="polite">
-            <span>Remise</span>
-            <span id="header-discount" class="discount-field__value">0&nbsp;%</span>
-          </div>
-          <button
-            id="generate-pdf"
-            class="btn-primary btn-icon"
-            data-tooltip="Imprimer le devis"
-            aria-label="Imprimer le devis"
-            type="button"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
-              <path
-                d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.5"
-              />
-              <path
-                d="M7 13h10v8H7z"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.5"
-              />
-            </svg>
-            <span class="sr-only">Imprimer</span>
-          </button>
-          <button
-            id="submit-order"
-            class="btn-primary btn-icon"
-            data-tooltip="Passer commande"
-            aria-label="Passer commande"
-            type="button"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
-              <path
-                d="M3 5h2l2 12h12l2-8H6"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.5"
-              />
-              <circle cx="9" cy="19" r="1.5" fill="currentColor" />
-              <circle cx="18" cy="19" r="1.5" fill="currentColor" />
-            </svg>
-            <span class="sr-only">Passer commande</span>
-          </button>
           <div class="site-nav__tree">
             <label for="catalogue-tree" class="site-nav__tree-label">Catégories</label>
             <select id="catalogue-tree" class="site-nav__tree-select">

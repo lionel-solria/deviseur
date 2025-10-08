@@ -76,6 +76,11 @@ const VIEWPORT_LABELS = {
   mobile: 'Téléphone',
 };
 
+const MOBILE_VIEW_TOGGLE_LABELS = {
+  search: 'Voir le pied de page',
+  footer: 'Voir la liste de recherche',
+};
+
 const state = {
   catalogue: [],
   filtered: [],
@@ -106,6 +111,7 @@ const state = {
   lastOrderDetails: null,
   viewportMode: 'auto',
   detectedViewportMode: 'desktop',
+  mobileView: 'search',
 };
 
 const elements = {
@@ -167,6 +173,7 @@ const elements = {
   viewportToggleWrapper: document.querySelector('.viewport-toggle'),
   viewportIconScreen: document.querySelector('[data-role="viewport-screen"]'),
   viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
+  mobileContentToggle: document.getElementById('mobile-content-toggle'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -194,6 +201,7 @@ const elements = {
   orderCopy: document.getElementById('order-copy'),
   globalLoader: document.getElementById('global-loader'),
   globalLoaderMessage: document.getElementById('global-loader-message'),
+  siteFooter: document.querySelector('.site-footer'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -218,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
+  elements.mobileContentToggle?.addEventListener('click', handleMobileContentToggle);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
@@ -329,6 +338,7 @@ function applyViewportMode() {
   }
   updateViewportToggleLabel();
   updateViewportIcon(mode);
+  applyMobileViewState(mode);
   setupResponsiveSplit();
 }
 
@@ -402,6 +412,55 @@ function updateViewportIcon(mode) {
     elements.viewportIconStand.setAttribute('y', '26');
     elements.viewportIconStand.setAttribute('width', '8');
     elements.viewportIconStand.setAttribute('height', '2');
+  }
+}
+
+function applyMobileViewState(mode = getEffectiveViewportMode()) {
+  if (!document.body) {
+    return;
+  }
+  const effective = mode;
+  if (effective === 'mobile' || effective === 'tablet') {
+    const targetView = state.mobileView === 'footer' ? 'footer' : 'search';
+    document.body.setAttribute('data-mobile-view', targetView);
+  } else {
+    document.body.removeAttribute('data-mobile-view');
+  }
+  updateMobileToggleVisibility(effective);
+}
+
+function updateMobileToggleVisibility(mode = getEffectiveViewportMode()) {
+  if (!elements.mobileContentToggle) {
+    return;
+  }
+  const shouldShow = mode === 'mobile' || mode === 'tablet';
+  elements.mobileContentToggle.hidden = !shouldShow;
+  if (!shouldShow) {
+    elements.mobileContentToggle.removeAttribute('aria-pressed');
+    return;
+  }
+  updateMobileToggleLabel();
+  elements.mobileContentToggle.setAttribute('aria-pressed', state.mobileView === 'footer' ? 'true' : 'false');
+}
+
+function updateMobileToggleLabel() {
+  if (!elements.mobileContentToggle) {
+    return;
+  }
+  const label = MOBILE_VIEW_TOGGLE_LABELS[state.mobileView] || MOBILE_VIEW_TOGGLE_LABELS.search;
+  elements.mobileContentToggle.textContent = label;
+}
+
+function handleMobileContentToggle(event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+  state.mobileView = state.mobileView === 'search' ? 'footer' : 'search';
+  applyMobileViewState(getEffectiveViewportMode());
+  if (state.mobileView === 'footer' && elements.siteFooter) {
+    elements.siteFooter.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (state.mobileView === 'search' && elements.cataloguePanel) {
+    elements.cataloguePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
