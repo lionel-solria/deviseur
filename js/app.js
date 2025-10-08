@@ -93,6 +93,7 @@ const state = {
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
+  filterConfigOpen: false,
   brandLogoDataUrl: undefined,
   webhookMode: 'production',
   isIdentifyingClient: false,
@@ -106,6 +107,10 @@ const state = {
   lastOrderDetails: null,
   viewportMode: 'auto',
   detectedViewportMode: 'desktop',
+  extraFilters: [],
+  extraFiltersBySlug: new Map(),
+  visibleExtraFilters: new Set(),
+  activeExtraFilters: new Map(),
 };
 
 const elements = {
@@ -121,6 +126,10 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  filterConfigButton: document.getElementById('filter-config-button'),
+  filterConfigMenu: document.getElementById('filter-config-menu'),
+  filterConfigOptions: document.getElementById('filter-config-options'),
+  filterConfigClose: document.getElementById('filter-config-close'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productFeedback: document.getElementById('product-feedback'),
@@ -169,6 +178,7 @@ const elements = {
   viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
   mobileViewToggle: document.getElementById('mobile-view-toggle'),
   mobileViewToggleLabel: document.getElementById('mobile-view-toggle-label'),
+  extraFilterControls: document.getElementById('extra-filter-controls'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -202,6 +212,9 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
   initialiseViewportMode();
   initialiseMobileViewToggle();
+  setupFilterConfiguration();
+  renderFilterConfigOptions();
+  renderExtraFilterControls();
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
@@ -507,13 +520,14 @@ async function loadCatalogue() {
       throw new Error(`Impossible de charger le fichier (${response.status})`);
     }
     const csvText = await response.text();
-    const entries = parseCsv(csvText);
+    const { entries, headers, rawHeaders } = parseCsv(csvText);
     state.catalogue = entries
       .map(toProduct)
       .filter((item) => item && item.name);
     state.catalogue.forEach((product) => state.catalogueById.set(product.id, product));
     state.categories = deriveCategories(state.catalogue);
     state.units = deriveUnits(state.catalogue);
+    updateExtraFiltersMetadata(entries, headers, rawHeaders);
     populateCategoryFilter();
     populateUnitFilter();
     populateCatalogueTree();
@@ -531,9 +545,12 @@ async function loadCatalogue() {
 
 function parseCsv(text, delimiter = ';') {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (!lines.length) return [];
-  const headers = splitCsvLine(lines.shift(), delimiter).map(slugifyHeader);
-  return lines.map((line) => {
+  if (!lines.length) {
+    return { entries: [], headers: [], rawHeaders: [] };
+  }
+  const rawHeaders = splitCsvLine(lines.shift(), delimiter).map((header) => header.trim());
+  const headers = rawHeaders.map(slugifyHeader);
+  const entries = lines.map((line) => {
     const cells = splitCsvLine(line, delimiter);
     const entry = {};
     headers.forEach((header, index) => {
@@ -541,6 +558,7 @@ function parseCsv(text, delimiter = ';') {
     });
     return entry;
   });
+  return { entries, headers, rawHeaders };
 }
 
 function splitCsvLine(line, delimiter) {
@@ -689,6 +707,10 @@ function getQuantityMode(unit) {
 
 function toProduct(entry) {
   if (!entry) return null;
+  const attributes = {};
+  Object.entries(entry).forEach(([key, value]) => {
+    attributes[key] = cleanCsvValue(value);
+  });
   const reference = cleanCsvValue(entry.ref);
   const name = cleanCsvValue(entry.design);
   if (!reference || !name) return null;
@@ -717,6 +739,7 @@ function toProduct(entry) {
     image,
     link,
     category,
+    attributes,
   };
 }
 
@@ -730,6 +753,7 @@ function applyFilters() {
   const selectedCategories = state.selectedCategories;
   const query = state.searchQuery;
   const selectedUnit = state.selectedUnit;
+  const activeExtraFilters = state.activeExtraFilters;
   state.filtered = state.catalogue.filter((product) => {
     const matchesSearch = !query || `${product.name} ${product.reference}`.toLowerCase().includes(query);
     const matchesCategory = !selectedCategories.size || (product.category && selectedCategories.has(product.category));
@@ -738,7 +762,20 @@ function applyFilters() {
       selectedUnit === UNIT_FILTER_ALL ||
       (selectedUnit === UNIT_FILTER_NONE && productUnitValue === UNIT_FILTER_NONE) ||
       (selectedUnit !== UNIT_FILTER_ALL && selectedUnit === productUnitValue);
-    return matchesSearch && matchesCategory && matchesUnit;
+    let matchesExtraFilters = true;
+    if (activeExtraFilters.size > 0) {
+      for (const [slug, value] of activeExtraFilters.entries()) {
+        if (!value) {
+          continue;
+        }
+        const candidate = (product.attributes && product.attributes[slug]) || '';
+        if (!candidate || candidate.toLowerCase() !== value.toLowerCase()) {
+          matchesExtraFilters = false;
+          break;
+        }
+      }
+    }
+    return matchesSearch && matchesCategory && matchesUnit && matchesExtraFilters;
   });
   renderProducts();
 }
@@ -3554,6 +3591,270 @@ function deriveUnits(items) {
     set.add(item.unit || '');
   });
   return Array.from(set).sort((a, b) => formatUnitLabel(a).localeCompare(formatUnitLabel(b), 'fr', { sensitivity: 'base' }));
+}
+
+function updateExtraFiltersMetadata(entries, headers, rawHeaders) {
+  const sourceEntries = Array.isArray(entries) ? entries : [];
+  const filters = [];
+  if (Array.isArray(headers) && headers.length) {
+    for (let index = 14; index < headers.length; index += 1) {
+      const slug = headers[index];
+      if (!slug) {
+        continue;
+      }
+      const label = (rawHeaders && rawHeaders[index]) || slug;
+      const values = new Set();
+      sourceEntries.forEach((entry) => {
+        const value = cleanCsvValue(entry?.[slug]);
+        if (value) {
+          values.add(value);
+        }
+      });
+      const options = Array.from(values).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+      filters.push({ slug, label, options });
+    }
+  }
+  state.extraFilters = filters;
+  state.extraFiltersBySlug = new Map(filters.map((filter) => [filter.slug, filter]));
+  const knownSlugs = new Set(state.extraFiltersBySlug.keys());
+  Array.from(state.visibleExtraFilters).forEach((slug) => {
+    if (!knownSlugs.has(slug)) {
+      state.visibleExtraFilters.delete(slug);
+      state.activeExtraFilters.delete(slug);
+    }
+  });
+  Array.from(state.activeExtraFilters.entries()).forEach(([slug, value]) => {
+    const filter = state.extraFiltersBySlug.get(slug);
+    if (!filter || (value && !filter.options.includes(value))) {
+      state.activeExtraFilters.delete(slug);
+    }
+  });
+  renderFilterConfigOptions();
+  renderExtraFilterControls();
+  updateFilterConfigButtonState();
+}
+
+function setupFilterConfiguration() {
+  const button = elements.filterConfigButton;
+  const menu = elements.filterConfigMenu;
+  if (!button || !menu) {
+    return;
+  }
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (button.disabled) {
+      return;
+    }
+    toggleFilterConfigMenu();
+  });
+  elements.filterConfigClose?.addEventListener('click', (event) => {
+    event.preventDefault();
+    closeFilterConfigMenu();
+  });
+  menu.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+  document.addEventListener('click', handleFilterConfigOutsideClick);
+  document.addEventListener('keydown', handleFilterConfigKeydown);
+}
+
+function updateFilterConfigButtonState() {
+  const button = elements.filterConfigButton;
+  if (!button) {
+    return;
+  }
+  const hasFilters = state.extraFilters.length > 0;
+  button.disabled = !hasFilters;
+  button.setAttribute('aria-disabled', hasFilters ? 'false' : 'true');
+  if (!hasFilters) {
+    button.setAttribute('title', 'Aucune colonne supplémentaire disponible');
+    if (state.filterConfigOpen) {
+      closeFilterConfigMenu();
+    }
+  } else {
+    button.removeAttribute('title');
+  }
+}
+
+function toggleFilterConfigMenu(forceState) {
+  if (!elements.filterConfigMenu || !elements.filterConfigButton) {
+    return;
+  }
+  const shouldOpen = typeof forceState === 'boolean' ? forceState : !state.filterConfigOpen;
+  if (shouldOpen) {
+    openFilterConfigMenu();
+  } else {
+    closeFilterConfigMenu();
+  }
+}
+
+function openFilterConfigMenu() {
+  const menu = elements.filterConfigMenu;
+  const button = elements.filterConfigButton;
+  if (!menu || !button) {
+    return;
+  }
+  menu.dataset.open = 'true';
+  button.setAttribute('aria-expanded', 'true');
+  state.filterConfigOpen = true;
+}
+
+function closeFilterConfigMenu() {
+  const menu = elements.filterConfigMenu;
+  const button = elements.filterConfigButton;
+  if (!menu || !button) {
+    return;
+  }
+  menu.dataset.open = 'false';
+  button.setAttribute('aria-expanded', 'false');
+  state.filterConfigOpen = false;
+}
+
+function handleFilterConfigOutsideClick(event) {
+  if (!state.filterConfigOpen) {
+    return;
+  }
+  const menu = elements.filterConfigMenu;
+  const button = elements.filterConfigButton;
+  if (!menu || !button) {
+    return;
+  }
+  const target = event.target;
+  if (target instanceof Node && (menu.contains(target) || button.contains(target))) {
+    return;
+  }
+  closeFilterConfigMenu();
+}
+
+function handleFilterConfigKeydown(event) {
+  if (event.key !== 'Escape') {
+    return;
+  }
+  if (state.filterConfigOpen) {
+    event.preventDefault();
+    closeFilterConfigMenu();
+  }
+}
+
+function renderFilterConfigOptions() {
+  const container = elements.filterConfigOptions;
+  if (!container) {
+    return;
+  }
+  container.innerHTML = '';
+  if (!state.extraFilters.length) {
+    const empty = document.createElement('p');
+    empty.className = 'text-xs text-slate-500';
+    empty.textContent = 'Aucune colonne supplémentaire détectée dans le catalogue.';
+    container.appendChild(empty);
+    updateFilterConfigButtonState();
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  state.extraFilters.forEach((filter) => {
+    const label = document.createElement('label');
+    label.className = 'filter-config-option';
+    label.addEventListener('click', (event) => event.stopPropagation());
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = filter.slug;
+    checkbox.checked = state.visibleExtraFilters.has(filter.slug);
+    checkbox.addEventListener('click', (event) => event.stopPropagation());
+    checkbox.addEventListener('change', (event) => handleFilterConfigCheckboxChange(event, label, filter.slug));
+    const text = document.createElement('span');
+    text.textContent = filter.label || filter.slug;
+    if (checkbox.checked) {
+      label.classList.add('is-active');
+    }
+    label.append(checkbox, text);
+    fragment.appendChild(label);
+  });
+  container.appendChild(fragment);
+  updateFilterConfigButtonState();
+}
+
+function handleFilterConfigCheckboxChange(event, label, slug) {
+  const checkbox = event.target;
+  if (!(checkbox instanceof HTMLInputElement)) {
+    return;
+  }
+  if (checkbox.checked) {
+    state.visibleExtraFilters.add(slug);
+    label.classList.add('is-active');
+  } else {
+    state.visibleExtraFilters.delete(slug);
+    state.activeExtraFilters.delete(slug);
+    label.classList.remove('is-active');
+  }
+  renderExtraFilterControls();
+  applyFilters();
+}
+
+function renderExtraFilterControls() {
+  const container = elements.extraFilterControls;
+  if (!container) {
+    return;
+  }
+  container.innerHTML = '';
+  const activeFilters = state.extraFilters.filter((filter) => state.visibleExtraFilters.has(filter.slug));
+  if (!activeFilters.length) {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+  const fragment = document.createDocumentFragment();
+  activeFilters.forEach((filter) => {
+    const wrapper = document.createElement('label');
+    wrapper.className =
+      'extra-filter-control flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select';
+    wrapper.dataset.slug = filter.slug;
+
+    const title = document.createElement('span');
+    title.className = 'extra-filter-control__label text-xs uppercase tracking-wide text-slate-500';
+    title.textContent = filter.label || filter.slug;
+
+    const select = document.createElement('select');
+    select.className =
+      'extra-filter-control__select w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+    select.dataset.slug = filter.slug;
+
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Toutes les valeurs';
+    select.appendChild(defaultOption);
+
+    filter.options.forEach((value) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    });
+
+    const activeValue = state.activeExtraFilters.get(filter.slug) || '';
+    select.value = activeValue;
+    select.addEventListener('change', (event) => {
+      const value = event.target?.value || '';
+      handleExtraFilterChange(filter.slug, value);
+    });
+
+    wrapper.append(title, select);
+    fragment.appendChild(wrapper);
+  });
+  container.appendChild(fragment);
+}
+
+function handleExtraFilterChange(slug, value) {
+  if (!slug) {
+    return;
+  }
+  const trimmed = value.trim();
+  if (trimmed) {
+    state.activeExtraFilters.set(slug, trimmed);
+  } else {
+    state.activeExtraFilters.delete(slug);
+  }
+  applyFilters();
 }
 
 function setupCategoryFilter() {

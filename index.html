@@ -150,6 +150,33 @@
             </button>
             <input id="restore-cart-input" type="file" accept="application/json" class="sr-only" />
           </div>
+          <div class="site-nav__config">
+            <button
+              id="filter-config-button"
+              type="button"
+              class="btn-secondary site-nav__config-toggle"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              Configurer les filtres
+            </button>
+            <div
+              id="filter-config-menu"
+              class="filter-config-menu"
+              role="menu"
+              aria-labelledby="filter-config-button"
+              data-open="false"
+            >
+              <div class="filter-config-header">
+                <p class="filter-config-title">Filtres supplémentaires</p>
+                <button id="filter-config-close" type="button" class="filter-config-close">Fermer</button>
+              </div>
+              <p class="filter-config-description">
+                Sélectionnez les colonnes à afficher dans la recherche produit pour affiner vos résultats.
+              </p>
+              <div id="filter-config-options" class="filter-config-options" role="group"></div>
+            </div>
+          </div>
           <button
             id="mobile-view-toggle"
             type="button"
@@ -248,11 +275,11 @@
               </p>
             </div>
             <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div class="relative w-full lg:max-w-md">
-                <label for="search" class="sr-only">Rechercher un produit</label>
-                <input
-                  id="search"
-                  type="search"
+            <div class="relative w-full lg:max-w-md">
+              <label for="search" class="sr-only">Rechercher un produit</label>
+              <input
+                id="search"
+                type="search"
                   placeholder="Rechercher par nom ou référence..."
                   class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 brand-input"
                 />
@@ -299,6 +326,7 @@
                 </label>
               </div>
             </div>
+            <div id="extra-filter-controls" class="extra-filter-controls mt-2 flex flex-wrap gap-3" hidden></div>
           </header>
           <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
           <div id="product-grid" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
