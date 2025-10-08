@@ -167,6 +167,8 @@ const elements = {
   viewportToggleWrapper: document.querySelector('.viewport-toggle'),
   viewportIconScreen: document.querySelector('[data-role="viewport-screen"]'),
   viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
+  footerToggle: document.getElementById('footer-toggle'),
+  siteFooter: document.querySelector('.site-footer'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -218,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
+  elements.footerToggle?.addEventListener('click', handleFooterToggleClick);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
@@ -242,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setIdentificationState('idle');
   renderClientIdentity();
   applyFieldTooltips();
+  updateFooterToggleLabel();
 });
 
 function setupResponsiveSplit() {
@@ -329,6 +333,7 @@ function applyViewportMode() {
   }
   updateViewportToggleLabel();
   updateViewportIcon(mode);
+  resetFooterToggleState(mode);
   setupResponsiveSplit();
 }
 
@@ -344,6 +349,46 @@ function formatViewportLabel(mode) {
   const baseMode = mode === 'auto' ? state.detectedViewportMode : mode;
   const baseLabel = VIEWPORT_LABELS[baseMode] || VIEWPORT_LABELS.desktop;
   return mode === 'auto' ? `Mode auto : ${baseLabel}` : `Mode : ${baseLabel}`;
+}
+
+function handleFooterToggleClick() {
+  if (!elements.footerToggle) {
+    return;
+  }
+  const currentState = elements.footerToggle.dataset.state === 'footer' ? 'footer' : 'catalogue';
+  const nextState = currentState === 'footer' ? 'catalogue' : 'footer';
+  elements.footerToggle.dataset.state = nextState;
+  if (nextState === 'footer') {
+    elements.siteFooter?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    elements.cataloguePanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  updateFooterToggleLabel();
+}
+
+function updateFooterToggleLabel() {
+  if (!elements.footerToggle) {
+    return;
+  }
+  const state = elements.footerToggle.dataset.state === 'footer' ? 'footer' : 'catalogue';
+  const label = state === 'footer' ? 'Voir la recherche' : 'Voir le pied de page';
+  elements.footerToggle.textContent = label;
+  elements.footerToggle.setAttribute('aria-label', label);
+}
+
+function resetFooterToggleState(mode = getEffectiveViewportMode()) {
+  if (!elements.footerToggle) {
+    return;
+  }
+  if (mode !== 'mobile' && mode !== 'tablet') {
+    elements.footerToggle.dataset.state = 'catalogue';
+    updateFooterToggleLabel();
+    return;
+  }
+  if (!elements.footerToggle.dataset.state) {
+    elements.footerToggle.dataset.state = 'catalogue';
+  }
+  updateFooterToggleLabel();
 }
 
 function updateViewportToggleLabel() {

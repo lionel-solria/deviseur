@@ -35,6 +35,7 @@
                 inputmode="numeric"
                 maxlength="14"
                 placeholder="Numéro SIRET (14 chiffres)"
+                aria-label="Numéro SIRET"
                 class="site-nav__identity-input"
               />
               <button
@@ -172,6 +173,14 @@
             <span>Remise</span>
             <span id="header-discount" class="discount-field__value">0&nbsp;%</span>
           </div>
+          <button
+            id="footer-toggle"
+            type="button"
+            class="btn-secondary site-nav__footer-toggle"
+            data-state="catalogue"
+          >
+            Voir le pied de page
+          </button>
           <button
             id="generate-pdf"
             class="btn-primary btn-icon"
