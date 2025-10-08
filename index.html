@@ -86,10 +86,6 @@
             </button>
           </div>
           <div class="site-nav__save-group">
-            <label for="save-name" class="save-name-field">
-              <span>Proposition</span>
-              <input id="save-name" type="text" maxlength="80" placeholder="Ex. Projet magasin" />
-            </label>
             <div class="site-nav__cart-actions">
               <button
                 id="save-cart"
@@ -208,26 +204,37 @@
             </svg>
             <span class="sr-only">Passer commande</span>
           </button>
+          <button
+            id="display-mode-toggle"
+            type="button"
+            class="btn-secondary btn-icon display-mode-toggle"
+            data-tooltip="Mode d'affichage : Bureau"
+            aria-label="Changer le mode d'affichage"
+            aria-describedby="display-mode-toggle-label"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon display-mode-toggle__icon display-mode-toggle__icon--desktop">
+              <path
+                d="M4 5.5a1.5 1.5 0 0 1 1.5-1.5h13a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H13v2h2v1h-6v-1h2v-2H5.5A1.5 1.5 0 0 1 4 14.5Z"
+                fill="currentColor"
+              />
+            </svg>
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon display-mode-toggle__icon display-mode-toggle__icon--tablet">
+              <path
+                d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm5 16a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                fill="currentColor"
+              />
+            </svg>
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="icon display-mode-toggle__icon display-mode-toggle__icon--phone">
+              <path
+                d="M9 2h6a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm3 18a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                fill="currentColor"
+              />
+            </svg>
+            <span id="display-mode-toggle-label" class="sr-only">Mode bureau</span>
+          </button>
           <div class="site-nav__tree">
-            <label
-              for="catalogue-tree"
-              class="site-nav__tree-label icon-label"
-              data-tooltip="Sélectionner une catégorie"
-              aria-label="Sélectionner une catégorie"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
-                <path
-                  d="M4 6h16M4 12h16M4 18h16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                />
-              </svg>
-              <span class="sr-only">Sélectionner une catégorie</span>
-            </label>
-            <select id="catalogue-tree" class="site-nav__tree-select">
+            <label for="catalogue-tree" class="site-nav__tree-label">Catégories</label>
+            <select id="catalogue-tree" class="site-nav__tree-select" aria-label="Sélectionner une catégorie">
               <option value="">Sélectionner une catégorie ou un article</option>
             </select>
           </div>
@@ -596,6 +603,54 @@
             <button type="submit" class="btn-primary">Confirmer l'envoi</button>
           </div>
         </form>
+      </div>
+    </div>
+    <div
+      id="save-cart-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="save-cart-modal-title"
+      data-open="false"
+    >
+      <div class="modal-card save-cart-modal-card">
+        <form id="save-cart-form" class="modal-body save-cart-modal-body">
+          <h2 id="save-cart-modal-title" class="save-cart-modal-title">Nommer votre panier</h2>
+          <p class="save-cart-modal-intro">Indiquez un nom pour retrouver facilement cette sauvegarde.</p>
+          <label class="save-cart-modal-field" for="save-cart-modal-input">Nom du panier</label>
+          <input
+            id="save-cart-modal-input"
+            type="text"
+            maxlength="80"
+            placeholder="Ex. Projet magasin"
+            autocomplete="off"
+            required
+          />
+          <div class="modal-actions save-cart-modal-actions">
+            <button id="save-cart-cancel" type="button" class="btn-secondary">Annuler</button>
+            <button type="submit" class="btn-primary">Sauvegarder</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div id="order-loading-overlay" class="loading-overlay" role="status" aria-live="polite" data-open="false">
+      <div class="loading-overlay__content">
+        <svg class="loading-overlay__icon" viewBox="0 0 64 64" aria-hidden="true">
+          <path
+            class="loading-overlay__hourglass"
+            d="M18 8h28a2 2 0 0 1 2 2v4c0 8.8-8 14.4-11 16 3 1.6 11 7.2 11 16v4a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2v-4c0-8.8 8-14.4 11-16-3-1.6-11-7.2-11-16v-4a2 2 0 0 1 2-2Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="4"
+            stroke-linejoin="round"
+          />
+          <path
+            class="loading-overlay__sand"
+            d="M23 14h18c0 6-6 10-9 11-3-1-9-5-9-11Zm0 36h18c0-6-6-10-9-11-3 1-9 5-9 11Z"
+            fill="currentColor"
+          />
+        </svg>
+        <p class="loading-overlay__text">Préparation du devis en cours...</p>
       </div>
     </div>
 
