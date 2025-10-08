@@ -561,7 +561,7 @@ textarea {
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.75rem;
-  border-radius: 999px;
+  border-radius: 0.85rem;
   background: var(--color-soft);
   border: 1px solid rgba(25, 63, 96, 0.15);
   text-transform: uppercase;
@@ -620,6 +620,48 @@ textarea {
 .btn-secondary--compact {
   padding: 0.5rem 0.85rem;
   font-size: 0.8rem;
+}
+
+.btn-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5rem;
+  line-height: 1;
+  gap: 0;
+}
+
+.btn-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  pointer-events: none;
+}
+
+.icon-only-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(25, 63, 96, 0.15);
+  color: var(--color-secondary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+
+.icon-only-label svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  pointer-events: none;
+}
+
+.icon-only-label:hover,
+.icon-only-label:focus-visible {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.15);
+  background: #fff;
 }
 
 .btn-secondary:hover,
@@ -1018,6 +1060,100 @@ textarea {
 .siret-modal-actions {
   flex-wrap: wrap;
   justify-content: flex-start;
+}
+
+#siret-error-link,
+#siret-error-link:visited {
+  color: #fff;
+}
+
+#order-confirmation-modal .modal-card {
+  max-width: 36rem;
+}
+
+.order-modal-body {
+  gap: 1.5rem;
+}
+
+.order-modal-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.order-modal-description {
+  font-size: 0.95rem;
+  color: var(--color-muted-strong);
+  line-height: 1.6;
+}
+
+.order-modal-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.order-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.order-modal-field label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.order-modal-field input {
+  border: 1px solid rgba(25, 63, 96, 0.2);
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  color: var(--color-secondary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.order-modal-field input:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(25, 63, 96, 0.18);
+}
+
+.order-modal-field--full {
+  grid-column: 1 / -1;
+}
+
+.order-modal-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.9rem;
+  color: var(--color-muted-strong);
+}
+
+.order-modal-checkbox input {
+  margin-top: 0.25rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid rgba(25, 63, 96, 0.25);
+  border-radius: 0.25rem;
+}
+
+.order-modal-checkbox span {
+  flex: 1;
+}
+
+.order-modal-actions {
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+#order-confirmation-submit[data-loading='true'] {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .quote-row {
@@ -1512,6 +1648,12 @@ textarea {
     width: 100%;
   }
 
+  .site-nav__actions .btn-primary.btn-icon,
+  .site-nav__actions .btn-secondary.btn-icon,
+  .site-nav__cart-actions .btn-secondary.btn-icon {
+    width: auto;
+  }
+
   .site-nav__save-group {
     flex-direction: column;
     align-items: stretch;
@@ -1524,6 +1666,20 @@ textarea {
   }
 
   .site-nav__cart-actions .btn-secondary {
+    width: 100%;
+  }
+
+  .order-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-modal-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .order-modal-actions .btn-primary,
+  .order-modal-actions .btn-secondary {
     width: 100%;
   }
 
