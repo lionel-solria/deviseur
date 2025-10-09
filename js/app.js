@@ -76,6 +76,13 @@ const VIEWPORT_LABELS = {
   mobile: 'Téléphone',
 };
 
+const PRODUCT_GRID_COLUMN_CLASS_MAP = {
+  2: ['lg:grid-cols-2', 'xl:grid-cols-2'],
+  3: ['lg:grid-cols-3', 'xl:grid-cols-3'],
+  4: ['lg:grid-cols-4', 'xl:grid-cols-4'],
+  5: ['lg:grid-cols-5', 'xl:grid-cols-5'],
+};
+
 const state = {
   catalogue: [],
   filtered: [],
@@ -91,6 +98,7 @@ const state = {
   generalComment: '',
   saveName: '',
   splitInstance: null,
+  productGridColumns: 3,
   lastFocusElement: null,
   categoryMenuOpen: false,
   brandLogoDataUrl: undefined,
@@ -123,6 +131,7 @@ const elements = {
   categoryFilterClose: document.getElementById('category-filter-close'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
+  productGridColumns: document.getElementById('product-grid-columns'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
   quoteTemplate: document.getElementById('quote-item-template'),
@@ -153,6 +162,8 @@ const elements = {
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
   brandLogo: document.querySelector('.brand-logo'),
+  siteNavTree: document.querySelector('.site-nav__tree'),
+  siteNavBranding: document.querySelector('.site-nav__branding'),
   webhookModeBadge: document.getElementById('webhook-mode-badge'),
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
@@ -242,6 +253,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   window.addEventListener('resize', handleWindowResize);
   setupResponsiveSplit();
+  setupSiteNavTreeToggle();
+  setupProductGridColumns();
   syncDiscountInputs();
   syncGeneralCommentInput();
   updateWebhookModeIndicator();
@@ -255,8 +268,8 @@ function setupResponsiveSplit() {
   const mode = getEffectiveViewportMode();
   const shouldSplit = mode === 'desktop' && window.innerWidth >= 1024;
   if (shouldSplit && !state.splitInstance && typeof window.Split === 'function') {
-    state.splitInstance = window.Split(['#catalogue-panel', '#quote-panel'], {
-      sizes: [60, 40],
+    state.splitInstance = window.Split(['#quote-panel', '#catalogue-panel'], {
+      sizes: [40, 60],
       minSize: [320, 320],
       gutterSize: 12,
       snapOffset: 0,
@@ -283,6 +296,57 @@ function setupNavAutoHide() {
     return;
   }
   nav.dataset.collapsed = 'false';
+}
+
+function setupSiteNavTreeToggle() {
+  const branding = elements.siteNavBranding;
+  const tree = elements.siteNavTree;
+  if (!branding || !tree) {
+    return;
+  }
+  tree.hidden = true;
+  branding.addEventListener('click', () => {
+    tree.toggleAttribute('hidden');
+  });
+}
+
+function setupProductGridColumns() {
+  const select = elements.productGridColumns;
+  const grid = elements.productGrid;
+  if (!select || !grid) {
+    return;
+  }
+  const initialValue = Number(select.value);
+  const fallback = state.productGridColumns || 3;
+  const nextValue = Number.isFinite(initialValue) && PRODUCT_GRID_COLUMN_CLASS_MAP[initialValue] ? initialValue : fallback;
+  state.productGridColumns = nextValue;
+  select.value = String(state.productGridColumns);
+  applyProductGridColumns(state.productGridColumns);
+  select.addEventListener('change', (event) => {
+    const value = Number(event.target.value);
+    if (!Number.isFinite(value) || !PRODUCT_GRID_COLUMN_CLASS_MAP[value]) {
+      return;
+    }
+    state.productGridColumns = value;
+    applyProductGridColumns(value);
+  });
+}
+
+function applyProductGridColumns(count) {
+  const grid = elements.productGrid;
+  if (!grid) {
+    return;
+  }
+  Object.values(PRODUCT_GRID_COLUMN_CLASS_MAP).forEach((classNames) => {
+    classNames.forEach((className) => {
+      grid.classList.remove(className);
+    });
+  });
+  const classes = PRODUCT_GRID_COLUMN_CLASS_MAP[count] || PRODUCT_GRID_COLUMN_CLASS_MAP[3];
+  classes.forEach((className) => {
+    grid.classList.add(className);
+  });
+  grid.dataset.columns = String(count);
 }
 
 function initialiseViewportMode() {
@@ -2520,7 +2584,10 @@ function handleClientIdentityReset() {
   }
 }
 
-function toggleWebhookMode() {
+function toggleWebhookMode(event) {
+  if (event && !event.altKey) {
+    return;
+  }
   state.webhookMode = state.webhookMode === 'production' ? 'test' : 'production';
   state.identifiedClient = null;
   state.lastOrderDetails = null;
