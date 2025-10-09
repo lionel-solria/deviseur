@@ -1819,6 +1819,7 @@ function buildCartSnapshot() {
   if (state.identifiedClient && state.identifiedClient.identified) {
     snapshot.identifiedClient = {
       identified: true,
+      clientId: state.identifiedClient.clientId || '',
       siret: state.identifiedClient.siret || '',
       companyName: state.identifiedClient.companyName || '',
       contactEmail: state.identifiedClient.contactEmail || '',
@@ -1868,6 +1869,7 @@ function applyCartSnapshot(snapshot) {
   if (snapshot.identifiedClient && typeof snapshot.identifiedClient === 'object') {
     state.identifiedClient = {
       identified: Boolean(snapshot.identifiedClient.identified),
+      clientId: snapshot.identifiedClient.clientId || '',
       siret: snapshot.identifiedClient.siret || '',
       companyName: snapshot.identifiedClient.companyName || '',
       contactEmail: snapshot.identifiedClient.contactEmail || '',
@@ -2041,6 +2043,7 @@ function normaliseWebhookResponse(payload, siret) {
     addressLines: [],
     conditionsLines: [],
     discountRate: undefined,
+    clientId: '',
     siret,
   };
 
@@ -2133,6 +2136,20 @@ function normaliseWebhookResponse(payload, siret) {
     getValue('Nom');
   if (typeof companyCandidate === 'string') {
     result.companyName = companyCandidate.trim();
+  }
+
+  const clientIdCandidate =
+    getValue('clientId') ??
+    getValue('idClient') ??
+    getValue('client_id') ??
+    getValue('identifier') ??
+    getValue('identifiant') ??
+    getValue('id');
+  if (typeof clientIdCandidate === 'string' || typeof clientIdCandidate === 'number') {
+    const candidate = String(clientIdCandidate).trim();
+    if (candidate) {
+      result.clientId = candidate;
+    }
   }
 
   const contactField = payload.contact ?? getValue('contact');
@@ -2344,6 +2361,9 @@ function renderClientIdentity() {
 
   const client = state.identifiedClient;
   const identified = Boolean(client && client.identified);
+  if (elements.submitOrder) {
+    elements.submitOrder.disabled = !identified;
+  }
   form.hidden = identified;
   container.hidden = !identified;
 
@@ -2594,6 +2614,10 @@ function handleSubmitOrderClick(event) {
     toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
     return;
   }
+  if (!state.identifiedClient || !state.identifiedClient.identified) {
+    toggleFeedback('Identifiez un client reconnu avant de passer commande.', 'warning');
+    return;
+  }
   openOrderModal();
 }
 
@@ -2731,6 +2755,10 @@ async function handleOrderFormSubmit(event) {
 }
 
 async function sendOrderRequest(orderDetails) {
+  if (!state.identifiedClient || !state.identifiedClient.identified) {
+    toggleFeedback('Identifiez un client reconnu avant de passer commande.', 'warning');
+    return;
+  }
   toggleFeedback('Envoi de la commande en cours...', 'info');
   showGlobalLoader('Préparation du devis en cours…');
   logDebug('Préparation de la commande pour envoi.', {
@@ -2765,11 +2793,18 @@ async function sendOrderRequest(orderDetails) {
     formData.append('contactEmail', orderDetails.email);
     formData.append('contactPhone', orderDetails.phone);
     formData.append('contactReceiveCopy', orderDetails.sendCopy ? 'true' : 'false');
+    if (state.identifiedClient?.clientId) {
+      formData.append('clientId', state.identifiedClient.clientId);
+    }
+    if (state.identifiedClient?.siret) {
+      formData.append('clientSiret', state.identifiedClient.siret);
+    }
     logDebug('Commande : envoi du webhook.', {
       quoteNumber,
       fichierPdf: filename,
       fichierPanier: snapshotFilename,
       contactEmail: orderDetails.email || null,
+      clientId: state.identifiedClient?.clientId || null,
     });
     const response = await fetch(ORDER_WEBHOOK_URL, {
       method: 'POST',
@@ -3288,6 +3323,7 @@ function showWebhookPanel(result) {
   addRow('Statut', statusLabel);
   addRow('Entreprise', result?.companyName || 'Non communiqué');
   addRow('SIRET', formatSiret(result?.siret));
+  addRow('Identifiant client', result?.clientId);
   addRow('Contact', result?.contactName);
   addRow('Email', result?.contactEmail);
   addRow('Remise appliquée', `${quantityFormatter.format(state.discountRate)} %`);
