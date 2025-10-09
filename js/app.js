@@ -129,6 +129,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  clearAllFilters: document.getElementById('clear-all-filters'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productGridColumns: document.getElementById('product-grid-columns'),
@@ -217,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
+  elements.clearAllFilters?.addEventListener('click', handleClearAllFilters);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
@@ -790,6 +792,38 @@ function handleSearch(event) {
   const query = event.target.value.trim().toLowerCase();
   state.searchQuery = query;
   applyFilters();
+}
+
+function handleClearAllFilters(event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+  clearAllFilters();
+  closeCategoryMenu();
+}
+
+function clearAllFilters() {
+  const hadQuery = state.searchQuery.length > 0;
+  const hadCategories = state.selectedCategories.size > 0;
+  const hadUnit = state.selectedUnit !== UNIT_FILTER_ALL;
+
+  state.searchQuery = '';
+  if (elements.search) {
+    elements.search.value = '';
+  }
+
+  if (hadCategories) {
+    setCategorySelection([]);
+  }
+
+  state.selectedUnit = UNIT_FILTER_ALL;
+  if (elements.unitFilter) {
+    elements.unitFilter.value = UNIT_FILTER_ALL;
+  }
+
+  if (hadQuery || hadCategories || hadUnit) {
+    applyFilters();
+  }
 }
 
 function applyFilters() {
