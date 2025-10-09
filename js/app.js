@@ -165,6 +165,7 @@ const elements = {
   clientIdentity: document.getElementById('client-identity'),
   clientIdentityName: document.getElementById('client-identity-name'),
   clientIdentityMeta: document.getElementById('client-identity-meta'),
+  clientIdentityDiscount: document.getElementById('client-identity-discount'),
   clientIdentityRegister: document.getElementById('client-identity-register'),
   clientIdentityReset: document.getElementById('client-identity-reset'),
   orderModal: document.getElementById('order-confirmation-modal'),
@@ -1368,6 +1369,16 @@ function extractInitialsForFilename(value) {
 }
 
 function getClientCodeForFilename() {
+  if (state.identifiedClient?.clientId) {
+    const cleaned = String(state.identifiedClient.clientId)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9]/g, '');
+    if (cleaned) {
+      const segment = cleaned.slice(0, 3).toUpperCase();
+      return segment.padEnd(3, 'X');
+    }
+  }
   if (state.identifiedClient?.companyName) {
     const initials = extractInitialsForFilename(state.identifiedClient.companyName);
     if (initials.length >= 3) {
@@ -1514,6 +1525,7 @@ function buildCartSnapshot() {
       identified: true,
       siret: state.identifiedClient.siret || '',
       companyName: state.identifiedClient.companyName || '',
+      clientId: state.identifiedClient.clientId || '',
       contactEmail: state.identifiedClient.contactEmail || '',
       contactName: state.identifiedClient.contactName || '',
       contactPhone: state.identifiedClient.contactPhone || '',
@@ -1564,6 +1576,12 @@ function applyCartSnapshot(snapshot) {
       identified: Boolean(snapshot.identifiedClient.identified),
       siret: snapshot.identifiedClient.siret || '',
       companyName: snapshot.identifiedClient.companyName || '',
+      clientId:
+        typeof snapshot.identifiedClient.clientId === 'string'
+          ? snapshot.identifiedClient.clientId.trim()
+          : snapshot.identifiedClient.clientId != null
+          ? String(snapshot.identifiedClient.clientId)
+          : '',
       contactEmail: snapshot.identifiedClient.contactEmail || '',
       contactName: snapshot.identifiedClient.contactName || '',
       contactPhone: snapshot.identifiedClient.contactPhone || '',
@@ -1702,6 +1720,7 @@ async function handleSiretSubmit(event) {
       siret,
       identifie: Boolean(result?.identified),
       statut: result?.statusLabel || null,
+      identifiantClient: result?.clientId || null,
     });
     showWebhookPanel(result);
     if (result.identified) {
@@ -1729,6 +1748,7 @@ function normaliseWebhookResponse(payload, siret) {
     identified: false,
     statusLabel: 'Client non identifié',
     companyName: '',
+    clientId: '',
     contactEmail: '',
     contactName: '',
     contactPhone: '',
@@ -1869,6 +1889,71 @@ function normaliseWebhookResponse(payload, siret) {
     result.contactPhone = phoneCandidate.trim();
   } else if (typeof phoneCandidate === 'number') {
     result.contactPhone = String(phoneCandidate);
+  }
+
+  const normaliseClientId = (value) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed;
+    }
+    if (typeof value === 'number') {
+      return String(value);
+    }
+    return '';
+  };
+
+  const clientIdCandidates = [
+    getValue('clientId'),
+    getValue('customerId'),
+    getValue('idClient'),
+    getValue('client_id'),
+    getValue('codeClient'),
+    getValue('code_client'),
+    getValue('numeroClient'),
+    getValue('numero_client'),
+    getValue('identifiant'),
+    getValue('code'),
+    getValue('id'),
+  ];
+
+  for (const candidate of clientIdCandidates) {
+    const value = normaliseClientId(candidate);
+    if (value) {
+      result.clientId = value;
+      break;
+    }
+  }
+
+  if (!result.clientId) {
+    const clientSources = [payload.client, payload.customer, payload.data?.client, payload.details?.client];
+    for (const source of clientSources) {
+      if (!source || typeof source !== 'object') {
+        continue;
+      }
+      const nestedCandidates = [
+        source.clientId,
+        source.customerId,
+        source.idClient,
+        source.client_id,
+        source.codeClient,
+        source.code_client,
+        source.numeroClient,
+        source.numero_client,
+        source.identifiant,
+        source.code,
+        source.id,
+      ];
+      for (const nested of nestedCandidates) {
+        const value = normaliseClientId(nested);
+        if (value) {
+          result.clientId = value;
+          break;
+        }
+      }
+      if (result.clientId) {
+        break;
+      }
+    }
   }
 
   const addressLines = new Set();
@@ -2029,10 +2114,24 @@ function buildIdentificationMessage(result) {
   return parts.join(' • ') || 'Client identifié';
 }
 
+function canSubmitOrder() {
+  return Boolean(state.identifiedClient && state.identifiedClient.identified && state.identifiedClient.clientId);
+}
+
+function syncOrderButtonAvailability() {
+  if (!elements.submitOrder) {
+    return;
+  }
+  const allowed = canSubmitOrder();
+  elements.submitOrder.disabled = !allowed;
+  elements.submitOrder.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+}
+
 function renderClientIdentity() {
   const container = elements.clientIdentity;
   const form = elements.siretForm;
   if (!container || !form) {
+    syncOrderButtonAvailability();
     return;
   }
 
@@ -2040,6 +2139,9 @@ function renderClientIdentity() {
   const identified = Boolean(client && client.identified);
   form.hidden = identified;
   container.hidden = !identified;
+  if (elements.clientIdentityDiscount) {
+    elements.clientIdentityDiscount.hidden = !identified;
+  }
 
   if (!identified) {
     if (elements.clientIdentityName) {
@@ -2052,6 +2154,7 @@ function renderClientIdentity() {
     if (elements.clientIdentityRegister) {
       elements.clientIdentityRegister.hidden = true;
     }
+    syncOrderButtonAvailability();
     return;
   }
 
@@ -2066,13 +2169,11 @@ function renderClientIdentity() {
     if (client?.siret) {
       parts.push(`SIRET ${formatSiret(client.siret)}`);
     }
+    if (client?.clientId) {
+      parts.push(`ID ${client.clientId}`);
+    }
     if (client?.statusLabel) {
       parts.push(client.statusLabel);
-    }
-    const discountRate = Number.isFinite(state.discountRate) ? state.discountRate : null;
-    if (discountRate !== null) {
-      const formattedDiscount = `${quantityFormatter.format(discountRate)} %`;
-      parts.push(`Remise ${formattedDiscount}`);
     }
     elements.clientIdentityMeta.textContent = parts.join(' • ');
     elements.clientIdentityMeta.hidden = parts.length === 0;
@@ -2081,6 +2182,8 @@ function renderClientIdentity() {
   if (elements.clientIdentityRegister) {
     elements.clientIdentityRegister.hidden = hasName;
   }
+
+  syncOrderButtonAvailability();
 }
 
 function formatSiretErrorFeedback(message) {
@@ -2172,6 +2275,7 @@ function toggleWebhookMode() {
   setIdentificationState('idle', `Mode ${state.webhookMode === 'production' ? 'production' : 'test'} activé.`);
   closeWebhookPanel();
   closeClientFormPlaceholder();
+  renderClientIdentity();
 }
 
 function updateWebhookModeIndicator() {
@@ -2283,6 +2387,13 @@ async function generatePdf() {
 function handleSubmitOrderClick(event) {
   if (event && typeof event.preventDefault === 'function') {
     event.preventDefault();
+  }
+  if (!canSubmitOrder()) {
+    toggleFeedback('Identifiez un client reconnu avant de passer commande.', 'warning');
+    if (elements.siretInput && typeof elements.siretInput.focus === 'function') {
+      elements.siretInput.focus();
+    }
+    return;
   }
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
@@ -2400,6 +2511,10 @@ async function handleOrderFormSubmit(event) {
 }
 
 async function sendOrderRequest(orderDetails) {
+  if (!canSubmitOrder()) {
+    toggleFeedback('Identifiez un client reconnu avant de passer commande.', 'warning');
+    return;
+  }
   toggleFeedback('Envoi de la commande en cours...', 'info');
   logDebug('Préparation de la commande pour envoi.', {
     lignes: state.quote.size,
@@ -2432,11 +2547,15 @@ async function sendOrderRequest(orderDetails) {
     formData.append('contactEmail', orderDetails.email);
     formData.append('contactPhone', orderDetails.phone);
     formData.append('contactReceiveCopy', orderDetails.sendCopy ? 'true' : 'false');
+    if (state.identifiedClient?.clientId) {
+      formData.append('clientId', state.identifiedClient.clientId);
+    }
     logDebug('Commande : envoi du webhook.', {
       quoteNumber,
       fichierPdf: filename,
       fichierPanier: snapshotFilename,
       contactEmail: orderDetails.email || null,
+      clientId: state.identifiedClient?.clientId || null,
     });
     const response = await fetch(ORDER_WEBHOOK_URL, {
       method: 'POST',
@@ -2555,6 +2674,7 @@ async function buildQuotePdfDocument() {
     ? [
         identifiedClient.companyName || 'Client identifié',
         identifiedClient.siret ? `SIRET : ${identifiedClient.siret}` : '',
+        identifiedClient.clientId ? `ID client : ${identifiedClient.clientId}` : '',
         ...(identifiedClient.addressLines || []),
         identifiedClient.contactName ? `Contact : ${identifiedClient.contactName}` : '',
         identifiedClient.contactEmail ? `Email : ${identifiedClient.contactEmail}` : '',
