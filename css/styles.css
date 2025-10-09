@@ -587,10 +587,10 @@ textarea {
 .catalogue-header {
   position: sticky;
   top: calc(var(--site-nav-height) + 1rem);
-  z-index: 10;
+  z-index: 40;
   backdrop-filter: blur(6px);
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .catalogue-header::before {

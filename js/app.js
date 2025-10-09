@@ -129,6 +129,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  resetFilters: document.getElementById('reset-filters'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productGridColumns: document.getElementById('product-grid-columns'),
@@ -236,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
   elements.mobileViewToggle?.addEventListener('click', handleMobileViewToggleClick);
   elements.webhookPanelClose?.addEventListener('click', closeWebhookPanel);
+  elements.resetFilters?.addEventListener('click', handleResetFilters);
   elements.clientIdentityReset?.addEventListener('click', handleClientIdentityReset);
   elements.siretErrorClose?.addEventListener('click', closeSiretErrorModal);
   elements.siretErrorModal?.addEventListener('click', handleSiretErrorBackdropClick);
@@ -3844,6 +3846,27 @@ function buildCatalogueTree(items) {
 function handleUnitFilterChange(event) {
   const value = event.target?.value ?? UNIT_FILTER_ALL;
   state.selectedUnit = value;
+  applyFilters();
+}
+
+function handleResetFilters() {
+  resetAllFilters();
+}
+
+function resetAllFilters() {
+  state.searchQuery = '';
+  if (elements.search) {
+    elements.search.value = '';
+  }
+  state.selectedUnit = UNIT_FILTER_ALL;
+  if (elements.unitFilter) {
+    elements.unitFilter.value = UNIT_FILTER_ALL;
+  }
+  if (elements.catalogueTree) {
+    elements.catalogueTree.value = '';
+  }
+  setCategorySelection([]);
+  closeCategoryMenu();
   applyFilters();
 }
 

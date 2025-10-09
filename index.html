@@ -378,6 +378,23 @@
                     <option value="5">5</option>
                   </select>
                 </label>
+                <button
+                  id="reset-filters"
+                  type="button"
+                  class="btn-secondary btn-secondary--compact flex items-center gap-2 self-start sm:self-auto"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                    <path
+                      d="M4 4h6M4 10h10M4 16h6M15 16l3 3 3-3M21 7l-3-3-3 3"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                    />
+                  </svg>
+                  <span>Supprimer les filtres</span>
+                </button>
               </div>
             </div>
           </header>
@@ -413,11 +430,41 @@
               <p class="product-weight text-xs text-slate-400"></p>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <button class="view-details btn-secondary">
-                Voir les détails
+              <button class="view-details btn-secondary btn-icon" type="button" aria-label="Voir les détails">
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M2.25 12c1.8-4 5.48-6.75 9.75-6.75s7.95 2.75 9.75 6.75c-1.8 4-5.48 6.75-9.75 6.75S4.05 16 2.25 12Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                </svg>
+                <span class="sr-only">Voir les détails</span>
               </button>
-              <button class="add-to-quote btn-primary">
-                Ajouter au devis
+              <button class="add-to-quote btn-primary btn-icon" type="button" aria-label="Ajouter au devis">
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path
+                    d="M3 5h2l2 12h12l2-8H6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                  />
+                  <circle cx="9" cy="19" r="1.5" fill="currentColor" />
+                  <circle cx="18" cy="19" r="1.5" fill="currentColor" />
+                </svg>
+                <span class="sr-only">Ajouter au devis</span>
               </button>
             </div>
           </div>
