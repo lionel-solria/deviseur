@@ -1605,6 +1605,18 @@ function extractInitialsForFilename(value) {
 }
 
 function getClientCodeForFilename() {
+  if (state.identifiedClient?.clientId) {
+    const rawId = String(state.identifiedClient.clientId).trim();
+    if (rawId) {
+      const sanitized = rawId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      if (sanitized.length >= 3) {
+        return sanitized.slice(0, 3);
+      }
+      if (sanitized.length > 0) {
+        return sanitized.padEnd(3, 'X');
+      }
+    }
+  }
   if (state.identifiedClient?.companyName) {
     const initials = extractInitialsForFilename(state.identifiedClient.companyName);
     if (initials.length >= 3) {
@@ -1824,6 +1836,7 @@ function buildCartSnapshot() {
       contactEmail: state.identifiedClient.contactEmail || '',
       contactName: state.identifiedClient.contactName || '',
       contactPhone: state.identifiedClient.contactPhone || '',
+      clientId: state.identifiedClient.clientId || '',
       addressLines: Array.isArray(state.identifiedClient.addressLines)
         ? state.identifiedClient.addressLines
         : [],
@@ -1873,6 +1886,12 @@ function applyCartSnapshot(snapshot) {
       contactEmail: snapshot.identifiedClient.contactEmail || '',
       contactName: snapshot.identifiedClient.contactName || '',
       contactPhone: snapshot.identifiedClient.contactPhone || '',
+      clientId:
+        typeof snapshot.identifiedClient.clientId === 'string'
+          ? snapshot.identifiedClient.clientId.trim()
+          : typeof snapshot.identifiedClient.clientId === 'number'
+          ? String(snapshot.identifiedClient.clientId)
+          : '',
       addressLines: Array.isArray(snapshot.identifiedClient.addressLines)
         ? snapshot.identifiedClient.addressLines.filter((line) => typeof line === 'string' && line.trim().length > 0)
         : [],
@@ -2041,6 +2060,7 @@ function normaliseWebhookResponse(payload, siret) {
     addressLines: [],
     conditionsLines: [],
     discountRate: undefined,
+    clientId: '',
     siret,
   };
 
@@ -2094,6 +2114,55 @@ function normaliseWebhookResponse(payload, siret) {
     }
     return undefined;
   };
+
+  const directClientField =
+    payload.client && typeof payload.client === 'object' && !Array.isArray(payload.client)
+      ? payload.client
+      : null;
+  const accountField =
+    payload.account && typeof payload.account === 'object' && !Array.isArray(payload.account)
+      ? payload.account
+      : null;
+
+  const assignClientId = (value) => {
+    if (result.clientId) {
+      return;
+    }
+    if (value === null || value === undefined) {
+      return;
+    }
+    const stringValue = typeof value === 'number' ? String(value) : typeof value === 'string' ? value : null;
+    if (!stringValue) {
+      return;
+    }
+    const trimmed = stringValue.trim();
+    if (trimmed) {
+      result.clientId = trimmed;
+    }
+  };
+
+  [
+    getValue('clientId'),
+    getValue('customerId'),
+    getValue('idClient'),
+    getValue('id_client'),
+    getValue('idclient'),
+    getValue('clientCode'),
+    getValue('customerCode'),
+    getValue('codeClient'),
+    getValue('code_client'),
+    getValue('codeclient'),
+    directClientField?.id,
+    directClientField?.clientId,
+    directClientField?.code,
+    accountField?.id,
+    accountField?.clientId,
+    accountField?.code,
+  ].forEach(assignClientId);
+
+  if (!result.clientId) {
+    assignClientId(payload.id);
+  }
 
   const statusCandidate = [getValue('status'), getValue('result'), getValue('message'), getValue('state')]
     .find((value) => typeof value === 'string' && value.trim().length > 0);
@@ -2347,6 +2416,18 @@ function renderClientIdentity() {
   form.hidden = identified;
   container.hidden = !identified;
 
+  const clientId = typeof client?.clientId === 'string' ? client.clientId.trim() : '';
+  const canSubmitOrder = identified && clientId.length > 0;
+  if (elements.submitOrder) {
+    elements.submitOrder.disabled = !canSubmitOrder;
+    elements.submitOrder.setAttribute('aria-disabled', (!canSubmitOrder).toString());
+    const tooltip = canSubmitOrder
+      ? 'Passer commande'
+      : 'Identifiez un client reconnu pour commander';
+    elements.submitOrder.dataset.tooltip = tooltip;
+    elements.submitOrder.setAttribute('title', tooltip);
+  }
+
   if (!identified) {
     if (elements.clientIdentityName) {
       elements.clientIdentityName.textContent = '';
@@ -2371,6 +2452,9 @@ function renderClientIdentity() {
     const parts = [];
     if (client?.siret) {
       parts.push(`SIRET ${formatSiret(client.siret)}`);
+    }
+    if (clientId) {
+      parts.push(`ID client ${clientId}`);
     }
     if (client?.statusLabel) {
       parts.push(client.statusLabel);
@@ -2590,6 +2674,16 @@ function handleSubmitOrderClick(event) {
   if (event && typeof event.preventDefault === 'function') {
     event.preventDefault();
   }
+  const client = state.identifiedClient;
+  if (!client || !client.identified) {
+    toggleFeedback('Identifiez un client reconnu avant de passer commande.', 'warning');
+    return;
+  }
+  const clientId = typeof client.clientId === 'string' ? client.clientId.trim() : '';
+  if (!clientId) {
+    toggleFeedback("Identifiant client indisponible. Relancez l'identification avant de passer commande.", 'warning');
+    return;
+  }
   if (!state.quote.size) {
     toggleFeedback('Ajoutez au moins un article avant de passer commande.', 'warning');
     return;
@@ -2731,6 +2825,16 @@ async function handleOrderFormSubmit(event) {
 }
 
 async function sendOrderRequest(orderDetails) {
+  const client = state.identifiedClient;
+  const clientId = typeof client?.clientId === 'string' ? client.clientId.trim() : '';
+  if (!client || !client.identified) {
+    toggleFeedback('Identifiez un client reconnu avant de passer commande.', 'warning');
+    return;
+  }
+  if (!clientId) {
+    toggleFeedback("Identifiant client indisponible. Relancez l'identification avant de passer commande.", 'warning');
+    return;
+  }
   toggleFeedback('Envoi de la commande en cours...', 'info');
   showGlobalLoader('Préparation du devis en cours…');
   logDebug('Préparation de la commande pour envoi.', {
@@ -2765,11 +2869,13 @@ async function sendOrderRequest(orderDetails) {
     formData.append('contactEmail', orderDetails.email);
     formData.append('contactPhone', orderDetails.phone);
     formData.append('contactReceiveCopy', orderDetails.sendCopy ? 'true' : 'false');
+    formData.append('clientId', clientId);
     logDebug('Commande : envoi du webhook.', {
       quoteNumber,
       fichierPdf: filename,
       fichierPanier: snapshotFilename,
       contactEmail: orderDetails.email || null,
+      clientId,
     });
     const response = await fetch(ORDER_WEBHOOK_URL, {
       method: 'POST',
@@ -3288,6 +3394,7 @@ function showWebhookPanel(result) {
   addRow('Statut', statusLabel);
   addRow('Entreprise', result?.companyName || 'Non communiqué');
   addRow('SIRET', formatSiret(result?.siret));
+  addRow('ID client', result?.clientId);
   addRow('Contact', result?.contactName);
   addRow('Email', result?.contactEmail);
   addRow('Remise appliquée', `${quantityFormatter.format(state.discountRate)} %`);
