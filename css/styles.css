@@ -25,7 +25,7 @@
 }
 
 main {
-  margin-top: 2rem;
+  margin-top: 0;
 }
 
 ::selection {
@@ -216,6 +216,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  cursor: pointer;
 }
 
 .site-nav__branding-text {
@@ -311,29 +312,15 @@ textarea {
 }
 
 .webhook-mode-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0.5rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
-  background: rgba(25, 63, 96, 0.08);
-  color: var(--color-secondary);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border: 1px solid rgba(25, 63, 96, 0.12);
+  display: none !important;
 }
 
 .webhook-mode-badge:empty {
-  display: none;
+  display: none !important;
 }
 
 .webhook-mode-badge[data-mode='test'] {
-  background: rgba(234, 97, 26, 0.12);
-  border-color: rgba(234, 97, 26, 0.35);
-  color: var(--color-accent);
+  display: none !important;
 }
 
 .site-nav__identity {
@@ -1052,7 +1039,7 @@ textarea {
   background: #fff;
   box-shadow: 0 20px 45px -20px rgba(25, 63, 96, 0.35);
   padding: 1rem;
-  z-index: 80;
+  z-index: 200;
 }
 
 .category-filter-menu[data-open='true'] {
