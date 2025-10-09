@@ -85,6 +85,7 @@ const state = {
   units: [],
   selectedCategories: new Set(),
   selectedUnit: '__all__',
+  productColumnCount: 3,
   searchQuery: '',
   discountRate: 0,
   vatRate: 0.2,
@@ -93,6 +94,7 @@ const state = {
   splitInstance: null,
   lastFocusElement: null,
   categoryMenuOpen: false,
+  navTreeVisible: false,
   brandLogoDataUrl: undefined,
   webhookMode: 'production',
   isIdentifyingClient: false,
@@ -122,7 +124,9 @@ const elements = {
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
   catalogueTree: document.getElementById('catalogue-tree'),
+  siteNavTree: document.querySelector('.site-nav__tree'),
   productGrid: document.getElementById('product-grid'),
+  productColumns: document.getElementById('product-columns'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
   quoteTemplate: document.getElementById('quote-item-template'),
@@ -153,6 +157,7 @@ const elements = {
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
   brandLogo: document.querySelector('.brand-logo'),
+  siteNavBranding: document.querySelector('.site-nav__branding'),
   webhookModeBadge: document.getElementById('webhook-mode-badge'),
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
@@ -206,6 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
+  elements.productColumns?.addEventListener('change', handleProductColumnsChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
@@ -220,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
-  elements.brandLogo?.addEventListener('click', toggleWebhookMode);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
   elements.mobileViewToggle?.addEventListener('click', handleMobileViewToggleClick);
@@ -237,6 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupModal();
   setupCategoryFilter();
   setupNavAutoHide();
+  setupSiteNavTreeToggle();
+  initialiseProductColumnsControl();
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
@@ -255,8 +262,8 @@ function setupResponsiveSplit() {
   const mode = getEffectiveViewportMode();
   const shouldSplit = mode === 'desktop' && window.innerWidth >= 1024;
   if (shouldSplit && !state.splitInstance && typeof window.Split === 'function') {
-    state.splitInstance = window.Split(['#catalogue-panel', '#quote-panel'], {
-      sizes: [60, 40],
+    state.splitInstance = window.Split(['#quote-panel', '#catalogue-panel'], {
+      sizes: [40, 60],
       minSize: [320, 320],
       gutterSize: 12,
       snapOffset: 0,
@@ -283,6 +290,102 @@ function setupNavAutoHide() {
     return;
   }
   nav.dataset.collapsed = 'false';
+}
+
+function setupSiteNavTreeToggle() {
+  const navTree = elements.siteNavTree;
+  const branding = elements.siteNavBranding || elements.brandLogo?.closest('.site-nav__branding');
+  if (!navTree || !branding) {
+    return;
+  }
+  navTree.hidden = true;
+  state.navTreeVisible = false;
+  branding.setAttribute('role', 'button');
+  branding.setAttribute('tabindex', '0');
+  branding.setAttribute('aria-expanded', 'false');
+  if (elements.catalogueTree) {
+    branding.setAttribute('aria-controls', 'catalogue-tree');
+  }
+  branding.addEventListener('click', handleSiteNavBrandingClick);
+  branding.addEventListener('keydown', handleSiteNavBrandingKeydown);
+}
+
+function handleSiteNavBrandingClick(event) {
+  if (event && (event.altKey || event.metaKey || event.ctrlKey)) {
+    toggleWebhookMode();
+    return;
+  }
+  toggleNavTreeVisibility();
+}
+
+function handleSiteNavBrandingKeydown(event) {
+  if (!event) {
+    return;
+  }
+  const key = event.key;
+  if (key === 'Enter' || key === ' ') {
+    event.preventDefault();
+    toggleNavTreeVisibility();
+  }
+}
+
+function toggleNavTreeVisibility(force) {
+  const navTree = elements.siteNavTree;
+  const branding = elements.siteNavBranding || elements.brandLogo?.closest('.site-nav__branding');
+  if (!navTree || !branding) {
+    return;
+  }
+  const shouldShow = typeof force === 'boolean' ? force : navTree.hidden;
+  navTree.hidden = !shouldShow;
+  state.navTreeVisible = shouldShow;
+  branding.setAttribute('aria-expanded', shouldShow ? 'true' : 'false');
+}
+
+function initialiseProductColumnsControl() {
+  const fallback = Number.isFinite(Number(state.productColumnCount)) ? state.productColumnCount : 3;
+  if (elements.productColumns) {
+    const normalized = normalizeProductColumnValue(elements.productColumns.value, fallback);
+    state.productColumnCount = normalized;
+    elements.productColumns.value = String(normalized);
+  } else {
+    state.productColumnCount = normalizeProductColumnValue(fallback, 3);
+  }
+  updateProductGridColumns();
+}
+
+function handleProductColumnsChange(event) {
+  const fallback = Number.isFinite(Number(state.productColumnCount)) ? state.productColumnCount : 3;
+  const normalized = normalizeProductColumnValue(event?.target?.value, fallback);
+  state.productColumnCount = normalized;
+  if (elements.productColumns && elements.productColumns.value !== String(normalized)) {
+    elements.productColumns.value = String(normalized);
+  }
+  updateProductGridColumns();
+}
+
+function updateProductGridColumns() {
+  const grid = elements.productGrid;
+  if (!grid) {
+    return;
+  }
+  const normalized = normalizeProductColumnValue(state.productColumnCount, 3);
+  grid.style.setProperty('--product-columns', String(normalized));
+}
+
+function normalizeProductColumnValue(value, fallback = 3) {
+  const parsed = Number(value);
+  const baseline = Number.isFinite(parsed) ? parsed : Number(fallback);
+  if (!Number.isFinite(baseline)) {
+    return 3;
+  }
+  const rounded = Math.round(baseline);
+  if (rounded < 2) {
+    return 2;
+  }
+  if (rounded > 5) {
+    return 5;
+  }
+  return rounded;
 }
 
 function initialiseViewportMode() {
