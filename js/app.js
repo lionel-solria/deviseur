@@ -129,6 +129,7 @@ const elements = {
   categoryFilterOptions: document.getElementById('category-filter-options'),
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
+  catalogueFilterReset: document.getElementById('catalogue-filter-reset'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
   productGridColumns: document.getElementById('product-grid-columns'),
@@ -221,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
   elements.catalogueTree?.addEventListener('change', handleCatalogueTreeChange);
+  elements.catalogueFilterReset?.addEventListener('click', resetCatalogueFilters);
   elements.saveCart?.addEventListener('click', handleSaveCart);
   elements.saveCartForm?.addEventListener('submit', handleSaveCartFormSubmit);
   elements.saveCartCancel?.addEventListener('click', closeSaveCartModal);
@@ -3844,6 +3846,23 @@ function buildCatalogueTree(items) {
 function handleUnitFilterChange(event) {
   const value = event.target?.value ?? UNIT_FILTER_ALL;
   state.selectedUnit = value;
+  applyFilters();
+}
+
+function resetCatalogueFilters() {
+  state.searchQuery = '';
+  if (elements.search) {
+    elements.search.value = '';
+  }
+  state.selectedUnit = UNIT_FILTER_ALL;
+  if (elements.unitFilter) {
+    elements.unitFilter.value = UNIT_FILTER_ALL;
+  }
+  setCategorySelection([]);
+  closeCategoryMenu();
+  if (elements.catalogueTree) {
+    elements.catalogueTree.value = '';
+  }
   applyFilters();
 }
 

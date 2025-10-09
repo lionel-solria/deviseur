@@ -1039,7 +1039,7 @@ textarea {
   background: #fff;
   box-shadow: 0 20px 45px -20px rgba(25, 63, 96, 0.35);
   padding: 1rem;
-  z-index: 200;
+  z-index: 600;
 }
 
 .category-filter-menu[data-open='true'] {
@@ -2082,6 +2082,11 @@ body[data-viewport-mode='tablet'][data-mobile-view='footer'] .site-nav__mobile-t
 
   .product-card .product-actions button {
     width: 100%;
+  }
+
+  .product-card .product-actions .btn-icon {
+    width: 2.75rem;
+    flex: 0 0 auto;
   }
 
   .quote-row {
