@@ -106,6 +106,7 @@ const state = {
   lastOrderDetails: null,
   viewportMode: 'auto',
   detectedViewportMode: 'desktop',
+  productGridColumns: 3,
 };
 
 const elements = {
@@ -122,7 +123,9 @@ const elements = {
   categoryFilterClear: document.getElementById('category-filter-clear'),
   categoryFilterClose: document.getElementById('category-filter-close'),
   catalogueTree: document.getElementById('catalogue-tree'),
+  siteNavTree: document.getElementById('site-nav-tree'),
   productGrid: document.getElementById('product-grid'),
+  productColumns: document.getElementById('product-columns'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
   quoteTemplate: document.getElementById('quote-item-template'),
@@ -152,7 +155,7 @@ const elements = {
   modalScore: document.getElementById('product-modal-score'),
   modalClose: document.getElementById('product-modal-close'),
   currentYear: document.getElementById('current-year'),
-  brandLogo: document.querySelector('.brand-logo'),
+  brandLogo: document.querySelector('.brand-logo-button'),
   webhookModeBadge: document.getElementById('webhook-mode-badge'),
   saveCart: document.getElementById('save-cart'),
   restoreCart: document.getElementById('restore-cart'),
@@ -206,6 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
+  elements.productColumns?.addEventListener('change', handleProductColumnsChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
@@ -220,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
-  elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.brandLogo?.addEventListener('click', handleBrandLogoClick);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
   elements.mobileViewToggle?.addEventListener('click', handleMobileViewToggleClick);
@@ -237,11 +241,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setupModal();
   setupCategoryFilter();
   setupNavAutoHide();
+  toggleSiteNavTreeVisibility(false);
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
   window.addEventListener('resize', handleWindowResize);
   setupResponsiveSplit();
+  initialiseProductGridColumns();
   syncDiscountInputs();
   syncGeneralCommentInput();
   updateWebhookModeIndicator();
@@ -255,8 +261,8 @@ function setupResponsiveSplit() {
   const mode = getEffectiveViewportMode();
   const shouldSplit = mode === 'desktop' && window.innerWidth >= 1024;
   if (shouldSplit && !state.splitInstance && typeof window.Split === 'function') {
-    state.splitInstance = window.Split(['#catalogue-panel', '#quote-panel'], {
-      sizes: [60, 40],
+    state.splitInstance = window.Split(['#quote-panel', '#catalogue-panel'], {
+      sizes: [40, 60],
       minSize: [320, 320],
       gutterSize: 12,
       snapOffset: 0,
@@ -275,6 +281,51 @@ function setupResponsiveSplit() {
     elements.quotePanel.style.removeProperty('left');
     elements.quotePanel.style.removeProperty('right');
   }
+}
+
+function initialiseProductGridColumns() {
+  const initialValue = elements.productColumns?.value ?? state.productGridColumns;
+  state.productGridColumns = clampProductColumnCount(initialValue);
+  if (elements.productColumns) {
+    elements.productColumns.value = String(state.productGridColumns);
+  }
+  updateProductGridColumns();
+}
+
+function clampProductColumnCount(value) {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) {
+    return state.productGridColumns || 3;
+  }
+  return Math.min(Math.max(parsed, 2), 5);
+}
+
+function updateProductGridColumns() {
+  if (!elements.productGrid) {
+    return;
+  }
+  state.productGridColumns = clampProductColumnCount(state.productGridColumns);
+  const width = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 0);
+  let columns = state.productGridColumns;
+  if (width > 0 && width < 640) {
+    columns = 1;
+  } else if (width > 0 && width < 1280) {
+    columns = Math.min(columns, 2);
+  }
+  if (elements.productColumns && elements.productColumns.value !== String(state.productGridColumns)) {
+    elements.productColumns.value = String(state.productGridColumns);
+  }
+  elements.productGrid.style.setProperty('--product-grid-columns', String(columns));
+}
+
+function handleProductColumnsChange(event) {
+  const target = event?.target;
+  const value = target ? target.value : state.productGridColumns;
+  state.productGridColumns = clampProductColumnCount(value);
+  if (elements.productColumns) {
+    elements.productColumns.value = String(state.productGridColumns);
+  }
+  updateProductGridColumns();
 }
 
 function setupNavAutoHide() {
@@ -305,6 +356,7 @@ function handleWindowResize() {
   if (!shouldApply) {
     setupResponsiveSplit();
   }
+  updateProductGridColumns();
 }
 
 function detectViewportMode(width = window.innerWidth) {
@@ -338,6 +390,7 @@ function applyViewportMode() {
   updateViewportToggleLabel();
   updateViewportIcon(mode);
   setupResponsiveSplit();
+  updateProductGridColumns();
 }
 
 function syncMobileViewState(mode) {
@@ -1265,6 +1318,38 @@ function disableDebugMode() {
   if (state.debugPanel) {
     state.debugPanel.hidden = true;
   }
+}
+
+function handleBrandLogoClick(event) {
+  if (event?.altKey || event?.metaKey || event?.ctrlKey) {
+    toggleWebhookMode();
+    return;
+  }
+  if (event) {
+    if (event.detail > 1) {
+      return;
+    }
+    if (typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    if (typeof event.stopPropagation === 'function') {
+      event.stopPropagation();
+    }
+  }
+  toggleSiteNavTreeVisibility();
+}
+
+function toggleSiteNavTreeVisibility(forceShow) {
+  if (!elements.siteNavTree || !elements.brandLogo) {
+    return;
+  }
+  const shouldShow = typeof forceShow === 'boolean' ? forceShow : elements.siteNavTree.hasAttribute('hidden');
+  if (shouldShow) {
+    elements.siteNavTree.removeAttribute('hidden');
+  } else {
+    elements.siteNavTree.setAttribute('hidden', '');
+  }
+  elements.brandLogo.setAttribute('aria-expanded', shouldShow ? 'true' : 'false');
 }
 
 function handleBrandLogoDoubleClick(event) {

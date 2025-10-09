@@ -25,7 +25,7 @@
 }
 
 main {
-  margin-top: 2rem;
+  margin-top: 0;
 }
 
 ::selection {
@@ -224,11 +224,31 @@ textarea {
   gap: 0.15rem;
 }
 
+.brand-logo-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: 0;
+  background: transparent;
+  border-radius: 0.75rem;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.brand-logo-button:hover {
+  background: rgba(25, 63, 96, 0.08);
+}
+
+.brand-logo-button:focus-visible {
+  outline: 2px solid rgba(25, 63, 96, 0.35);
+  outline-offset: 2px;
+}
+
 .brand-logo {
   width: 4.125rem;
   height: 4.125rem;
   object-fit: contain;
-  cursor: pointer;
 }
 
 .brand-title {
@@ -290,6 +310,10 @@ textarea {
   background: rgba(246, 247, 250, 0.85);
 }
 
+.site-nav__tree[hidden] {
+  display: none !important;
+}
+
 .site-nav__tree-label {
   font-size: 0.7rem;
   font-weight: 600;
@@ -311,29 +335,7 @@ textarea {
 }
 
 .webhook-mode-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0.5rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
-  background: rgba(25, 63, 96, 0.08);
-  color: var(--color-secondary);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border: 1px solid rgba(25, 63, 96, 0.12);
-}
-
-.webhook-mode-badge:empty {
-  display: none;
-}
-
-.webhook-mode-badge[data-mode='test'] {
-  background: rgba(234, 97, 26, 0.12);
-  border-color: rgba(234, 97, 26, 0.35);
-  color: var(--color-accent);
+  display: none !important;
 }
 
 .site-nav__identity {
@@ -896,6 +898,12 @@ textarea {
 #product-feedback {
   border-radius: 1rem;
   border: 1px solid rgba(234, 97, 26, 0.35);
+}
+
+.product-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(var(--product-grid-columns, 1), minmax(0, 1fr));
 }
 
 #quote-empty {

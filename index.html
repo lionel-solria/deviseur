@@ -18,78 +18,21 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-10">
+    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24">
       <div id="main-layout" class="main-layout">
-        <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
-          <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
-            <div>
-              <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
-              <p class="mt-1 text-sm text-slate-500 brand-text-muted">
-                Parcourez le catalogue et ajoutez les articles souhaités directement à votre devis.
-              </p>
-            </div>
-            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div class="relative w-full lg:max-w-md">
-                <label for="search" class="sr-only">Rechercher un produit</label>
-                <input
-                  id="search"
-                  type="search"
-                  placeholder="Rechercher par nom ou référence..."
-                  class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 brand-input"
-                />
-                <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
-                </svg>
-              </div>
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center xl:w-auto">
-                <div class="relative sm:w-56 xl:w-64">
-                  <button
-                    id="category-filter-button"
-                    type="button"
-                  class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 brand-select"
-                    aria-haspopup="true"
-                    aria-expanded="false"
-                  >
-                    <span id="category-filter-label">Toutes les catégories</span>
-                    <svg class="h-4 w-4 text-slate-400 transition-transform" data-role="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 8.25 12 15.75 4.5 8.25" />
-                    </svg>
-                  </button>
-                  <div
-                    id="category-filter-menu"
-                    class="category-filter-menu"
-                    role="menu"
-                    aria-labelledby="category-filter-button"
-                  >
-                    <div class="category-filter-header">
-                      <p class="text-sm font-semibold text-slate-900">Catégories</p>
-                      <button id="category-filter-clear" type="button" class="text-xs font-semibold text-blue-600 transition hover:text-blue-700">Réinitialiser</button>
-                    </div>
-                    <div id="category-filter-options" class="category-filter-options" role="group" aria-label="Filtrer par catégories"></div>
-                    <div class="category-filter-footer">
-                      <p class="text-xs text-slate-500">Sélectionnez une ou plusieurs catégories pour affiner la liste.</p>
-                      <button id="category-filter-close" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
-                    </div>
-                  </div>
-                </div>
-                <label for="unit-filter" class="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select">
-                  <span class="text-xs uppercase tracking-wide text-slate-500">Unité</span>
-                  <select id="unit-filter" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                    <option value="">Toutes les unités</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          </header>
-          <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
-          <div id="product-grid" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
-        </section>
         <aside id="quote-panel" class="split-panel rounded-2xl bg-white p-0 shadow-lg brand-surface">
           <nav class="site-nav" data-collapsed="false">
             <div class="site-nav__inner">
               <div class="site-nav__top-row">
                 <div class="site-nav__branding">
-                  <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+                  <button
+                    type="button"
+                    class="brand-logo-button"
+                    aria-controls="site-nav-tree"
+                    aria-expanded="false"
+                  >
+                    <img src="media/ID GROUP.png" alt="ID Group" class="brand-logo" />
+                  </button>
                   <div class="site-nav__branding-text">
                     <p class="brand-title">ID GROUP</p>
                     <span id="webhook-mode-badge" class="webhook-mode-badge" aria-live="polite"></span>
@@ -312,7 +255,7 @@
               </div>
             </div>
           </nav>
-          <div class="site-nav__tree">
+          <div id="site-nav-tree" class="site-nav__tree" hidden>
             <label for="catalogue-tree" class="site-nav__tree-label">Catégories</label>
             <select id="catalogue-tree" class="site-nav__tree-select">
               <option value="">Sélectionner une catégorie ou un article</option>
@@ -325,6 +268,129 @@
                   <dt>Total HT produits</dt>
                   <dd id="summary-products" class="font-semibold text-slate-900">0,00 €</dd>
                 </div>
+                <div class="flex items-center justify-between gap-3">
+                  <dt class="flex-1">Remise (%)</dt>
+                  <dd class="flex items-center gap-2">
+                    <input id="discount" type="text" value="0" readonly class="h-9 w-20 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2 text-right text-sm text-slate-500" />
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between">
+                  <dt>Montant remise</dt>
+                  <dd id="summary-discount" class="text-slate-900">-0,00 €</dd>
+                </div>
+                <div class="flex items-center justify-between">
+                  <dt>Ecopart totale</dt>
+                  <dd id="summary-ecotax" class="text-amber-600">0,00 €</dd>
+                </div>
+                <div class="flex items-center justify-between">
+                  <dt>Base HT après remise + Ecopart</dt>
+                  <dd id="summary-net" class="text-slate-900">0,00 €</dd>
+                </div>
+                <div class="flex items-center justify-between">
+                  <dt>TVA (20%)</dt>
+                  <dd id="summary-vat" class="text-slate-900">0,00 €</dd>
+                </div>
+                <div class="flex items-center justify-between text-base font-semibold text-slate-900">
+                  <dt>Total TTC</dt>
+                  <dd id="summary-total">0,00 €</dd>
+                </div>
+              </dl>
+            </footer>
+            <header class="mt-4 flex items-start justify-between gap-2">
+              <div>
+                <h2 class="text-xl font-semibold text-slate-900">Devis en cours</h2>
+                <p class="text-sm text-slate-500">Ajustez les quantités et vérifiez les totaux en temps réel.</p>
+              </div>
+            </header>
+            <div id="quote-empty" class="mt-4 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-10 w-10 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5h15a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 19.5 4.5h-15A1.5 1.5 0 0 0 3 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
+              </svg>
+              <p>Aucun article n'a encore été ajouté. Utilisez le bouton « Ajouter au devis » sur un produit.</p>
+            </div>
+            <div id="quote-list" class="mt-4 hidden flex-1 space-y-4 overflow-y-auto pr-1"></div>
+            <div class="mt-6 space-y-4">
+              <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <label for="general-comment" class="text-sm font-medium text-slate-700">Commentaire général</label>
+                <textarea id="general-comment" class="general-comment mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Ajoutez un message qui apparaîtra sur le devis généré..."></textarea>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
+          <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
+            <div>
+              <h1 id="catalogue-title" class="text-2xl font-semibold text-slate-900 brand-heading">Catalogue produits</h1>
+              <p class="mt-1 text-sm text-slate-500 brand-text-muted">
+                Parcourez le catalogue et ajoutez les articles souhaités directement à votre devis.
+              </p>
+            </div>
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div class="relative w-full lg:max-w-md">
+                <label for="search" class="sr-only">Rechercher un produit</label>
+                <input
+                  id="search"
+                  type="search"
+                  placeholder="Rechercher par nom ou référence..."
+                  class="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 brand-input"
+                />
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m21 21-4.35-4.35m0 0a7 7 0 1 0-9.9-9.9 7 7 0 0 0 9.9 9.9Z" />
+                </svg>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center xl:w-auto">
+                <div class="relative sm:w-56 xl:w-64">
+                  <button
+                    id="category-filter-button"
+                    type="button"
+                  class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 brand-select"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    <span id="category-filter-label">Toutes les catégories</span>
+                    <svg class="h-4 w-4 text-slate-400 transition-transform" data-role="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 8.25 12 15.75 4.5 8.25" />
+                    </svg>
+                  </button>
+                  <div
+                    id="category-filter-menu"
+                    class="category-filter-menu"
+                    role="menu"
+                    aria-labelledby="category-filter-button"
+                  >
+                    <div class="category-filter-header">
+                      <p class="text-sm font-semibold text-slate-900">Catégories</p>
+                      <button id="category-filter-clear" type="button" class="text-xs font-semibold text-blue-600 transition hover:text-blue-700">Réinitialiser</button>
+                    </div>
+                    <div id="category-filter-options" class="category-filter-options" role="group" aria-label="Filtrer par catégories"></div>
+                    <div class="category-filter-footer">
+                      <p class="text-xs text-slate-500">Sélectionnez une ou plusieurs catégories pour affiner la liste.</p>
+                      <button id="category-filter-close" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">Fermer</button>
+                    </div>
+                  </div>
+                </div>
+                <label for="unit-filter" class="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select">
+                  <span class="text-xs uppercase tracking-wide text-slate-500">Unité</span>
+                  <select id="unit-filter" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="">Toutes les unités</option>
+                  </select>
+                </label>
+                <label for="product-columns" class="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select xl:w-52">
+                  <span class="text-xs uppercase tracking-wide text-slate-500">Colonnes</span>
+                  <select id="product-columns" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </header>
+          <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
+          <div id="product-grid" class="product-grid"></div>
+        </section>
               <div class="flex items-center justify-between gap-3">
                 <dt class="flex-1">Remise (%)</dt>
                 <dd class="flex items-center gap-2">
