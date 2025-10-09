@@ -1039,7 +1039,7 @@ textarea {
   background: #fff;
   box-shadow: 0 20px 45px -20px rgba(25, 63, 96, 0.35);
   padding: 1rem;
-  z-index: 200;
+  z-index: 1000;
 }
 
 .category-filter-menu[data-open='true'] {
