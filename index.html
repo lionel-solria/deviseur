@@ -18,7 +18,7 @@
     <script src="js/app.js" type="module" defer></script>
   </head>
   <body class="site-body min-h-screen">
-    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24 pt-10">
+    <main class="mx-auto w-full max-w-[120rem] px-4 pb-24">
       <div id="main-layout" class="main-layout">
         <section id="catalogue-panel" aria-labelledby="catalogue-title" class="split-panel gap-6">
           <header class="catalogue-header flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm brand-surface">
@@ -78,11 +78,20 @@
                     <option value="">Toutes les unités</option>
                   </select>
                 </label>
+                <label for="product-columns" class="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 brand-select">
+                  <span class="text-xs uppercase tracking-wide text-slate-500">Colonnes</span>
+                  <select id="product-columns" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                </label>
               </div>
             </div>
           </header>
           <div id="product-feedback" class="hidden rounded-2xl bg-amber-50 px-6 py-4 text-sm text-amber-700 shadow-sm"></div>
-          <div id="product-grid" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"></div>
+          <div id="product-grid" class="product-grid"></div>
         </section>
         <aside id="quote-panel" class="split-panel rounded-2xl bg-white p-0 shadow-lg brand-surface">
           <nav class="site-nav" data-collapsed="false">
@@ -312,7 +321,7 @@
               </div>
             </div>
           </nav>
-          <div class="site-nav__tree">
+          <div class="site-nav__tree" hidden>
             <label for="catalogue-tree" class="site-nav__tree-label">Catégories</label>
             <select id="catalogue-tree" class="site-nav__tree-select">
               <option value="">Sélectionner une catégorie ou un article</option>

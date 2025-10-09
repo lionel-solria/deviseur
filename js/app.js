@@ -106,6 +106,8 @@ const state = {
   lastOrderDetails: null,
   viewportMode: 'auto',
   detectedViewportMode: 'desktop',
+  productGridColumns: 3,
+  navTreeVisible: false,
 };
 
 const elements = {
@@ -123,6 +125,7 @@ const elements = {
   categoryFilterClose: document.getElementById('category-filter-close'),
   catalogueTree: document.getElementById('catalogue-tree'),
   productGrid: document.getElementById('product-grid'),
+  productColumns: document.getElementById('product-columns'),
   productFeedback: document.getElementById('product-feedback'),
   productTemplate: document.getElementById('product-card-template'),
   quoteTemplate: document.getElementById('quote-item-template'),
@@ -169,6 +172,7 @@ const elements = {
   viewportIconStand: document.querySelector('[data-role="viewport-stand"]'),
   mobileViewToggle: document.getElementById('mobile-view-toggle'),
   mobileViewToggleLabel: document.getElementById('mobile-view-toggle-label'),
+  navTree: document.querySelector('.site-nav__tree'),
   siretForm: document.getElementById('siret-form'),
   siretInput: document.getElementById('siret-input'),
   siretSubmit: document.getElementById('siret-submit'),
@@ -206,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCatalogue();
   elements.search?.addEventListener('input', handleSearch);
   elements.unitFilter?.addEventListener('change', handleUnitFilterChange);
+  elements.productColumns?.addEventListener('change', handleProductColumnsChange);
   elements.generalComment?.addEventListener('input', handleGeneralCommentChange);
   elements.generatePdf?.addEventListener('click', generatePdf);
   elements.submitOrder?.addEventListener('click', handleSubmitOrderClick);
@@ -220,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.restoreCartInput?.addEventListener('change', handleRestoreCartInput);
   elements.siretForm?.addEventListener('submit', handleSiretSubmit);
   elements.siretInput?.addEventListener('input', handleSiretInputChange);
-  elements.brandLogo?.addEventListener('click', toggleWebhookMode);
+  elements.brandLogo?.addEventListener('click', handleBrandLogoClick);
   elements.brandLogo?.addEventListener('dblclick', handleBrandLogoDoubleClick);
   elements.viewportToggle?.addEventListener('click', handleViewportToggleClick);
   elements.mobileViewToggle?.addEventListener('click', handleMobileViewToggleClick);
@@ -237,9 +242,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupModal();
   setupCategoryFilter();
   setupNavAutoHide();
+  setNavTreeVisibility(false);
   if (elements.currentYear) {
     elements.currentYear.textContent = new Date().getFullYear();
   }
+  initialiseProductGridColumns();
   window.addEventListener('resize', handleWindowResize);
   setupResponsiveSplit();
   syncDiscountInputs();
@@ -277,12 +284,92 @@ function setupResponsiveSplit() {
   }
 }
 
+function initialiseProductGridColumns() {
+  const initial = normalizeProductGridColumnsValue(elements.productColumns?.value);
+  state.productGridColumns = initial;
+  if (elements.productColumns) {
+    elements.productColumns.value = String(initial);
+  }
+  applyProductGridColumns();
+}
+
+function handleProductGridColumnsChange(event) {
+  const value = event?.target?.value;
+  const normalized = normalizeProductGridColumnsValue(value);
+  state.productGridColumns = normalized;
+  if (elements.productColumns) {
+    elements.productColumns.value = String(normalized);
+  }
+  applyProductGridColumns();
+}
+
+function normalizeProductGridColumnsValue(value) {
+  const numericValue = typeof value === 'number' ? value : Number.parseInt(typeof value === 'string' ? value : '', 10);
+  if (!Number.isFinite(numericValue)) {
+    return 3;
+  }
+  if (numericValue < 2) {
+    return 2;
+  }
+  if (numericValue > 5) {
+    return 5;
+  }
+  return numericValue;
+}
+
+function computeProductGridColumns() {
+  const choice = normalizeProductGridColumnsValue(state.productGridColumns);
+  if (window.innerWidth < 768) {
+    return 1;
+  }
+  if (window.innerWidth < 1024) {
+    return Math.min(choice, 2);
+  }
+  return choice;
+}
+
+function applyProductGridColumns() {
+  if (!elements.productGrid) {
+    return;
+  }
+  const columns = computeProductGridColumns();
+  elements.productGrid.style.setProperty('--product-grid-columns', String(columns));
+  elements.productGrid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+}
+
 function setupNavAutoHide() {
   const nav = elements.siteNav;
   if (!nav) {
     return;
   }
   nav.dataset.collapsed = 'false';
+}
+
+function setNavTreeVisibility(visible) {
+  state.navTreeVisible = Boolean(visible);
+  if (!elements.navTree) {
+    return;
+  }
+  if (state.navTreeVisible) {
+    elements.navTree.hidden = false;
+    elements.navTree.setAttribute('data-visible', 'true');
+  } else {
+    elements.navTree.hidden = true;
+    elements.navTree.removeAttribute('data-visible');
+  }
+}
+
+function toggleNavTreeVisibility(force) {
+  const target = typeof force === 'boolean' ? force : !state.navTreeVisible;
+  setNavTreeVisibility(target);
+}
+
+function handleBrandLogoClick(event) {
+  if (event && (event.altKey || event.metaKey || event.ctrlKey)) {
+    toggleWebhookMode();
+    return;
+  }
+  toggleNavTreeVisibility();
 }
 
 function initialiseViewportMode() {
@@ -305,6 +392,11 @@ function handleWindowResize() {
   if (!shouldApply) {
     setupResponsiveSplit();
   }
+  const mode = getEffectiveViewportMode();
+  if (mode !== 'desktop') {
+    setNavTreeVisibility(false);
+  }
+  applyProductGridColumns();
 }
 
 function detectViewportMode(width = window.innerWidth) {
@@ -338,6 +430,10 @@ function applyViewportMode() {
   updateViewportToggleLabel();
   updateViewportIcon(mode);
   setupResponsiveSplit();
+  if (mode !== 'desktop') {
+    setNavTreeVisibility(false);
+  }
+  applyProductGridColumns();
 }
 
 function syncMobileViewState(mode) {
